@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /mnt/c/Users/Codys/OneDrive/Desktop/Projs/College_Exploration/docs/)"
+    ]
+  }
+}

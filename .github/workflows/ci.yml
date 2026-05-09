@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  frontend:
+    name: Frontend placeholder
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check frontend scaffold
+        shell: bash
+        run: |
+          if [ -f package.json ]; then
+            echo "TODO: replace placeholder with frontend install, lint, and build commands."
+            echo "Example: pnpm install --frozen-lockfile && pnpm lint && pnpm build"
+          else
+            echo "apps/web has no package.json yet; skipping frontend lint/build placeholder."
+          fi
+
+  backend:
+    name: Backend placeholder
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check backend scaffold
+        shell: bash
+        run: |
+          if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
+            echo "TODO: replace placeholder with backend dependency install and test commands."
+            echo "Example: pytest"
+          else
+            echo "apps/api has no Python project file yet; skipping backend test placeholder."
+          fi

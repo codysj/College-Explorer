@@ -1,0 +1,64 @@
+# College Exploration Platform Task Tracker
+
+Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
+
+## V1: Production-Quality MVP
+
+- [x] V1.1 Repo foundation and documentation
+  - Monorepo directories, foundation docs, root agent instructions, environment example, and CI skeleton are in place.
+  - Validation is limited to manual structure checks because no app runtime exists yet.
+- [ ] V1.2 Database schema and seed data
+  - Next recommended task.
+  - Create the initial PostgreSQL schema, migrations, and deterministic seed data.
+  - Document fields and missing-data rules in `docs/data-dictionary.md`.
+- [ ] V1.3 FastAPI foundation
+  - Add FastAPI app structure, health endpoint, settings, typed contracts, and backend tests.
+- [ ] V1.4 Structured search API
+  - Add paginated, filtered, sorted school search backed by parameterized queries.
+- [ ] V1.5 School profile API
+  - Add complete school profile responses with explicit missing-data handling.
+- [ ] V1.6 Next.js frontend foundation
+  - Add Next.js App Router app, styling foundation, reusable UI primitives, and frontend validation.
+- [ ] V1.7 Search UI
+  - Add filterable search experience, cards, sorting, pagination, empty states, and error states.
+- [ ] V1.8 Onboarding and preference profile
+  - Capture student preferences and produce a profile usable by deterministic ranking.
+- [ ] V1.9 Deterministic ranking engine
+  - Implement tested weighted scoring, reason codes, tradeoffs, confidence, and `ranking_version`.
+- [ ] V1.10 School profile frontend
+  - Build school detail pages using profile data, fit summaries, and honest missing-data states.
+- [ ] V1.11 Saved schools and comparison MVP
+  - Add saved school state and side-by-side comparison workflow.
+- [ ] V1.12 Redis cache-aside
+  - Cache repeated search, profile, and ranking reads with versioned keys.
+- [ ] V1.13 Deployment and README polish
+  - Deploy the app, add screenshots, document measured performance, and finalize setup notes.
+
+## V2: Recommendation and Decision Intelligence
+
+- [ ] V2.1 Data ingestion pipeline
+- [ ] V2.2 pgvector semantic search
+- [ ] V2.3 Similar-school discovery
+- [ ] V2.4 Acceptance decision mode
+- [ ] V2.5 Cost/value calculator
+- [ ] V2.6 Sensitivity analysis
+- [ ] V2.7 Shareable decision report
+- [ ] V2.8 Analytics and ranking evaluation
+
+## V3: Production Hardening and Portfolio Polish
+
+- [ ] V3.1 Authentication and account persistence
+- [ ] V3.2 Observability and performance dashboard
+- [ ] V3.3 Load testing and query optimization
+- [ ] V3.4 Admin data quality console
+- [ ] V3.5 Security and privacy hardening
+- [ ] V3.6 End-to-end test suite
+- [ ] V3.7 Portfolio/demo polish
+
+## Session Log
+
+- 2026-05-09: Completed V1.1 foundation pass. Preserved the existing skeleton, added root documentation and guardrails, created `.env.example`, added non-failing CI placeholders, and kept implementation scope limited to repository foundation.
+
+## Next Recommended Task
+
+V1.2 Database schema and seed data.
