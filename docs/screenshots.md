@@ -1,12 +1,19 @@
 # Screenshots
 
-No product screenshots exist yet because no UI has been implemented.
+No committed product screenshots exist yet.
+
+## Implemented UI Capture Targets
+
+- Landing page at `/`.
+- Search UI at `/search`, including filters, sort dropdown, active chips, result cards, pagination, local save/compare actions, compare tray, and empty/error/loading states.
+
+Search result cards are backed by `GET /schools/search`. Ranking reason and tradeoff copy appears only when the backend returns those fields; current V1 search data leaves them empty until deterministic ranking lands.
 
 ## Planned Capture Checklist
 
 - Landing page
 - Onboarding quiz
-- Search filters and ranked result cards
+- Search filters and result cards
 - School profile with fit breakdown
 - Comparison workspace
 - Semantic search after V2

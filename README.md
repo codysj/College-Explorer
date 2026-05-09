@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.6 frontend foundation complete. Search UI, onboarding, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
+Status: V1.7 search UI complete. Onboarding, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -151,6 +151,7 @@ npm run dev
 Useful local URL:
 
 - Web app: `http://localhost:3000`
+- Search UI: `http://localhost:3000/search`
 
 Frontend environment:
 
@@ -205,6 +206,7 @@ Frontend:
 cd apps/web
 npm run lint
 npm run build
+npm run test:e2e
 ```
 
 Expected future commands:
@@ -215,7 +217,9 @@ Expected future commands:
 ## Limitations
 
 - `/health`, `/ready`, `/schools/search`, and `/schools/{id}` exist. Saved-school, comparison, and ranking endpoints are not implemented yet.
-- The frontend has a landing page, route shell, UI primitives, and typed API client, but no search UI, onboarding, saved-school flows, or profile pages yet.
+- The frontend has a landing page, search UI, route shell, UI primitives, and typed API client, but no onboarding, persisted saved-school flows, comparison workflow, or profile pages yet.
+- Search supports structured filters, sort controls, URL state, pagination, local save/compare state, loading/empty/error states, and API-backed result cards.
+- The “Best fit” sort is a UI placeholder that falls back to name sorting until deterministic ranking exists in V1.9.
 - No ranking engine, Redis cache, pgvector integration, or deployment exists yet.
 - No performance metrics are available.
 - Seed data is synthetic and intended for deterministic local development, not factual school reporting.

@@ -61,14 +61,16 @@ Profile responses keep missing values as `null`, list missing dot-paths in `data
 
 The V1.6 Next.js foundation lives in `apps/web`:
 
-- `app/`: App Router layout, landing page, loading state, not-found page, and route-level error boundary.
+- `app/`: App Router layout, landing page, search page, loading state, not-found page, and route-level error boundary.
 - `components/ui/`: Small typed UI primitives that follow shadcn/ui-compatible composition patterns without introducing a generated component registry yet.
+- `components/search/`: URL-synced school search experience, result cards, filter panel, pagination, and local compare tray.
 - `lib/api-client.ts`: Safe fetch wrapper for backend calls, JSON error handling, and typed response usage.
+- `lib/search.ts`: Frontend search filter parsing, API query serialization, and sort mapping.
 - `lib/env.ts`: Environment-based API base URL resolution using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`.
 - `types/api.ts`: Frontend TypeScript contracts for currently consumed API shapes.
 
-The frontend talks to the backend over HTTP only. It does not query PostgreSQL and does not compute ranking scores. The landing page includes static example recommendation content to demonstrate product direction, while real search, onboarding, and ranking workflows remain later V1 tasks.
+The frontend talks to the backend over HTTP only. It does not query PostgreSQL and does not compute ranking scores. The search page keeps filters, sort, and pagination in the URL, calls `GET /schools/search`, and treats ranking fields as optional placeholders. Local save and compare state is intentionally browser-only until persistence arrives later in V1.
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, and the frontend foundation are implemented. Ranking, saved schools, comparisons, frontend search/profile workflows, cache, semantic retrieval, and deployment pipeline are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, the frontend foundation, and the search UI are implemented. Ranking, persisted saved schools, full comparisons, frontend profile workflows, cache, semantic retrieval, and deployment pipeline are not implemented yet.

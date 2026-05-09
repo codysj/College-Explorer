@@ -22,6 +22,8 @@ htmlcov/
 .coverage
 build/
 *.log
+playwright-report/
+test-results/
 
 # Environment / secrets
 .env

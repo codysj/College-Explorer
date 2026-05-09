@@ -21,8 +21,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V1.6 Next.js frontend foundation
   - Added a Next.js App Router TypeScript app, Tailwind styling foundation, route metadata/loading/error states, shadcn-compatible UI primitives, typed API client, and landing page.
   - Frontend validation uses `npm run lint` and `npm run build` from `apps/web`.
-- [ ] V1.7 Search UI
-  - Add filterable search experience, cards, sorting, pagination, empty states, and error states.
+- [x] V1.7 Search UI
+  - Added `/search` with URL-synced filters, sort controls, active chips, API-backed school cards, pagination, loading/empty/error states, local save/compare actions, and a compare tray.
+  - Added a Playwright smoke test that loads search, applies a state filter, and verifies updated results.
 - [ ] V1.8 Onboarding and preference profile
   - Capture student preferences and produce a profile usable by deterministic ranking.
 - [ ] V1.9 Deterministic ranking engine
@@ -66,7 +67,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-09: Stabilized backend dependency setup for Windows. Standardized Python `>=3.12,<3.13`, relaxed wheel-friendly dependency ranges, updated install troubleshooting, and documented how to avoid native Rust/MSVC builds.
 - 2026-05-09: Completed V1.5 school profile API. Added a single-query profile read across all school profile tables, structured profile schemas, missing-field tracking, completeness confidence scoring, route tests, and profile docs.
 - 2026-05-09: Completed V1.6 Next.js frontend foundation. Added the App Router app, Tailwind setup, reusable UI primitives, safe API client, polished landing page, and frontend setup documentation.
+- 2026-05-09: Completed V1.7 Search UI. Added API-backed structured search, shareable URL filter state, result cards, local save/compare UI, pagination, and Playwright smoke coverage.
 
 ## Next Recommended Task
 
-V1.7 Search UI.
+V1.8 Onboarding and preference profile.

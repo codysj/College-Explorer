@@ -41,13 +41,13 @@ export default function Home() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg">
-              <Link href="/shortlist">
+              <Link href="/search">
                 Build my shortlist
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>
             <Button asChild size="lg" variant="secondary">
-              <Link href="/schools">
+              <Link href="/search">
                 <Search className="h-4 w-4" aria-hidden="true" />
                 Explore schools
               </Link>
