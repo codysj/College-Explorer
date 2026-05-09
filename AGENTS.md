@@ -5,6 +5,7 @@ These instructions apply to Codex and other LLM coding agents working in this re
 ## Coding Standards
 
 - Read `README.md`, `tasks.md`, `docs/architecture.md`, and the docs relevant to the current task before editing.
+- Use Python `>=3.12,<3.13` for backend work. Do not move the project to Python 3.14 until dependency wheel compatibility is verified.
 - Keep each implementation step small and aligned with the V1/V2/V3 roadmap.
 - Prefer typed contracts and explicit validation over ad hoc objects.
 - Keep SQL out of route handlers when backend code is added; use repository or service modules.
@@ -17,6 +18,11 @@ These instructions apply to Codex and other LLM coding agents working in this re
 Database commands available after V1.2:
 
 ```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip cache purge
+python -m pip install -r apps/api/requirements.txt
 docker compose up -d postgres
 cd apps/api
 alembic upgrade head
@@ -37,6 +43,8 @@ Until those runtimes exist, validate foundation changes with:
 ```powershell
 Get-ChildItem -Recurse -File
 ```
+
+Do not fix Windows dependency installation failures by adding Visual Studio Build Tools or Rust requirements. If `pydantic-core`, `maturin`, or `link.exe` errors appear, recreate the venv with Python 3.12 and reinstall from wheels.
 
 ## Documentation Update Rules
 

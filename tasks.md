@@ -12,8 +12,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
   - Local execution depends on Docker and Python tooling being available.
 - [x] V1.3 FastAPI foundation
   - Added FastAPI app factory, health/readiness endpoints, Pydantic settings, SQLAlchemy session wiring, ORM models, schemas, repository/service placeholders, structured logging, error handlers, and pytest health coverage.
-- [ ] V1.4 Structured search API
-  - Add paginated, filtered, sorted school search backed by parameterized queries.
+- [x] V1.4 Structured search API
+  - Added `/schools/search` with typed filters, range validation, sorting, pagination, SQLAlchemy repository query, query timing logs, response placeholders for future ranking, and endpoint tests.
+  - Runtime validation and `.venv` creation still need a shell with Python available on PATH.
 - [ ] V1.5 School profile API
   - Add complete school profile responses with explicit missing-data handling.
 - [ ] V1.6 Next.js frontend foundation
@@ -59,7 +60,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-09: Completed V1.1 foundation pass. Preserved the existing skeleton, added root documentation and guardrails, created `.env.example`, added non-failing CI placeholders, and kept implementation scope limited to repository foundation.
 - 2026-05-09: Completed V1.2 database foundation. Added local PostgreSQL Compose config, Alembic migration, seed CSV and loader, README setup commands, and updated data dictionary.
 - 2026-05-09: Completed V1.3 FastAPI foundation. Added backend app structure, health/readiness endpoints, DB session wiring, typed schema placeholders, repository/service layers, logging/error handling, tests, and API docs.
+- 2026-05-09: Completed V1.4 structured search API. Added local venv/dependency docs, root requirements entrypoint, typed search endpoint, repository query composition, search tests, and API contract examples.
+- 2026-05-09: Stabilized backend dependency setup for Windows. Standardized Python `>=3.12,<3.13`, relaxed wheel-friendly dependency ranges, updated install troubleshooting, and documented how to avoid native Rust/MSVC builds.
 
 ## Next Recommended Task
 
-V1.4 Structured search API.
+V1.5 School profile API.

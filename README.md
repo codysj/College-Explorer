@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.3 FastAPI foundation complete. Search routes, frontend pages, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
+Status: V1.4 structured search API complete. Frontend pages, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -37,12 +37,43 @@ Copy-Item .env.example .env
 docker compose up -d postgres
 ```
 
-Install backend tooling:
+### Python Setup
+
+Use Python `>=3.12,<3.13`. Python 3.12 is the supported local development version for this project. Do not use Python 3.14 yet; several native-extension dependencies may not have Windows wheels for it.
+
+Verify your Python launcher can find Python 3.12:
 
 ```powershell
-cd apps/api
-python -m pip install -r requirements.txt
+py -3.12 --version
 ```
+
+### Virtual Environment Setup
+
+Create and activate a local Python virtual environment from the project root:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\activate
+```
+
+Confirm the venv is active and using Python 3.12:
+
+```powershell
+python --version
+python -c "import sys; print(sys.prefix)"
+```
+
+`sys.prefix` should point at this repository's `.venv` directory.
+
+### Install Dependencies
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip cache purge
+python -m pip install -r apps/api/requirements.txt
+```
+
+Successful installs should download wheels and should not show build steps for `pydantic-core`, `psycopg`, `maturin`, Rust, or MSVC.
 
 Run migrations:
 
@@ -77,7 +108,32 @@ Useful local URLs:
 
 - API health: `http://127.0.0.1:8000/health`
 - DB readiness: `http://127.0.0.1:8000/ready`
+- Structured search: `http://127.0.0.1:8000/schools/search`
 - OpenAPI docs: `http://127.0.0.1:8000/docs`
+
+Example search request:
+
+```powershell
+curl "http://127.0.0.1:8000/schools/search?state=CA&min_net_price=15000&max_net_price=40000&sort=net_price&page=1&page_size=10"
+```
+
+### Windows Install Troubleshooting
+
+If installation fails with `Failed building wheel for pydantic-core`, `maturin failed`, or `link.exe not found`, pip is trying to compile native code locally. That usually means the venv is using an unsupported or too-new Python version, or pip has cached an incompatible artifact.
+
+Fix:
+
+```powershell
+deactivate
+Remove-Item -Recurse -Force .venv
+py -3.12 -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip cache purge
+python -m pip install -r apps/api/requirements.txt
+```
+
+Do not install Visual Studio Build Tools or Rust for this project just to satisfy dependency installation. The supported path is Python 3.12 plus prebuilt wheels.
 
 ## Roadmap Summary
 
@@ -92,6 +148,9 @@ See [tasks.md](tasks.md) for the working checklist.
 Current backend validation commands are:
 
 ```powershell
+py -3.12 --version
+.\.venv\Scripts\activate
+python --version
 docker compose up -d postgres
 cd apps/api
 alembic upgrade head
@@ -107,7 +166,7 @@ Expected future commands:
 
 ## Limitations
 
-- Only `/health` and `/ready` API endpoints exist. Search, profile, saved-school, comparison, and ranking endpoints are not implemented yet.
+- `/health`, `/ready`, and `/schools/search` exist. Profile, saved-school, comparison, and ranking endpoints are not implemented yet.
 - No UI pages, ranking engine, Redis cache, pgvector integration, or deployment exists yet.
 - No performance metrics are available.
 - Seed data is synthetic and intended for deterministic local development, not factual school reporting.
