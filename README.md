@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.5 school profile API complete. Frontend pages, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
+Status: V1.6 frontend foundation complete. Search UI, onboarding, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -128,6 +128,36 @@ curl "http://127.0.0.1:8000/schools/1"
 
 Missing data is treated as unknown. The API returns `null` for missing values, lists those fields in `data_fields_missing`, and includes a simple `data_confidence_score` based on profile completeness. It does not convert missing numbers to zero or infer school facts that are not in the database.
 
+### Frontend Setup
+
+The V1.6 frontend lives in `apps/web` and uses the Next.js App Router with TypeScript, Tailwind CSS, and small shadcn/ui-compatible component primitives.
+
+Install and validate from the frontend directory:
+
+```powershell
+cd apps/web
+npm install
+npm run lint
+npm run build
+```
+
+Run the frontend locally:
+
+```powershell
+cd apps/web
+npm run dev
+```
+
+Useful local URL:
+
+- Web app: `http://localhost:3000`
+
+Frontend environment:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | Base URL used by the typed frontend API client. |
+
 ### Windows Install Troubleshooting
 
 If installation fails with `Failed building wheel for pydantic-core`, `maturin failed`, or `link.exe not found`, pip is trying to compile native code locally. That usually means the venv is using an unsupported or too-new Python version, or pip has cached an incompatible artifact.
@@ -156,7 +186,7 @@ See [tasks.md](tasks.md) for the working checklist.
 
 ## Validation Commands
 
-Current backend validation commands are:
+Current validation commands are:
 
 ```powershell
 py -3.12 --version
@@ -169,17 +199,25 @@ python scripts/seed_database.py --reset
 pytest
 ```
 
+Frontend:
+
+```powershell
+cd apps/web
+npm run lint
+npm run build
+```
+
 Expected future commands:
 
-- Frontend: `cd apps/web && pnpm lint && pnpm build`
 - Backend: `cd apps/api && pytest`
 - E2E: `pnpm exec playwright test`
 
 ## Limitations
 
 - `/health`, `/ready`, `/schools/search`, and `/schools/{id}` exist. Saved-school, comparison, and ranking endpoints are not implemented yet.
-- No UI pages, ranking engine, Redis cache, pgvector integration, or deployment exists yet.
+- The frontend has a landing page, route shell, UI primitives, and typed API client, but no search UI, onboarding, saved-school flows, or profile pages yet.
+- No ranking engine, Redis cache, pgvector integration, or deployment exists yet.
 - No performance metrics are available.
 - Seed data is synthetic and intended for deterministic local development, not factual school reporting.
-- App-specific validation will be added when the API and frontend runtimes exist.
+- End-to-end validation will be added after the product workflows exist.
 - Documentation is intentionally concise and should be updated as each implementation step lands.

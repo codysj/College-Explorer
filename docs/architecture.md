@@ -57,6 +57,18 @@ Indexes from V1.2 support common filters and sorts on state, region, type, setti
 
 Profile responses keep missing values as `null`, list missing dot-paths in `data_fields_missing`, and expose a simple completeness-based `data_confidence_score`. Ranking and similar-school placeholders remain empty until later roadmap steps.
 
+## Frontend Structure
+
+The V1.6 Next.js foundation lives in `apps/web`:
+
+- `app/`: App Router layout, landing page, loading state, not-found page, and route-level error boundary.
+- `components/ui/`: Small typed UI primitives that follow shadcn/ui-compatible composition patterns without introducing a generated component registry yet.
+- `lib/api-client.ts`: Safe fetch wrapper for backend calls, JSON error handling, and typed response usage.
+- `lib/env.ts`: Environment-based API base URL resolution using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`.
+- `types/api.ts`: Frontend TypeScript contracts for currently consumed API shapes.
+
+The frontend talks to the backend over HTTP only. It does not query PostgreSQL and does not compute ranking scores. The landing page includes static example recommendation content to demonstrate product direction, while real search, onboarding, and ranking workflows remain later V1 tasks.
+
 ## Not Implemented Yet
 
-Health, readiness, structured school search, and school profile endpoints are implemented. Ranking, saved schools, comparisons, frontend app, cache, semantic retrieval, and deployment pipeline are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, and the frontend foundation are implemented. Ranking, saved schools, comparisons, frontend search/profile workflows, cache, semantic retrieval, and deployment pipeline are not implemented yet.

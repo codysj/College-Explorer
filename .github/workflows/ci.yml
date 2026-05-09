@@ -6,7 +6,7 @@ on:
 
 jobs:
   frontend:
-    name: Frontend placeholder
+    name: Frontend checks
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -15,15 +15,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check frontend scaffold
-        shell: bash
-        run: |
-          if [ -f package.json ]; then
-            echo "TODO: replace placeholder with frontend install, lint, and build commands."
-            echo "Example: pnpm install --frozen-lockfile && pnpm lint && pnpm build"
-          else
-            echo "apps/web has no package.json yet; skipping frontend lint/build placeholder."
-          fi
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Build frontend
+        run: npm run build
 
   backend:
     name: Backend tests

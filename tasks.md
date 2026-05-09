@@ -18,8 +18,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V1.5 School profile API
   - Added `/schools/{id}` full profile responses composed from core, academic, cost, outcome, and campus-life tables.
   - Added explicit missing-data metadata, completeness confidence scoring, 404 handling, tests, and API/README documentation.
-- [ ] V1.6 Next.js frontend foundation
-  - Add Next.js App Router app, styling foundation, reusable UI primitives, and frontend validation.
+- [x] V1.6 Next.js frontend foundation
+  - Added a Next.js App Router TypeScript app, Tailwind styling foundation, route metadata/loading/error states, shadcn-compatible UI primitives, typed API client, and landing page.
+  - Frontend validation uses `npm run lint` and `npm run build` from `apps/web`.
 - [ ] V1.7 Search UI
   - Add filterable search experience, cards, sorting, pagination, empty states, and error states.
 - [ ] V1.8 Onboarding and preference profile
@@ -64,7 +65,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-09: Completed V1.4 structured search API. Added local venv/dependency docs, root requirements entrypoint, typed search endpoint, repository query composition, search tests, and API contract examples.
 - 2026-05-09: Stabilized backend dependency setup for Windows. Standardized Python `>=3.12,<3.13`, relaxed wheel-friendly dependency ranges, updated install troubleshooting, and documented how to avoid native Rust/MSVC builds.
 - 2026-05-09: Completed V1.5 school profile API. Added a single-query profile read across all school profile tables, structured profile schemas, missing-field tracking, completeness confidence scoring, route tests, and profile docs.
+- 2026-05-09: Completed V1.6 Next.js frontend foundation. Added the App Router app, Tailwind setup, reusable UI primitives, safe API client, polished landing page, and frontend setup documentation.
 
 ## Next Recommended Task
 
-V1.6 Next.js frontend foundation.
+V1.7 Search UI.

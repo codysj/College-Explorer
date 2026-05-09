@@ -21,6 +21,7 @@ coverage/
 htmlcov/
 .coverage
 build/
+*.log
 
 # Environment / secrets
 .env
