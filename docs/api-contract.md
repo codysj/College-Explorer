@@ -1,6 +1,6 @@
 # API Contract
 
-V1.4 implements process health, DB readiness, and structured school search. Profile, preference persistence, saved schools, comparisons, semantic search, and ranking logic are not implemented yet.
+V1.5 implements process health, DB readiness, structured school search, and full school profiles. Preference persistence, saved schools, comparisons, semantic search, and ranking logic are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -97,6 +97,97 @@ Response `200`:
 
 No-result responses use an empty `results` array with pagination metadata.
 
+### `GET /schools/{id}`
+
+Full school profile composed from `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life`. The endpoint uses a single repository query with left joins so missing optional profile rows or fields are represented as `null` rather than causing N+1 relationship loads.
+
+Path parameters:
+
+| Name | Type | Rules |
+| --- | --- | --- |
+| `id` | integer | School primary key. Returns `404` when no school exists. |
+
+Example request:
+
+```text
+GET /schools/1
+```
+
+Response `200`:
+
+```json
+{
+  "school_id": 1,
+  "name": "Adams State College",
+  "city": "Northbridge",
+  "state": "MA",
+  "region": "Northeast",
+  "type": "Public",
+  "setting": "Suburban",
+  "enrollment": 6200,
+  "academics": {
+    "majors": ["Biology", "Psychology", "Business"],
+    "popular_majors": ["Biology", "Psychology", "Business"],
+    "graduation_rate": 0.69,
+    "retention_rate": 0.82,
+    "student_faculty_ratio": 15.0
+  },
+  "cost": {
+    "tuition_in_state": 14200,
+    "tuition_out_state": 31800,
+    "net_price": 22100,
+    "average_aid": 12600,
+    "debt_median": 21000
+  },
+  "outcomes": {
+    "median_earnings": 52000,
+    "completion_rate": null,
+    "repayment_rate": 0.76,
+    "outcome_percentiles": null
+  },
+  "campus_life": {
+    "sports": "DIII",
+    "greek_life": 0.08,
+    "housing": true,
+    "weather_band": null,
+    "diversity_metrics": null,
+    "culture_tags": ["research", "commuter-friendly", "mid-size"]
+  },
+  "data_fields_missing": [
+    "outcomes.completion_rate",
+    "outcomes.outcome_percentiles",
+    "campus_life.weather_band",
+    "campus_life.diversity_metrics"
+  ],
+  "data_confidence_score": 0.8571,
+  "fit_score": null,
+  "category_scores": {},
+  "top_reasons": [],
+  "top_tradeoffs": [],
+  "similar_schools": []
+}
+```
+
+Response schema:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `school_id`, `name`, `city`, `state`, `region`, `type`, `setting`, `enrollment` | scalar | Core identity and search fields from `schools`. |
+| `academics` | object | `majors`, `popular_majors`, `graduation_rate`, `retention_rate`, and `student_faculty_ratio`. Current seed data has one majors array, so both major fields are populated from `top_majors`. |
+| `cost` | object | Tuition, net price, aid, and debt fields from `school_costs`. |
+| `outcomes` | object | Earnings and repayment from `school_outcomes`; `completion_rate` and `outcome_percentiles` remain `null` until those fields exist. |
+| `campus_life` | object | Sports, Greek life, housing, and culture tags from `school_campus_life`; weather and diversity remain `null` until data exists. |
+| `data_fields_missing` | string array | Dot-path list of response fields whose values are `null`. |
+| `data_confidence_score` | number | Completeness heuristic: non-null data fields divided by total tracked profile data fields, rounded to four decimals. |
+| `fit_score`, `category_scores`, `top_reasons`, `top_tradeoffs`, `similar_schools` | placeholders | Present for future ranking and V2 similar-school work. They are not computed in V1.5. |
+
+Missing data behavior:
+
+- Missing numeric values are returned as `null`, never converted to `0`.
+- Missing object-like future fields such as `outcome_percentiles` and `diversity_metrics` are returned as `null`.
+- `data_fields_missing` makes unknown values explicit for clients.
+- `data_confidence_score` measures data completeness only; it is not a ranking score, admissions signal, ROI estimate, or recommendation confidence.
+
 ## Error Format
 
 ```json
@@ -114,11 +205,12 @@ Validation errors generally return `422`. Unexpected server errors return `500`.
 
 Structured search joins `schools` to `school_costs` and `school_academics` with left joins, composes filters through SQLAlchemy expressions, counts the filtered result set, applies deterministic sorting, and then applies offset/limit pagination. Route handlers do not write SQL directly.
 
+School profile reads join `schools` to academics, costs, outcomes, and campus life with left joins in one repository query. The service layer composes the nested profile response, computes missing-field metadata, and leaves ranking and similar-school placeholders empty.
+
 ## Planned V1 Endpoints
 
 | Method | Path | Purpose | Stage |
 | --- | --- | --- | --- |
-| `GET` | `/schools/{id}` | Full school profile. | V1.5 |
 | `POST` | `/preferences` | Create or update onboarding preference profile. | V1.8 |
 | `POST` | `/rankings` | Rank candidate schools against deterministic preferences. | V1.9 |
 | `POST` | `/saved-schools` | Save or update school list status. | V1.11 |

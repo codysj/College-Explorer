@@ -37,6 +37,60 @@ class SchoolProfile(BaseModel):
     campus_tags: list[str] = Field(default_factory=list)
 
 
+class SchoolProfileAcademics(BaseModel):
+    majors: list[str] | None = None
+    popular_majors: list[str] | None = None
+    graduation_rate: float | None = None
+    retention_rate: float | None = None
+    student_faculty_ratio: float | None = None
+
+
+class SchoolProfileCost(BaseModel):
+    tuition_in_state: int | None = None
+    tuition_out_state: int | None = None
+    net_price: int | None = None
+    average_aid: int | None = None
+    debt_median: int | None = None
+
+
+class SchoolProfileOutcomes(BaseModel):
+    median_earnings: int | None = None
+    completion_rate: float | None = None
+    repayment_rate: float | None = None
+    outcome_percentiles: dict[str, float] | None = None
+
+
+class SchoolProfileCampusLife(BaseModel):
+    sports: str | None = None
+    greek_life: float | None = None
+    housing: bool | None = None
+    weather_band: str | None = None
+    diversity_metrics: dict[str, float] | None = None
+    culture_tags: list[str] | None = None
+
+
+class SchoolProfileResponse(BaseModel):
+    school_id: int
+    name: str
+    city: str
+    state: str
+    region: str
+    type: str
+    setting: str
+    enrollment: int | None = None
+    academics: SchoolProfileAcademics
+    cost: SchoolProfileCost
+    outcomes: SchoolProfileOutcomes
+    campus_life: SchoolProfileCampusLife
+    data_fields_missing: list[str] = Field(default_factory=list)
+    data_confidence_score: float
+    fit_score: float | None = None
+    category_scores: dict[str, float] = Field(default_factory=dict)
+    top_reasons: list[str] = Field(default_factory=list)
+    top_tradeoffs: list[str] = Field(default_factory=list)
+    similar_schools: list[dict[str, object]] = Field(default_factory=list)
+
+
 class SchoolSearchResult(BaseModel):
     school_id: int
     name: str

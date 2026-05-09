@@ -15,8 +15,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V1.4 Structured search API
   - Added `/schools/search` with typed filters, range validation, sorting, pagination, SQLAlchemy repository query, query timing logs, response placeholders for future ranking, and endpoint tests.
   - Runtime validation and `.venv` creation still need a shell with Python available on PATH.
-- [ ] V1.5 School profile API
-  - Add complete school profile responses with explicit missing-data handling.
+- [x] V1.5 School profile API
+  - Added `/schools/{id}` full profile responses composed from core, academic, cost, outcome, and campus-life tables.
+  - Added explicit missing-data metadata, completeness confidence scoring, 404 handling, tests, and API/README documentation.
 - [ ] V1.6 Next.js frontend foundation
   - Add Next.js App Router app, styling foundation, reusable UI primitives, and frontend validation.
 - [ ] V1.7 Search UI
@@ -62,7 +63,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-09: Completed V1.3 FastAPI foundation. Added backend app structure, health/readiness endpoints, DB session wiring, typed schema placeholders, repository/service layers, logging/error handling, tests, and API docs.
 - 2026-05-09: Completed V1.4 structured search API. Added local venv/dependency docs, root requirements entrypoint, typed search endpoint, repository query composition, search tests, and API contract examples.
 - 2026-05-09: Stabilized backend dependency setup for Windows. Standardized Python `>=3.12,<3.13`, relaxed wheel-friendly dependency ranges, updated install troubleshooting, and documented how to avoid native Rust/MSVC builds.
+- 2026-05-09: Completed V1.5 school profile API. Added a single-query profile read across all school profile tables, structured profile schemas, missing-field tracking, completeness confidence scoring, route tests, and profile docs.
 
 ## Next Recommended Task
 
-V1.5 School profile API.
+V1.6 Next.js frontend foundation.

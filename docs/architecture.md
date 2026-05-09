@@ -37,7 +37,7 @@ The V1.3 FastAPI foundation lives in `apps/api`:
 
 Request flow should be `routes -> services -> repositories -> database`. Routes own HTTP concerns, services own product logic, repositories own persistence, and models mirror database tables.
 
-## Structured Search Query Strategy
+## School API Query Strategy
 
 `GET /schools/search` uses the standard backend layers:
 
@@ -49,6 +49,14 @@ The repository uses left joins so schools with missing optional cost or academic
 
 Indexes from V1.2 support common filters and sorts on state, region, type, setting, enrollment, acceptance rate, graduation rate, tuition, and net price. To inspect a slow query locally, run the generated SQL through `EXPLAIN ANALYZE` against Postgres.
 
+`GET /schools/{id}` follows the same layering:
+
+- `api/routes/schools.py` handles path parsing, response typing, and HTTP 404 behavior.
+- `services/schools.py` composes the nested profile response and computes missing-data metadata.
+- `repositories/schools.py` reads the profile with one left-joined query across `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life`.
+
+Profile responses keep missing values as `null`, list missing dot-paths in `data_fields_missing`, and expose a simple completeness-based `data_confidence_score`. Ranking and similar-school placeholders remain empty until later roadmap steps.
+
 ## Not Implemented Yet
 
-Health, readiness, and structured school search endpoints are implemented. Profiles, ranking, saved schools, comparisons, frontend app, cache, semantic retrieval, and deployment pipeline are not implemented yet.
+Health, readiness, structured school search, and school profile endpoints are implemented. Ranking, saved schools, comparisons, frontend app, cache, semantic retrieval, and deployment pipeline are not implemented yet.

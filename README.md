@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.4 structured search API complete. Frontend pages, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
+Status: V1.5 school profile API complete. Frontend pages, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -109,6 +109,7 @@ Useful local URLs:
 - API health: `http://127.0.0.1:8000/health`
 - DB readiness: `http://127.0.0.1:8000/ready`
 - Structured search: `http://127.0.0.1:8000/schools/search`
+- School profile: `http://127.0.0.1:8000/schools/1`
 - OpenAPI docs: `http://127.0.0.1:8000/docs`
 
 Example search request:
@@ -116,6 +117,16 @@ Example search request:
 ```powershell
 curl "http://127.0.0.1:8000/schools/search?state=CA&min_net_price=15000&max_net_price=40000&sort=net_price&page=1&page_size=10"
 ```
+
+Example profile request:
+
+```powershell
+curl "http://127.0.0.1:8000/schools/1"
+```
+
+`GET /schools/{id}` composes a full profile from the core `schools` row plus academic, cost, outcome, and campus-life tables. The API keeps ranking placeholders such as `fit_score`, `category_scores`, reasons, tradeoffs, and `similar_schools` empty until those roadmap steps are implemented.
+
+Missing data is treated as unknown. The API returns `null` for missing values, lists those fields in `data_fields_missing`, and includes a simple `data_confidence_score` based on profile completeness. It does not convert missing numbers to zero or infer school facts that are not in the database.
 
 ### Windows Install Troubleshooting
 
@@ -166,7 +177,7 @@ Expected future commands:
 
 ## Limitations
 
-- `/health`, `/ready`, and `/schools/search` exist. Profile, saved-school, comparison, and ranking endpoints are not implemented yet.
+- `/health`, `/ready`, `/schools/search`, and `/schools/{id}` exist. Saved-school, comparison, and ranking endpoints are not implemented yet.
 - No UI pages, ranking engine, Redis cache, pgvector integration, or deployment exists yet.
 - No performance metrics are available.
 - Seed data is synthetic and intended for deterministic local development, not factual school reporting.

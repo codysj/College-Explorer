@@ -4,7 +4,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from core.logging import get_logger
-from models.school import School, SchoolAcademics, SchoolCosts
+from models.school import School, SchoolAcademics, SchoolCampusLife, SchoolCosts, SchoolOutcomes
 from repositories.base import BaseRepository
 from schemas.schools import SchoolSearchResult, SearchRequest
 
@@ -15,9 +15,41 @@ class SchoolRepository(BaseRepository[School]):
     def __init__(self, db: Session) -> None:
         super().__init__(db)
 
-    def get_school_by_id(self, school_id: int) -> School | None:
-        """Example repository method for future routes and services."""
-        return self.db.get(School, school_id)
+    def get_school_profile_row(self, school_id: int) -> dict[str, object] | None:
+        query = (
+            select(
+                School.id.label("school_id"),
+                School.name,
+                School.city,
+                School.state,
+                School.region,
+                School.type,
+                School.setting,
+                School.undergraduate_enrollment.label("enrollment"),
+                SchoolAcademics.top_majors,
+                SchoolAcademics.graduation_rate,
+                SchoolAcademics.retention_rate,
+                SchoolAcademics.student_faculty_ratio,
+                SchoolCosts.tuition_in_state,
+                SchoolCosts.tuition_out_state,
+                SchoolCosts.net_price,
+                SchoolCosts.average_aid,
+                SchoolCosts.debt_median,
+                SchoolOutcomes.median_earnings,
+                SchoolOutcomes.repayment_rate,
+                SchoolCampusLife.housing_available,
+                SchoolCampusLife.sports_division,
+                SchoolCampusLife.greek_life_rate,
+                SchoolCampusLife.culture_tags,
+            )
+            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
+            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
+            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
+            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+            .where(School.id == school_id)
+        )
+        row = self.db.execute(query).mappings().one_or_none()
+        return dict(row) if row is not None else None
 
     def search_schools(self, filters: SearchRequest) -> tuple[list[SchoolSearchResult], int]:
         base_query = (

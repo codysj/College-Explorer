@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from api.routes.schools import get_school_service
-from main import app
+from apps.api.main import app
 from schemas.schools import SchoolSearchResult, SearchRequest, SearchResponse
 
 
