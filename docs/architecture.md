@@ -59,18 +59,20 @@ Profile responses keep missing values as `null`, list missing dot-paths in `data
 
 ## Frontend Structure
 
-The V1.6 Next.js foundation lives in `apps/web`:
+The V1 frontend lives in `apps/web`:
 
-- `app/`: App Router layout, landing page, search page, loading state, not-found page, and route-level error boundary.
+- `app/`: App Router layout, landing page, onboarding page, search page, loading state, not-found page, and route-level error boundary.
 - `components/ui/`: Small typed UI primitives that follow shadcn/ui-compatible composition patterns without introducing a generated component registry yet.
+- `components/onboarding/`: Multi-step local preference quiz for academic, cost, career, location, campus, admissions, and category-weight inputs.
 - `components/search/`: URL-synced school search experience, result cards, filter panel, pagination, and local compare tray.
 - `lib/api-client.ts`: Safe fetch wrapper for backend calls, JSON error handling, and typed response usage.
+- `lib/preferences.ts`: Local preference profile schema, completeness calculation, localStorage persistence, and search-parameter handoff.
 - `lib/search.ts`: Frontend search filter parsing, API query serialization, and sort mapping.
 - `lib/env.ts`: Environment-based API base URL resolution using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`.
 - `types/api.ts`: Frontend TypeScript contracts for currently consumed API shapes.
 
-The frontend talks to the backend over HTTP only. It does not query PostgreSQL and does not compute ranking scores. The search page keeps filters, sort, and pagination in the URL, calls `GET /schools/search`, and treats ranking fields as optional placeholders. Local save and compare state is intentionally browser-only until persistence arrives later in V1.
+The frontend talks to the backend over HTTP only. It does not query PostgreSQL and does not compute ranking scores. The onboarding page stores a typed V1 local preference profile in browser storage because `POST /preferences` is still planned. After completion, it routes to `/search` with the subset of preferences currently supported by `GET /schools/search`. The search page keeps filters, sort, and pagination in the URL, calls `GET /schools/search`, and treats ranking fields as optional placeholders. Local save and compare state is intentionally browser-only until persistence arrives later in V1.
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, the frontend foundation, and the search UI are implemented. Ranking, persisted saved schools, full comparisons, frontend profile workflows, cache, semantic retrieval, and deployment pipeline are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, the frontend foundation, onboarding, and the search UI are implemented. Ranking, backend preference persistence, persisted saved schools, full comparisons, frontend profile workflows, cache, semantic retrieval, and deployment pipeline are not implemented yet.

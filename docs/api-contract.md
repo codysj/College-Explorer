@@ -1,6 +1,6 @@
 # API Contract
 
-V1.5 implements process health, DB readiness, structured school search, and full school profiles. Preference persistence, saved schools, comparisons, semantic search, and ranking logic are not implemented yet.
+V1.8 implements process health, DB readiness, structured school search, full school profiles, and a frontend-only local preference profile. Backend preference persistence, saved schools, comparisons, semantic search, and ranking logic are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -217,6 +217,20 @@ School profile reads join `schools` to academics, costs, outcomes, and campus li
 | `GET` | `/saved-schools` | Fetch saved schools. | V1.11 |
 | `POST` | `/comparisons` | Create a comparison session. | V1.11 |
 | `GET` | `/comparisons/{id}` | Read comparison output. | V1.11 |
+
+## Frontend-Only V1.8 Preference Profile
+
+Until `POST /preferences` exists, the web app stores a local `PreferenceProfile` in browser `localStorage` under `college-exploration.preference-profile.v1`.
+
+The local profile extends the planned backend `Preference` schema:
+
+| Field | Notes |
+| --- | --- |
+| `intended_major`, `home_state`, `max_annual_cost`, `weights` | Directly map to the existing backend `Preference` schema placeholder. |
+| `academic_interests`, `career_priorities`, `preferred_regions`, `preferred_states`, `preferred_settings`, `preferred_school_types`, `campus_preferences`, `admissions_strategy`, `target_acceptance_rate_min`, `aid_importance` | Structured constraints intended for the V1.9 deterministic ranking engine. |
+| `completion` | Frontend-only completeness metadata for the onboarding UI. |
+
+Onboarding completion forwards only currently supported search filters to `/search`: state, setting, school type, and max net price. It does not call a ranking endpoint or compute fit scores.
 
 ## Contract Rules
 

@@ -32,6 +32,7 @@ import {
   type SearchFilters,
   type SortValue,
 } from "@/lib/search";
+import { loadPreferenceProfile, type PreferenceProfile } from "@/lib/preferences";
 import { cn } from "@/lib/utils";
 import type { SchoolSearchCard, SchoolSearchResponse } from "@/types/api";
 
@@ -60,10 +61,15 @@ export function SearchExperience() {
   const [retryNonce, setRetryNonce] = useState(0);
   const [savedIds, setSavedIds] = useState<Set<number>>(() => new Set());
   const [compareIds, setCompareIds] = useState<Set<number>>(() => new Set());
+  const [preferenceProfile, setPreferenceProfile] = useState<PreferenceProfile | null>(null);
 
   useEffect(() => {
     setDraftFilters(urlFilters);
   }, [retryNonce, urlFilters]);
+
+  useEffect(() => {
+    setPreferenceProfile(loadPreferenceProfile());
+  }, []);
 
   useEffect(() => {
     const nextParams = buildSearchParams(draftFilters);
@@ -186,6 +192,8 @@ export function SearchExperience() {
         />
 
         <section className="min-w-0">
+          {preferenceProfile ? <PreferenceBanner profile={preferenceProfile} /> : null}
+
           <div className="mb-4 flex flex-col gap-3 rounded-lg border border-border bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-foreground">
@@ -251,6 +259,26 @@ export function SearchExperience() {
         onClear={() => setCompareIds(new Set())}
       />
     </main>
+  );
+}
+
+function PreferenceBanner({ profile }: { profile: PreferenceProfile }) {
+  return (
+    <div className="mb-4 rounded-lg border border-primary/20 bg-primary/10 p-4 text-primary">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold">
+            Using local preference profile: {profile.completion.percent}% complete
+          </p>
+          <p className="mt-1 text-xs leading-5">
+            {profile.intended_major || "Undeclared"} - {profile.aid_importance || "aid not set"} - ranking integration arrives in V1.9.
+          </p>
+        </div>
+        <Button asChild size="default" variant="secondary">
+          <Link href="/onboarding">Edit profile</Link>
+        </Button>
+      </div>
+    </div>
   );
 }
 

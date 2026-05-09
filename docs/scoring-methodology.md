@@ -18,6 +18,12 @@ The ranking engine is not implemented yet. This document defines the guardrails 
 - Campus fit
 - Admissions realism
 
+## V1.8 Preference Inputs
+
+The frontend onboarding profile now captures user weights for the planned scoring categories above. These weights are stored locally as decimal values from `0.05` to `0.4` per category and are not yet applied to school scores.
+
+The profile also captures intended major, academic interests, affordability constraints, aid importance, career priorities, location preferences, campus preferences, and admissions strategy. V1.9 must define how these inputs become deterministic category scores, reason codes, tradeoffs, confidence, and `ranking_version`.
+
 ## Future Updates
 
 When ranking logic is added, document default weights, formulas, missing-data behavior, tie-breaking, reason codes, and the `ranking_version` policy here.
