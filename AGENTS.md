@@ -14,7 +14,16 @@ These instructions apply to Codex and other LLM coding agents working in this re
 
 ## Validation Commands
 
-Real commands will be added as the apps are implemented. Expected future commands:
+Database commands available after V1.2:
+
+```powershell
+docker compose up -d postgres
+cd apps/api
+alembic upgrade head
+python scripts/seed_database.py --reset
+```
+
+Expected future app commands:
 
 ```powershell
 cd apps/web; pnpm lint; pnpm build

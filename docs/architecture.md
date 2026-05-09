@@ -6,7 +6,7 @@ This document captures the target architecture for the College Exploration Platf
 
 - `apps/web`: Next.js frontend for onboarding, search, school profiles, comparison, and decision workflows.
 - `apps/api`: FastAPI backend for typed REST endpoints, validation, search, ranking, comparison, and data access.
-- PostgreSQL: canonical structured college data and user-owned decision state.
+- PostgreSQL: canonical structured college data and user-owned decision state. The V1.2 schema exists under `apps/api/alembic`.
 - pgvector: semantic retrieval for V2 after structured V1 search is stable.
 - Redis: cache-aside layer for repeated read-heavy queries after V1 APIs exist.
 - `data/raw`: raw source snapshots, usually large and not committed.
@@ -23,4 +23,4 @@ This document captures the target architecture for the College Exploration Platf
 
 ## Not Implemented Yet
 
-No database schema, API service, frontend app, cache, semantic retrieval, or deployment pipeline exists yet.
+No API service, frontend app, cache, semantic retrieval, or deployment pipeline exists yet. The database schema and synthetic seed data are present for local development.

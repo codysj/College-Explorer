@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.1 foundation complete. Application code, database schema, API routes, ranking logic, Redis, and deployment are intentionally not implemented yet.
+Status: V1.2 database foundation complete. API routes, frontend pages, ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -21,22 +21,50 @@ The product is designed around three jobs:
 Target architecture is documented in [docs/architecture.md](docs/architecture.md). The planned stack is:
 
 - `apps/web`: Next.js frontend.
-- `apps/api`: FastAPI backend.
-- PostgreSQL with pgvector for structured and semantic college data.
+- `apps/api`: FastAPI backend and Alembic migrations.
+- PostgreSQL for structured college data. pgvector is planned for V2 semantic retrieval and is not enabled yet.
 - Redis for cache-aside reads after the core V1 flows exist.
 - `data/raw`, `data/processed`, and `data/seed` for source snapshots, cleaned data, and deterministic fixtures.
 - `infra` for local and cloud infrastructure notes.
 - `tests/e2e` for future end-to-end coverage.
 
-## Local Setup Placeholder
+## Local Setup
 
-No application runtime exists yet. For now, clone the repository and review the docs:
+No API or frontend runtime exists yet. The local PostgreSQL database can be started with Docker Compose:
 
 ```powershell
-Get-ChildItem -Recurse
+Copy-Item .env.example .env
+docker compose up -d postgres
 ```
 
-Future setup will include frontend install/build commands, backend dependency setup, Docker services, migrations, and seed loading.
+Install backend database tooling:
+
+```powershell
+cd apps/api
+python -m pip install -r requirements.txt
+```
+
+Run migrations:
+
+```powershell
+cd apps/api
+alembic upgrade head
+```
+
+Load deterministic seed data:
+
+```powershell
+cd apps/api
+python scripts/seed_database.py --reset
+```
+
+Optional schema verification with `psql`:
+
+```powershell
+psql postgresql://college:college@localhost:5432/college_exploration -f scripts/verify_schema.sql
+```
+
+The seed set lives in `data/seed/schools_seed.csv` and contains 50 synthetic schools for local development and tests.
 
 ## Roadmap Summary
 
@@ -46,12 +74,15 @@ Future setup will include frontend install/build commands, backend dependency se
 
 See [tasks.md](tasks.md) for the working checklist.
 
-## Validation Commands Placeholder
+## Validation Commands
 
-There are no real build or test commands yet. Current foundation validation is manual:
+There are no frontend or API test commands yet. Current database validation commands are:
 
 ```powershell
-Get-ChildItem -Recurse -File
+docker compose up -d postgres
+cd apps/api
+alembic upgrade head
+python scripts/seed_database.py --reset
 ```
 
 Expected future commands:
@@ -62,7 +93,8 @@ Expected future commands:
 
 ## Limitations
 
-- No database schema, migrations, seed data, API endpoints, UI pages, ranking engine, Redis cache, or deployment exists yet.
+- No API endpoints, UI pages, ranking engine, Redis cache, pgvector integration, or deployment exists yet.
 - No performance metrics are available.
-- The repository is not currently initialized as a Git repository in this workspace.
+- Seed data is synthetic and intended for deterministic local development, not factual school reporting.
+- App-specific validation will be added when the API and frontend runtimes exist.
 - Documentation is intentionally concise and should be updated as each implementation step lands.

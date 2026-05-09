@@ -7,10 +7,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V1.1 Repo foundation and documentation
   - Monorepo directories, foundation docs, root agent instructions, environment example, and CI skeleton are in place.
   - Validation is limited to manual structure checks because no app runtime exists yet.
-- [ ] V1.2 Database schema and seed data
-  - Next recommended task.
-  - Create the initial PostgreSQL schema, migrations, and deterministic seed data.
-  - Document fields and missing-data rules in `docs/data-dictionary.md`.
+- [x] V1.2 Database schema and seed data
+  - Added Docker Compose PostgreSQL, Alembic initial schema, search indexes, deterministic synthetic seed data, seed loader, and data dictionary.
+  - Local execution depends on Docker and Python tooling being available.
 - [ ] V1.3 FastAPI foundation
   - Add FastAPI app structure, health endpoint, settings, typed contracts, and backend tests.
 - [ ] V1.4 Structured search API
@@ -58,7 +57,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 ## Session Log
 
 - 2026-05-09: Completed V1.1 foundation pass. Preserved the existing skeleton, added root documentation and guardrails, created `.env.example`, added non-failing CI placeholders, and kept implementation scope limited to repository foundation.
+- 2026-05-09: Completed V1.2 database foundation. Added local PostgreSQL Compose config, Alembic migration, seed CSV and loader, README setup commands, and updated data dictionary.
 
 ## Next Recommended Task
 
-V1.2 Database schema and seed data.
+V1.3 FastAPI foundation.
