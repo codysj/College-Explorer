@@ -10,8 +10,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V1.2 Database schema and seed data
   - Added Docker Compose PostgreSQL, Alembic initial schema, search indexes, deterministic synthetic seed data, seed loader, and data dictionary.
   - Local execution depends on Docker and Python tooling being available.
-- [ ] V1.3 FastAPI foundation
-  - Add FastAPI app structure, health endpoint, settings, typed contracts, and backend tests.
+- [x] V1.3 FastAPI foundation
+  - Added FastAPI app factory, health/readiness endpoints, Pydantic settings, SQLAlchemy session wiring, ORM models, schemas, repository/service placeholders, structured logging, error handlers, and pytest health coverage.
 - [ ] V1.4 Structured search API
   - Add paginated, filtered, sorted school search backed by parameterized queries.
 - [ ] V1.5 School profile API
@@ -58,7 +58,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 
 - 2026-05-09: Completed V1.1 foundation pass. Preserved the existing skeleton, added root documentation and guardrails, created `.env.example`, added non-failing CI placeholders, and kept implementation scope limited to repository foundation.
 - 2026-05-09: Completed V1.2 database foundation. Added local PostgreSQL Compose config, Alembic migration, seed CSV and loader, README setup commands, and updated data dictionary.
+- 2026-05-09: Completed V1.3 FastAPI foundation. Added backend app structure, health/readiness endpoints, DB session wiring, typed schema placeholders, repository/service layers, logging/error handling, tests, and API docs.
 
 ## Next Recommended Task
 
-V1.3 FastAPI foundation.
+V1.4 Structured search API.

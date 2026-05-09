@@ -21,6 +21,7 @@ docker compose up -d postgres
 cd apps/api
 alembic upgrade head
 python scripts/seed_database.py --reset
+pytest
 ```
 
 Expected future app commands:

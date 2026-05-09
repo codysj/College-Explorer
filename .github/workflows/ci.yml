@@ -26,21 +26,26 @@ jobs:
           fi
 
   backend:
-    name: Backend placeholder
+    name: Backend tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check backend scaffold
+      - name: Set up Python
+        if: ${{ hashFiles('apps/api/requirements.txt') != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run backend tests when scaffold exists
         shell: bash
         run: |
-          if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
-            echo "TODO: replace placeholder with backend dependency install and test commands."
-            echo "Example: pytest"
+          if [ -f apps/api/requirements.txt ]; then
+            cd apps/api
+            python -m pip install --upgrade pip
+            python -m pip install -r requirements.txt
+            pytest
           else
             echo "apps/api has no Python project file yet; skipping backend test placeholder."
           fi
