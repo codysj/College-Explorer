@@ -104,8 +104,10 @@ class SchoolSearchResult(BaseModel):
     graduation_rate: float | None = None
     fit_score: float | None = None
     confidence_score: float | None = None
+    category_scores: dict[str, float] = Field(default_factory=dict)
     top_reasons: list[str] = Field(default_factory=list)
     top_tradeoffs: list[str] = Field(default_factory=list)
+    ranking_version: str | None = None
 
 
 class SearchRequest(BaseModel):

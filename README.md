@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.8 onboarding and local preference profile complete. Ranking logic, Redis, pgvector, and deployment are intentionally not implemented yet.
+Status: V1.9 deterministic ranking engine complete. Redis, pgvector, saved schools, comparisons, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -109,6 +109,7 @@ Useful local URLs:
 - API health: `http://127.0.0.1:8000/health`
 - DB readiness: `http://127.0.0.1:8000/ready`
 - Structured search: `http://127.0.0.1:8000/schools/search`
+- Deterministic rankings: `http://127.0.0.1:8000/rankings`
 - School profile: `http://127.0.0.1:8000/schools/1`
 - OpenAPI docs: `http://127.0.0.1:8000/docs`
 
@@ -124,9 +125,11 @@ Example profile request:
 curl "http://127.0.0.1:8000/schools/1"
 ```
 
-`GET /schools/{id}` composes a full profile from the core `schools` row plus academic, cost, outcome, and campus-life tables. The API keeps ranking placeholders such as `fit_score`, `category_scores`, reasons, tradeoffs, and `similar_schools` empty until those roadmap steps are implemented.
+`GET /schools/{id}` composes a full profile from the core `schools` row plus academic, cost, outcome, and campus-life tables. Profile ranking placeholders such as `fit_score`, `category_scores`, reasons, tradeoffs, and `similar_schools` remain empty until the frontend profile workflow consumes ranking output.
 
 Missing data is treated as unknown. The API returns `null` for missing values, lists those fields in `data_fields_missing`, and includes a simple `data_confidence_score` based on profile completeness. It does not convert missing numbers to zero or infer school facts that are not in the database.
+
+`POST /rankings` ranks search-card results against a supplied preference profile using deterministic V1.0 category scoring, normalized weights, confidence scores, hard constraints, and reason-code explanations. Ranking does not use semantic search, ML models, or LLM-generated scoring.
 
 ### Frontend Setup
 
@@ -217,12 +220,12 @@ Expected future commands:
 
 ## Limitations
 
-- `/health`, `/ready`, `/schools/search`, and `/schools/{id}` exist. Preference persistence, saved-school, comparison, and ranking endpoints are not implemented yet.
+- `/health`, `/ready`, `/schools/search`, `/schools/{id}`, and `/rankings` exist. Preference persistence, saved-school, and comparison endpoints are not implemented yet.
 - The frontend has a landing page, onboarding, search UI, route shell, UI primitives, and typed API client, but no backend preference persistence, persisted saved-school flows, comparison workflow, or profile pages yet.
 - Onboarding stores a typed `PreferenceProfile` in browser `localStorage` and forwards supported filters such as state, setting, school type, and max net price to `/search`.
 - Search supports structured filters, sort controls, URL state, pagination, local save/compare state, loading/empty/error states, and API-backed result cards.
-- The “Best fit” sort is a UI placeholder that falls back to name sorting until deterministic ranking exists in V1.9.
-- No ranking engine, Redis cache, pgvector integration, or deployment exists yet.
+- The "Best fit" sort is a UI placeholder until the frontend calls `POST /rankings`.
+- No Redis cache, pgvector integration, or deployment exists yet.
 - No performance metrics are available.
 - Seed data is synthetic and intended for deterministic local development, not factual school reporting.
 - End-to-end validation will be added after the product workflows exist.

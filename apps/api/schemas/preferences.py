@@ -3,6 +3,7 @@ from typing import TypeAlias
 from pydantic import BaseModel, ConfigDict, Field
 
 JsonScalar: TypeAlias = str | int | float | bool | None
+JsonValue: TypeAlias = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
 
 
 class Preference(BaseModel):
@@ -22,4 +23,4 @@ class Preference(BaseModel):
     home_state: str | None = Field(default=None, min_length=2, max_length=2)
     max_annual_cost: int | None = Field(default=None, ge=0)
     weights: dict[str, float] = Field(default_factory=dict)
-    constraints: dict[str, JsonScalar] = Field(default_factory=dict)
+    constraints: dict[str, JsonValue] = Field(default_factory=dict)

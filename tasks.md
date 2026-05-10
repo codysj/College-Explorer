@@ -27,8 +27,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V1.8 Onboarding and preference profile
   - Added `/onboarding` multi-step preference capture for academic, cost, career, location, campus, admissions, and category-weight inputs.
   - Stores a typed local `PreferenceProfile`, computes completeness, forwards supported filters to `/search`, and documents the backend/ranking integration gap.
-- [ ] V1.9 Deterministic ranking engine
-  - Implement tested weighted scoring, reason codes, tradeoffs, confidence, and `ranking_version`.
+- [x] V1.9 Deterministic ranking engine
+  - Added backend deterministic ranking service, weighted category scoring, confidence, hard constraints, reason-code explanations, `POST /rankings`, tests, and scoring/API documentation.
 - [ ] V1.10 School profile frontend
   - Build school detail pages using profile data, fit summaries, and honest missing-data states.
 - [ ] V1.11 Saved schools and comparison MVP
@@ -70,7 +70,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-09: Completed V1.6 Next.js frontend foundation. Added the App Router app, Tailwind setup, reusable UI primitives, safe API client, polished landing page, and frontend setup documentation.
 - 2026-05-09: Completed V1.7 Search UI. Added API-backed structured search, shareable URL filter state, result cards, local save/compare UI, pagination, and Playwright smoke coverage.
 - 2026-05-09: Completed V1.8 onboarding and preference profile. Added the local multi-step preference quiz, completeness indicator, local profile persistence, search handoff, schema docs, and Playwright smoke coverage.
+- 2026-05-09: Completed V1.9 deterministic ranking engine. Added V1.0 category scoring, normalized weights, hard constraints, deterministic reasons/tradeoffs, ranked API output, backend tests, and scoring methodology docs.
 
 ## Next Recommended Task
 
-V1.9 Deterministic ranking engine.
+V1.10 School profile frontend.

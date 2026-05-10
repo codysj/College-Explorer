@@ -1,29 +1,91 @@
 # Scoring Methodology
 
-The ranking engine is not implemented yet. This document defines the guardrails for V1.9.
+V1.9 implements a deterministic ranking engine in the FastAPI backend. Scores, rank order, reason codes, tradeoffs, confidence, and `ranking_version` come from structured data and rule-based code only. No LLM or model-generated text is used.
 
-## Principles
+## Version
 
-- Rankings must be deterministic, testable, and reproducible for the same data, preferences, and ranking version.
-- LLM output must not determine scores, rank order, category scores, confidence, reason codes, or tradeoffs.
-- Missing data should lower confidence or be shown as unknown; it should not be silently treated as zero.
-- Score explanations should be generated from structured reason codes and known data.
+The initial ranking version is `v1.0`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
 
-## Planned V1 Categories
+## Categories
 
-- Academic fit
-- Cost fit
-- Career fit
-- Location fit
-- Campus fit
-- Admissions realism
+All category scores are normalized to a `0` to `100` scale. Missing data is not treated as zero. When a category has no usable data, the category receives a neutral score of `50.0` and `0.0` confidence so the uncertainty is visible separately from fit.
 
-## V1.8 Preference Inputs
+| Category key | Inputs used | Method |
+| --- | --- | --- |
+| `academic` | Intended major, academic interests, listed majors, graduation rate, retention rate, student-faculty ratio | Rewards major/interests matches, stronger graduation and retention rates, and lower student-faculty ratios. |
+| `cost` | Max annual cost, net price, average aid, tuition, median debt, aid importance | Rewards schools within budget, lower net price, stronger aid relative to tuition, and lower median debt. |
+| `career` | Median earnings, repayment rate, career priorities, culture tags | Rewards stronger earnings, repayment, and deterministic matches between career priorities and known tags such as `career-focused`, `technical`, `research`, or `urban`. |
+| `location` | Home state, preferred states, preferred regions, school state, school region | Rewards exact preferred-state matches, then region or home-state alignment. |
+| `campus` | Preferred setting, school type, campus preferences, housing, sports division, Greek-life rate, culture tags | Rewards setting/type matches and deterministic lifestyle matches such as residential housing, athletics, Greek life, commuter-friendly tags, and small-class tags. |
+| `admissions_realism` | Acceptance rate, admissions strategy, target acceptance-rate comfort | Scores selectivity against a `likely`, `balanced`, or `reach` strategy and any minimum acceptance-rate comfort value. This is not admissions advice or an admission probability. |
 
-The frontend onboarding profile now captures user weights for the planned scoring categories above. These weights are stored locally as decimal values from `0.05` to `0.4` per category and are not yet applied to school scores.
+## Weights
 
-The profile also captures intended major, academic interests, affordability constraints, aid importance, career priorities, location preferences, campus preferences, and admissions strategy. V1.9 must define how these inputs become deterministic category scores, reason codes, tradeoffs, confidence, and `ranking_version`.
+The ranking service accepts user preference weights from onboarding. Supported weight keys are:
 
-## Future Updates
+- `academic`
+- `cost`
+- `career`
+- `location`
+- `campus`
+- `admissions_realism`
 
-When ranking logic is added, document default weights, formulas, missing-data behavior, tie-breaking, reason codes, and the `ranking_version` policy here.
+The service also accepts documented aliases such as `academic_fit`, `campus_lifestyle`, and `admissions`. Unknown weight keys are ignored. Positive supported weights are normalized to sum to `1.0`.
+
+If no usable weights are provided, V1.9 uses these defaults:
+
+```json
+{
+  "academic": 0.20,
+  "cost": 0.20,
+  "career": 0.18,
+  "location": 0.14,
+  "campus": 0.14,
+  "admissions_realism": 0.14
+}
+```
+
+The overall `fit_score` is the weighted sum of category scores, rounded to two decimals.
+
+## Confidence
+
+Confidence is separate from fit. Each category tracks how much of its scoring signal was available. Overall `confidence_score` is the weighted sum of category confidences, rounded to four decimals.
+
+Examples:
+
+- A school with missing cost data is not assigned a zero cost score. It receives neutral cost fit and low cost confidence.
+- A school with known outcomes but no matching career-priority tags can still score on career outcomes, but confidence reflects only the available components.
+- A high fit score with lower confidence should be shown as promising but data-limited, not as more certain than the source data supports.
+
+## Hard Constraints
+
+Hard constraints are optional and configured through the preference profile `constraints` object. V1.9 supports strict checks for:
+
+- `strict_major`, `major_strict`, `require_major`
+- `strict_cost`, `cost_strict`, `require_cost`
+- `strict_state`, `strict_region`, `strict_setting`, `strict_school_type`
+- `strict_constraints`, a list such as `["major", "cost"]`
+
+Strict major filters out schools whose known major list does not contain the intended major or academic interests. Strict cost filters out schools whose known net price is above `max_annual_cost`. Unknown data is not treated as a violation; it remains reflected in confidence.
+
+## Reason Codes
+
+Explanations are deterministic code strings, not generated prose. The service chooses:
+
+- `top_reasons`: the strongest 2 to 3 positive category signals by weighted contribution.
+- `top_tradeoffs`: the largest 1 to 2 penalties or lowest-confidence categories by weighted penalty.
+
+Example reason and tradeoff codes include:
+
+- `academic_major_match`
+- `academic_major_not_listed`
+- `cost_within_budget`
+- `cost_above_budget`
+- `career_strong_earnings`
+- `career_priorities_less_visible`
+- `location_preferred_state`
+- `campus_preferred_setting`
+- `admissions_meets_acceptance_comfort`
+- `admissions_below_acceptance_comfort`
+
+Clients may map these codes to user-facing copy, but the codes themselves are the ranking explanation source of truth for V1.9.

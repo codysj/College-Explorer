@@ -1,6 +1,6 @@
 # API Contract
 
-V1.8 implements process health, DB readiness, structured school search, full school profiles, and a frontend-only local preference profile. Backend preference persistence, saved schools, comparisons, semantic search, and ranking logic are not implemented yet.
+V1.9 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, and a frontend-only local preference profile. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -36,7 +36,7 @@ Response `200`:
 
 ### `GET /schools/search`
 
-Structured school search for search-result cards. This endpoint does not return full profiles and does not compute rankings.
+Structured school search for search-result cards. This endpoint does not return full profiles. Ranking fields are present in the response shape but are only populated by `POST /rankings`.
 
 Query parameters:
 
@@ -84,8 +84,10 @@ Response `200`:
       "graduation_rate": 0.76,
       "fit_score": null,
       "confidence_score": null,
+      "category_scores": {},
       "top_reasons": [],
-      "top_tradeoffs": []
+      "top_tradeoffs": [],
+      "ranking_version": null
     }
   ],
   "page": 1,
@@ -96,6 +98,110 @@ Response `200`:
 ```
 
 No-result responses use an empty `results` array with pagination metadata.
+
+### `POST /rankings`
+
+Ranks candidate schools against a deterministic preference profile. The endpoint fetches all data needed for V1 ranking in one joined repository query, applies optional hard constraints, computes scores in memory, sorts by `fit_score` descending, then `confidence_score` descending, then `school_id` ascending, and paginates the ranked result.
+
+Request body:
+
+```json
+{
+  "preferences": {
+    "intended_major": "Computer Science",
+    "home_state": "CA",
+    "max_annual_cost": 30000,
+    "weights": {
+      "academic": 0.2,
+      "cost": 0.2,
+      "career": 0.18,
+      "location": 0.14,
+      "campus": 0.14,
+      "admissions_realism": 0.14
+    },
+    "constraints": {
+      "preferred_regions": ["West"],
+      "preferred_settings": ["Urban"],
+      "career_priorities": ["High earnings", "Internships"],
+      "campus_preferences": ["Residential"],
+      "admissions_strategy": "balanced",
+      "target_acceptance_rate_min": 30,
+      "strict_cost": true
+    }
+  },
+  "filters": {
+    "state": "CA",
+    "page": 1,
+    "page_size": 10
+  }
+}
+```
+
+`filters` uses the same fields and validation rules as `GET /schools/search`.
+
+Response `200`:
+
+```json
+{
+  "ranking_version": "v1.0",
+  "results": [
+    {
+      "school_id": 40,
+      "name": "Sun Coast State University",
+      "city": "San Diego",
+      "state": "CA",
+      "type": "Public",
+      "setting": "Urban",
+      "enrollment": 27100,
+      "acceptance_rate": 0.37,
+      "net_price": 17600,
+      "graduation_rate": 0.76,
+      "fit_score": 87.45,
+      "confidence_score": 0.94,
+      "category_scores": {
+        "academic": 83.5,
+        "cost": 92.4,
+        "career": 86.2,
+        "location": 100.0,
+        "campus": 91.0,
+        "admissions_realism": 72.5
+      },
+      "top_reasons": [
+        "location_preferred_state",
+        "cost_within_budget",
+        "campus_preferred_setting"
+      ],
+      "top_tradeoffs": [
+        "admissions_below_acceptance_comfort"
+      ],
+      "ranking_version": "v1.0"
+    }
+  ],
+  "page": 1,
+  "page_size": 10,
+  "total_results": 1,
+  "has_next": false
+}
+```
+
+Ranking response fields:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `fit_score` | number | Weighted `0` to `100` deterministic fit score. |
+| `confidence_score` | number | Weighted `0` to `1` score-coverage confidence. This is separate from fit. |
+| `category_scores` | object | Category scores keyed by `academic`, `cost`, `career`, `location`, `campus`, and `admissions_realism`. |
+| `top_reasons` | string array | Deterministic reason codes for the strongest positive weighted signals. |
+| `top_tradeoffs` | string array | Deterministic reason codes for the largest penalties or lowest-confidence signals. |
+| `ranking_version` | string | Current ranking formula version, initially `v1.0`. |
+
+Hard constraints:
+
+- `strict_major`, `major_strict`, or `require_major` filters out schools whose known majors do not include the intended major or academic interests.
+- `strict_cost`, `cost_strict`, or `require_cost` filters out schools whose known net price is above `max_annual_cost`.
+- `strict_state`, `strict_region`, `strict_setting`, and `strict_school_type` make the matching preference fields required.
+- `strict_constraints` may also list strict dimensions, such as `["major", "cost"]`.
+- Unknown data is not treated as zero and does not count as a violation by itself.
 
 ### `GET /schools/{id}`
 
@@ -179,7 +285,7 @@ Response schema:
 | `campus_life` | object | Sports, Greek life, housing, and culture tags from `school_campus_life`; weather and diversity remain `null` until data exists. |
 | `data_fields_missing` | string array | Dot-path list of response fields whose values are `null`. |
 | `data_confidence_score` | number | Completeness heuristic: non-null data fields divided by total tracked profile data fields, rounded to four decimals. |
-| `fit_score`, `category_scores`, `top_reasons`, `top_tradeoffs`, `similar_schools` | placeholders | Present for future ranking and V2 similar-school work. They are not computed in V1.5. |
+| `fit_score`, `category_scores`, `top_reasons`, `top_tradeoffs`, `similar_schools` | placeholders | Profile ranking and V2 similar-school work are not computed by this endpoint. Use `POST /rankings` for ranked search-card output. |
 
 Missing data behavior:
 
@@ -207,12 +313,14 @@ Structured search joins `schools` to `school_costs` and `school_academics` with 
 
 School profile reads join `schools` to academics, costs, outcomes, and campus life with left joins in one repository query. The service layer composes the nested profile response, computes missing-field metadata, and leaves ranking and similar-school placeholders empty.
 
+Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life` with left joins in one repository query. The ranking service applies hard constraints, computes category scores, confidence, reason codes, and tradeoffs in memory for V1 scale.
+
 ## Planned V1 Endpoints
 
 | Method | Path | Purpose | Stage |
 | --- | --- | --- | --- |
 | `POST` | `/preferences` | Create or update onboarding preference profile. | V1.8 |
-| `POST` | `/rankings` | Rank candidate schools against deterministic preferences. | V1.9 |
+| `POST` | `/rankings` | Rank candidate schools against deterministic preferences. | Implemented in V1.9 |
 | `POST` | `/saved-schools` | Save or update school list status. | V1.11 |
 | `GET` | `/saved-schools` | Fetch saved schools. | V1.11 |
 | `POST` | `/comparisons` | Create a comparison session. | V1.11 |

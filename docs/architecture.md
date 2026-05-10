@@ -57,6 +57,14 @@ Indexes from V1.2 support common filters and sorts on state, region, type, setti
 
 Profile responses keep missing values as `null`, list missing dot-paths in `data_fields_missing`, and expose a simple completeness-based `data_confidence_score`. Ranking and similar-school placeholders remain empty until later roadmap steps.
 
+`POST /rankings` follows the same layering:
+
+- `api/routes/rankings.py` validates the ranking request and response shape.
+- `services/ranking_service.py` owns deterministic category scoring, normalized weights, hard constraints, confidence, reason codes, tradeoffs, and stable ordering.
+- `repositories/schools.py` fetches all V1 ranking inputs with one left-joined query across core, academic, cost, outcome, and campus-life tables.
+
+Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: they produce neutral category fit and lower confidence rather than zero-valued penalties. The ranking version is currently `v1.0`.
+
 ## Frontend Structure
 
 The V1 frontend lives in `apps/web`:
@@ -75,4 +83,4 @@ The frontend talks to the backend over HTTP only. It does not query PostgreSQL a
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, the frontend foundation, onboarding, and the search UI are implemented. Ranking, backend preference persistence, persisted saved schools, full comparisons, frontend profile workflows, cache, semantic retrieval, and deployment pipeline are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, the frontend foundation, onboarding, and the search UI are implemented. Backend preference persistence, persisted saved schools, full comparisons, frontend profile workflows, cache, semantic retrieval, and deployment pipeline are not implemented yet.
