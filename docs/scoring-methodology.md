@@ -66,6 +66,8 @@ Hard constraints are optional and configured through the preference profile `con
 - `strict_state`, `strict_region`, `strict_setting`, `strict_school_type`
 - `strict_constraints`, a list such as `["major", "cost"]`
 
+Preference constraint values may be supplied as a single string, comma- or pipe-separated string, or list of strings. The ranking engine normalizes these values before matching, so documented list fields such as `preferred_states`, `preferred_regions`, `preferred_settings`, `preferred_school_types`, and `campus_preferences` are evaluated as individual preferences.
+
 Strict major filters out schools whose known major list does not contain the intended major or academic interests. Strict cost filters out schools whose known net price is above `max_annual_cost`. Unknown data is not treated as a violation; it remains reflected in confidence.
 
 ## Reason Codes

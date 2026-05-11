@@ -535,14 +535,22 @@ def constraint_values(preferences: Preference, *keys: str) -> list[str]:
 def normalized_list(value: object) -> list[str]:
     if value is None:
         return []
-    raw_values: list[object]
-    if isinstance(value, str):
-        raw_values = [part.strip() for part in value.replace("|", ",").split(",")]
-    elif isinstance(value, list | tuple | set):
-        raw_values = list(value)
-    else:
-        raw_values = [value]
-    return [normalize_text(item) for item in raw_values if normalize_text(item)]
+    raw_values: list[str] = []
+
+    def collect(item: object) -> None:
+        if item is None:
+            return
+        if isinstance(item, str):
+            raw_values.extend(part.strip() for part in item.replace("|", ",").split(","))
+            return
+        if isinstance(item, list | tuple | set):
+            for nested_item in item:
+                collect(nested_item)
+            return
+        raw_values.append(str(item))
+
+    collect(value)
+    return [normalized for item in raw_values if (normalized := normalize_text(item))]
 
 
 def normalize_text(value: object) -> str:
