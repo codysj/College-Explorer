@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.9 deterministic ranking engine complete. Redis, pgvector, saved schools, comparisons, and deployment are intentionally not implemented yet.
+Status: V1.10 school profile frontend complete. Redis, pgvector, persisted saved schools, comparisons, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -156,6 +156,7 @@ Useful local URL:
 - Web app: `http://localhost:3000`
 - Onboarding: `http://localhost:3000/onboarding`
 - Search UI: `http://localhost:3000/search`
+- School profile: `http://localhost:3000/schools/1`
 
 Frontend environment:
 
@@ -221,12 +222,15 @@ Expected future commands:
 ## Limitations
 
 - `/health`, `/ready`, `/schools/search`, `/schools/{id}`, and `/rankings` exist. Preference persistence, saved-school, and comparison endpoints are not implemented yet.
-- The frontend has a landing page, onboarding, search UI, route shell, UI primitives, and typed API client, but no backend preference persistence, persisted saved-school flows, comparison workflow, or profile pages yet.
+- The frontend has a landing page, onboarding, search UI, school profile pages, route shell, UI primitives, and typed API client, but no backend preference persistence, persisted saved-school flows, or full comparison workflow yet.
 - Onboarding stores a typed `PreferenceProfile` in browser `localStorage` and forwards supported filters such as state, setting, school type, and max net price to `/search`.
 - Search supports structured filters, sort controls, URL state, pagination, local save/compare state, loading/empty/error states, and API-backed result cards.
+- School profiles call `GET /schools/{id}`, render fit summary placeholders, academics, cost, outcomes, campus life, data-quality metadata, and a V2 similar-schools placeholder.
 - The "Best fit" sort is a UI placeholder until the frontend calls `POST /rankings`.
+- Profile fit score, category scores, top reasons, top tradeoffs, and ranking version remain unavailable on `GET /schools/{id}` unless the backend later adds or composes ranking output. The profile page labels these states explicitly as unavailable and uses `data_confidence_score` only as data-completeness confidence.
 - No Redis cache, pgvector integration, or deployment exists yet.
 - No performance metrics are available.
 - Seed data is synthetic and intended for deterministic local development, not factual school reporting.
-- End-to-end validation will be added after the product workflows exist.
+- Playwright smoke coverage exists for search, onboarding, and school profiles.
+- README screenshot checklist for V1.13: landing page, onboarding completion, search with filters, school profile fit summary, profile missing-data state, and compare tray.
 - Documentation is intentionally concise and should be updated as each implementation step lands.

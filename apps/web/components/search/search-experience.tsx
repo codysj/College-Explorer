@@ -33,6 +33,7 @@ import {
   type SortValue,
 } from "@/lib/search";
 import { loadPreferenceProfile, type PreferenceProfile } from "@/lib/preferences";
+import { useSchoolActionState } from "@/lib/school-actions";
 import { cn } from "@/lib/utils";
 import type { SchoolSearchCard, SchoolSearchResponse } from "@/types/api";
 
@@ -59,9 +60,15 @@ export function SearchExperience() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryNonce, setRetryNonce] = useState(0);
-  const [savedIds, setSavedIds] = useState<Set<number>>(() => new Set());
-  const [compareIds, setCompareIds] = useState<Set<number>>(() => new Set());
   const [preferenceProfile, setPreferenceProfile] = useState<PreferenceProfile | null>(null);
+  const {
+    clearCompare,
+    compareIds,
+    compareLimit,
+    savedIds,
+    toggleCompare,
+    toggleSaved,
+  } = useSchoolActionState();
 
   useEffect(() => {
     setDraftFilters(urlFilters);
@@ -135,18 +142,6 @@ export function SearchExperience() {
 
   const resetFilters = useCallback(() => {
     setDraftFilters(defaultFilters);
-  }, []);
-
-  const toggleSaved = useCallback((schoolId: number) => {
-    setSavedIds((current) => toggleSetValue(current, schoolId));
-  }, []);
-
-  const toggleCompare = useCallback((schoolId: number) => {
-    setCompareIds((current) => {
-      if (current.has(schoolId)) return toggleSetValue(current, schoolId);
-      if (current.size >= 5) return current;
-      return toggleSetValue(current, schoolId);
-    });
   }, []);
 
   return (
@@ -232,7 +227,7 @@ export function SearchExperience() {
               : results.map((school) => (
                   <SchoolCard
                     key={school.school_id}
-                    compareDisabled={!compareIds.has(school.school_id) && compareIds.size >= 5}
+                    compareDisabled={!compareIds.has(school.school_id) && compareIds.size >= compareLimit}
                     isCompared={compareIds.has(school.school_id)}
                     isSaved={savedIds.has(school.school_id)}
                     school={school}
@@ -255,8 +250,9 @@ export function SearchExperience() {
 
       <CompareTray
         schools={selectedSchools}
+        selectionLimit={compareLimit}
         selectedCount={compareIds.size}
-        onClear={() => setCompareIds(new Set())}
+        onClear={clearCompare}
       />
     </main>
   );
@@ -433,7 +429,11 @@ function SchoolCard({
         <div className="flex items-start justify-between gap-4">
           <div>
             <Badge variant="outline">{school.type}</Badge>
-            <CardTitle className="mt-3">{school.name}</CardTitle>
+            <CardTitle className="mt-3">
+              <Link className="transition-colors hover:text-primary" href={`/schools/${school.school_id}`}>
+                {school.name}
+              </Link>
+            </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
               {school.city}, {school.state} - {school.setting}
             </p>
@@ -479,6 +479,9 @@ function SchoolCard({
           >
             <GitCompare className="h-4 w-4" aria-hidden="true" />
             {isCompared ? "Added" : "Compare"}
+          </Button>
+          <Button asChild className="col-span-2" variant="ghost">
+            <Link href={`/schools/${school.school_id}`}>View profile</Link>
           </Button>
         </div>
       </CardContent>
@@ -577,10 +580,12 @@ function Pagination({
 
 function CompareTray({
   onClear,
+  selectionLimit,
   schools,
   selectedCount,
 }: {
   onClear: () => void;
+  selectionLimit: number;
   schools: SchoolSearchCard[];
   selectedCount: number;
 }) {
@@ -594,7 +599,7 @@ function CompareTray({
             Compare tray: {selectedCount} selected
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Select 2 to 5 schools. Full comparison arrives in V1.11.
+            Select 2 to {selectionLimit} schools. Full comparison arrives in V1.11.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -650,13 +655,6 @@ function buildActiveChips(filters: SearchFilters): ActiveChip[] {
     chips.push({ key: "minGraduationRate", label: `Grad >= ${filters.minGraduationRate}%` });
   }
   return chips;
-}
-
-function toggleSetValue(current: Set<number>, value: number) {
-  const next = new Set(current);
-  if (next.has(value)) next.delete(value);
-  else next.add(value);
-  return next;
 }
 
 function formatPercent(value: number | null) {

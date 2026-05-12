@@ -29,8 +29,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
   - Stores a typed local `PreferenceProfile`, computes completeness, forwards supported filters to `/search`, and documents the backend/ranking integration gap.
 - [x] V1.9 Deterministic ranking engine
   - Added backend deterministic ranking service, weighted category scoring, confidence, hard constraints, reason-code explanations, `POST /rankings`, tests, and scoring/API documentation.
-- [ ] V1.10 School profile frontend
-  - Build school detail pages using profile data, fit summaries, and honest missing-data states.
+- [x] V1.10 School profile frontend
+  - Added `/schools/[id]` with typed profile fetching, metadata, loading/error states, profile sections, explicit unavailable-data handling, local save/compare integration, and Playwright smoke coverage.
 - [ ] V1.11 Saved schools and comparison MVP
   - Add saved school state and side-by-side comparison workflow.
 - [ ] V1.12 Redis cache-aside
@@ -72,6 +72,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-09: Completed V1.8 onboarding and preference profile. Added the local multi-step preference quiz, completeness indicator, local profile persistence, search handoff, schema docs, and Playwright smoke coverage.
 - 2026-05-09: Completed V1.9 deterministic ranking engine. Added V1.0 category scoring, normalized weights, hard constraints, deterministic reasons/tradeoffs, ranked API output, backend tests, and scoring methodology docs.
 
+- 2026-05-11: Completed V1.10 school profile frontend. Added the detail route, profile presentation sections, shared local save/compare state, dynamic metadata, profile smoke test, and docs updates. API assumption: `GET /schools/{id}` does not currently include `confidence_score` or `ranking_version`; the page uses `data_confidence_score` for data completeness and marks ranking fields unavailable.
+
 ## Next Recommended Task
 
-V1.10 School profile frontend.
+V1.11 Saved schools and comparison MVP.
