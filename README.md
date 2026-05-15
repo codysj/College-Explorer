@@ -287,12 +287,4 @@ V3 focuses on hardening:
 - Expanded end-to-end tests
 - Portfolio/demo polish
 
-## Resume-Aligned Engineering Highlights
-
-- Built a typed full-stack decision platform with Next.js, FastAPI, PostgreSQL, Redis, Docker, and GitHub Actions.
-- Implemented structured search over normalized school tables with SQLAlchemy repositories, parameterized queries, pagination, and indexed fields.
-- Developed a deterministic, versioned ranking engine with category scores, confidence, hard constraints, reason codes, and stable ordering.
-- Added Redis cache-aside for search, profile, and ranking responses with versioned keys, TTL policy, fallback behavior, and tests proving repeated calls avoid repository work.
-- Designed V1 product workflows across onboarding, search, school profiles, saved schools, and comparison while keeping data limitations visible.
-
 See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.1 Data ingestion pipeline**.
