@@ -1,238 +1,216 @@
 # College Exploration Platform
 
-College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
+College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
 
-Status: V1.12 Redis cache-aside complete. pgvector, authenticated persistence, and deployment are intentionally not implemented yet.
+Status: V1.13 deployment and README polish complete. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, and deployment documentation. Public cloud deployment, authenticated persistence, pgvector semantic search, and official college-data ingestion remain future work.
 
-## Project Thesis
+## Product Overview
 
-Students need more than a searchable college directory. The platform should help them move from a noisy set of schools to an explainable shortlist or enrollment decision using structured institutional data, user preferences, ranking transparency, and honest tradeoff analysis.
+The platform is built around a practical student workflow:
 
-## Product Purpose
+- Capture preferences for academics, cost, career goals, location, campus life, and admissions realism.
+- Search schools with structured filters and typed API contracts.
+- Rank candidate schools through deterministic, explainable scoring.
+- Save schools locally, compare finalists side by side, and surface missing data honestly.
 
-The product is designed around three jobs:
+The product is not admissions advice, financial advice, or a guarantee of outcomes. It is an exploration and decision-support tool that makes tradeoffs visible.
 
-- Discover schools that match academic, financial, career, location, and campus preferences.
-- Compare schools using consistent metrics and visible tradeoffs.
-- Explain why a school ranks well without pretending to provide guaranteed admissions or financial advice.
+## Product Thesis
 
-## Architecture Placeholder
+Most college search tools are either broad directories or black-box recommendation surfaces. This project treats college choice as a data-backed decision workflow: structured school facts enter the backend, deterministic ranking logic scores fit against student preferences, and the frontend turns that into a shortlist and comparison workspace.
 
-Target architecture is documented in [docs/architecture.md](docs/architecture.md). The planned stack is:
+The engineering thesis is that a consumer-facing product can stay trustworthy when ranking, cache behavior, API contracts, and data limitations are explicit.
 
-- `apps/web`: Next.js frontend.
-- `apps/api`: FastAPI backend and Alembic migrations.
-- PostgreSQL for structured college data. pgvector is planned for V2 semantic retrieval and is not enabled yet.
-- Redis for cache-aside reads on search, profile, and ranking responses.
-- `data/raw`, `data/processed`, and `data/seed` for source snapshots, cleaned data, and deterministic fixtures.
-- `infra` for local and cloud infrastructure notes.
-- `tests/e2e` for future end-to-end coverage.
+## Key Features
 
-## Local Setup
+- Next.js App Router frontend with landing, onboarding, search, school profile, dashboard, and comparison routes.
+- FastAPI backend with health, readiness, structured search, school profile, and deterministic ranking endpoints.
+- PostgreSQL schema for schools, academics, costs, outcomes, campus life, users, saved schools, comparisons, and events.
+- Synthetic deterministic seed dataset for local development and tests.
+- Redis cache-aside for repeated search, profile, and ranking responses with versioned keys and TTLs.
+- Browser-local saved-school and comparison state for V1 demo flows.
+- Playwright smoke coverage for onboarding, search, profiles, saved schools, and compare behavior.
+- Docker Compose support for frontend, backend, PostgreSQL, and Redis.
 
-The local PostgreSQL database and Redis cache can be started with Docker Compose:
+## Architecture Overview
+
+```mermaid
+flowchart LR
+    user["Student / recruiter demo browser"]
+    web["Next.js frontend<br/>apps/web"]
+    api["FastAPI backend<br/>apps/api"]
+    pg["PostgreSQL<br/>structured school data"]
+    redis["Redis<br/>cache-aside"]
+    pgvector["pgvector<br/>V2 semantic retrieval placeholder"]
+    gha["GitHub Actions<br/>lint, typecheck, build, tests"]
+    vercel["Vercel or equivalent<br/>frontend host"]
+    aws["AWS App Runner / ECS Fargate<br/>API container"]
+    rds["Managed PostgreSQL<br/>RDS or equivalent"]
+    elasticache["Managed Redis<br/>ElastiCache or equivalent"]
+
+    user --> web
+    web -->|"typed HTTP API"| api
+    api -->|"SQLAlchemy repositories"| pg
+    api -->|"cache get/set"| redis
+    api -. "future V2 embeddings" .-> pgvector
+
+    gha --> web
+    gha --> api
+    web -. "deploy target" .-> vercel
+    api -. "deploy target" .-> aws
+    pg -. "production target" .-> rds
+    redis -. "production target" .-> elasticache
+```
+
+Request flow is `frontend -> FastAPI routes -> services -> repositories -> PostgreSQL`, with Redis isolated behind a cache service. Ranking logic lives in the backend service layer and does not depend on LLM output.
+
+See [docs/architecture.md](docs/architecture.md) for the deeper architecture notes.
+
+## Tech Stack
+
+| Layer | Tooling |
+| --- | --- |
+| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, Playwright |
+| Backend | FastAPI, Pydantic, SQLAlchemy, Alembic, pytest |
+| Data | PostgreSQL 16, deterministic CSV seed data |
+| Cache | Redis 7 cache-aside |
+| DevOps | Docker Compose, GitHub Actions, Vercel/AWS deployment notes |
+| Future V2 | pgvector semantic retrieval, data ingestion pipeline, similar-school discovery |
+
+## Local Development Setup
+
+Prerequisites:
+
+- Python `>=3.12,<3.13`
+- Node.js 22
+- Docker Desktop or compatible Docker runtime
+
+Create local environment variables:
 
 ```powershell
 Copy-Item .env.example .env
+```
+
+Start PostgreSQL and Redis:
+
+```powershell
 docker compose up -d postgres redis
 ```
 
-### Python Setup
-
-Use Python `>=3.12,<3.13`. Python 3.12 is the supported local development version for this project. Do not use Python 3.14 yet; several native-extension dependencies may not have Windows wheels for it.
-
-Verify your Python launcher can find Python 3.12:
-
-```powershell
-py -3.12 --version
-```
-
-### Virtual Environment Setup
-
-Create and activate a local Python virtual environment from the project root:
+Set up the backend:
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\activate
-```
-
-Confirm the venv is active and using Python 3.12:
-
-```powershell
-python --version
-python -c "import sys; print(sys.prefix)"
-```
-
-`sys.prefix` should point at this repository's `.venv` directory.
-
-### Install Dependencies
-
-```powershell
 python -m pip install --upgrade pip
-python -m pip cache purge
 python -m pip install -r apps/api/requirements.txt
-```
-
-Successful installs should download wheels and should not show build steps for `pydantic-core`, `psycopg`, `maturin`, Rust, or MSVC.
-
-Run migrations:
-
-```powershell
 cd apps/api
 alembic upgrade head
-```
-
-Load deterministic seed data:
-
-```powershell
-cd apps/api
 python scripts/seed_database.py --reset
-```
-
-Optional schema verification with `psql`:
-
-```powershell
-psql postgresql://college:college@localhost:5432/college_exploration -f scripts/verify_schema.sql
-```
-
-The seed set lives in `data/seed/schools_seed.csv` and contains 50 synthetic schools for local development and tests.
-
-Run the FastAPI app locally:
-
-```powershell
-cd apps/api
 uvicorn main:app --reload
 ```
 
-Useful local URLs:
-
-- API health: `http://127.0.0.1:8000/health`
-- DB readiness: `http://127.0.0.1:8000/ready`
-- Structured search: `http://127.0.0.1:8000/schools/search`
-- Deterministic rankings: `http://127.0.0.1:8000/rankings`
-- School profile: `http://127.0.0.1:8000/schools/1`
-- OpenAPI docs: `http://127.0.0.1:8000/docs`
-
-Example search request:
-
-```powershell
-curl "http://127.0.0.1:8000/schools/search?state=CA&min_net_price=15000&max_net_price=40000&sort=net_price&page=1&page_size=10"
-```
-
-Example profile request:
-
-```powershell
-curl "http://127.0.0.1:8000/schools/1"
-```
-
-`GET /schools/{id}` composes a full profile from the core `schools` row plus academic, cost, outcome, and campus-life tables. Profile ranking placeholders such as `fit_score`, `category_scores`, reasons, tradeoffs, and `similar_schools` remain empty until the frontend profile workflow consumes ranking output.
-
-Missing data is treated as unknown. The API returns `null` for missing values, lists those fields in `data_fields_missing`, and includes a simple `data_confidence_score` based on profile completeness. It does not convert missing numbers to zero or infer school facts that are not in the database.
-
-`POST /rankings` ranks search-card results against a supplied preference profile using deterministic V1.0 category scoring, normalized weights, confidence scores, hard constraints, and reason-code explanations. Ranking does not use semantic search, ML models, or LLM-generated scoring.
-
-### Redis Cache
-
-The backend uses Redis as an optional cache-aside layer for repeated read-heavy responses:
-
-- `GET /schools/search`: 5 minute TTL.
-- `GET /schools/{id}`: 60 minute TTL.
-- `POST /rankings`: 5 minute TTL.
-
-Cache keys include the endpoint resource type, normalized request parameters, `CACHE_KEY_VERSION`, and `RANKING_VERSION` for ranking responses. Example key shapes:
-
-```text
-college-exploration:cache:v1:search:{sha256-digest}
-college-exploration:cache:v1:school-profile:{sha256-digest}
-college-exploration:cache:v1:ranking:{sha256-digest}
-```
-
-Redis configuration:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `REDIS_URL` | `redis://localhost:6379/0` | Backend Redis connection URL. |
-| `REDIS_ENABLED` | `true` | Set to `false` to use database reads only. |
-| `CACHE_KEY_VERSION` | `v1` | Manual namespace bump for cache invalidation. |
-| `CACHE_SEARCH_TTL_SECONDS` | `300` | Search response TTL. |
-| `CACHE_PROFILE_TTL_SECONDS` | `3600` | School profile response TTL. |
-| `CACHE_RANKING_TTL_SECONDS` | `300` | Ranking response TTL. |
-
-If Redis is down or disabled, the API logs the fallback and continues serving from PostgreSQL.
-
-### Frontend Setup
-
-The V1.6 frontend lives in `apps/web` and uses the Next.js App Router with TypeScript, Tailwind CSS, and small shadcn/ui-compatible component primitives.
-
-Install and validate from the frontend directory:
+Set up the frontend in a second terminal:
 
 ```powershell
 cd apps/web
 npm install
-npm run lint
-npm run build
-```
-
-Run the frontend locally:
-
-```powershell
-cd apps/web
 npm run dev
 ```
 
-Useful local URL:
+Useful local URLs:
 
-- Web app: `http://localhost:3000`
-- Onboarding: `http://localhost:3000/onboarding`
-- Search UI: `http://localhost:3000/search`
-- Saved schools dashboard: `http://localhost:3000/dashboard`
-- Comparison workspace: `http://localhost:3000/compare`
-- School profile: `http://localhost:3000/schools/1`
+- Frontend: `http://localhost:3000`
+- API health: `http://127.0.0.1:8000/health`
+- API readiness: `http://127.0.0.1:8000/ready`
+- OpenAPI docs: `http://127.0.0.1:8000/docs`
 
-Frontend environment:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | Base URL used by the typed frontend API client. |
-
-### Windows Install Troubleshooting
-
-If installation fails with `Failed building wheel for pydantic-core`, `maturin failed`, or `link.exe not found`, pip is trying to compile native code locally. That usually means the venv is using an unsupported or too-new Python version, or pip has cached an incompatible artifact.
-
-Fix:
+Optional full Docker startup:
 
 ```powershell
-deactivate
-Remove-Item -Recurse -Force .venv
-py -3.12 -m venv .venv
-.\.venv\Scripts\activate
-python -m pip install --upgrade pip
-python -m pip cache purge
-python -m pip install -r apps/api/requirements.txt
+docker compose up --build
 ```
 
-Do not install Visual Studio Build Tools or Rust for this project just to satisfy dependency installation. The supported path is Python 3.12 plus prebuilt wheels.
-
-## Roadmap Summary
-
-- V1: Production-quality MVP with database schema, FastAPI foundation, structured search, school profiles, frontend foundation, onboarding, deterministic ranking, saved schools, comparison, Redis caching, and deployment polish.
-- V2: Recommendation and decision intelligence with ingestion, pgvector semantic search, similar schools, acceptance decision mode, cost/value analysis, sensitivity analysis, decision reports, and analytics.
-- V3: Production hardening with auth, observability, load testing, admin data quality tools, security review, end-to-end tests, and portfolio polish.
-
-See [tasks.md](tasks.md) for the working checklist.
-
-## Validation Commands
-
-Current validation commands are:
+The full Docker path starts web, API, PostgreSQL, and Redis. It runs migrations on API startup, but it does not reset or reseed the database automatically. Seed manually when needed:
 
 ```powershell
-py -3.12 --version
+docker compose exec api python scripts/seed_database.py --reset
+```
+
+## Environment Variables
+
+Local defaults live in [.env.example](.env.example). Production values should be configured through the hosting provider or cloud secret manager, not committed.
+
+| Variable | Used by | Default | Notes |
+| --- | --- | --- | --- |
+| `APP_ENV` | API | `development` | Displayed by `/health`. |
+| `DATABASE_URL` | API, Alembic, seed script | Local PostgreSQL URL | Use managed PostgreSQL in production. |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | Docker Compose | Local dev values | Local-only container settings. Do not reuse local password in production. |
+| `NEXT_PUBLIC_API_BASE_URL` | Web | `http://localhost:8000` | Public browser-facing API base URL. |
+| `CORS_ORIGINS` | API | Local frontend origins | Comma-separated allowed browser origins. Avoid `*` in production. |
+| `REDIS_URL` | API | `redis://localhost:6379/0` | Use managed Redis or disable with `REDIS_ENABLED=false`. |
+| `REDIS_ENABLED` | API | `true` | API falls back to PostgreSQL reads when disabled or unavailable. |
+| `CACHE_KEY_VERSION` | API | `v1` | Manual namespace bump for cache invalidation. |
+| `CACHE_SEARCH_TTL_SECONDS` | API | `300` | Search response TTL. |
+| `CACHE_PROFILE_TTL_SECONDS` | API | `3600` | Profile response TTL. |
+| `CACHE_RANKING_TTL_SECONDS` | API | `300` | Ranking response TTL. |
+
+## API Overview
+
+Implemented endpoints:
+
+- `GET /health`: process health, no database dependency.
+- `GET /ready`: database readiness via `SELECT 1`.
+- `GET /schools/search`: structured filters, deterministic sorting, pagination, search-card response fields.
+- `GET /schools/{id}`: full profile assembled from school, academics, cost, outcome, and campus-life tables.
+- `POST /rankings`: deterministic fit ranking against a preference profile.
+
+API docs are generated locally at `http://127.0.0.1:8000/docs`. The contract details live in [docs/api-contract.md](docs/api-contract.md).
+
+## Ranking Methodology Summary
+
+Ranking is deterministic and versioned as `v1.0`. The backend computes category scores for academic fit, cost, career, location, campus, and admissions realism, then normalizes user weights and returns:
+
+- `fit_score` from weighted category scores.
+- `confidence_score` from available data coverage.
+- `category_scores` for explainability.
+- `top_reasons` and `top_tradeoffs` as deterministic reason codes.
+
+Missing data is unknown, not zero. LLM-generated prose does not create school facts or alter ranking. See [docs/scoring-methodology.md](docs/scoring-methodology.md).
+
+## Redis / Cache Summary
+
+Redis is used as an optional cache-aside layer for read-heavy responses:
+
+| Resource | TTL | Validation status |
+| --- | --- | --- |
+| Search | 5 minutes | Tests verify second identical call avoids repository work. |
+| School profile | 60 minutes | Tests verify cache hit avoids repository work. |
+| Ranking | 5 minutes | Tests verify cached response avoids ranking candidate repository work. |
+
+Cache keys include `CACHE_KEY_VERSION`; ranking keys also include `RANKING_VERSION`. Redis outages log a fallback and continue with database reads.
+
+## Deployment Overview
+
+The repository is deployment-ready but not currently publicly hosted.
+
+Recommended production-like deployment:
+
+- Frontend: Vercel or equivalent Next.js host from `apps/web`.
+- Backend: AWS App Runner or ECS/Fargate using `apps/api/Dockerfile`.
+- PostgreSQL: managed PostgreSQL such as AWS RDS.
+- Redis: managed Redis such as AWS ElastiCache.
+- CI: GitHub Actions runs frontend lint/typecheck/build, Playwright smoke tests, backend tests, and Docker Compose config validation.
+
+See [docs/deployment.md](docs/deployment.md) for environment setup, startup order, and hosting notes.
+
+## Testing Instructions
+
+Backend:
+
+```powershell
 .\.venv\Scripts\activate
-python --version
-docker compose up -d postgres redis
 cd apps/api
-alembic upgrade head
-python scripts/seed_database.py --reset
 pytest
 ```
 
@@ -241,30 +219,80 @@ Frontend:
 ```powershell
 cd apps/web
 npm run lint
+npm run typecheck
 npm run build
 npm run test:e2e
 ```
 
-Expected future commands:
+Docker validation:
 
-- Backend: `cd apps/api && pytest`
-- E2E: `pnpm exec playwright test`
+```powershell
+docker compose config
+docker compose up --build
+```
 
-## Limitations
+## Performance / Engineering Metrics
 
-- `/health`, `/ready`, `/schools/search`, `/schools/{id}`, and `/rankings` exist. Preference persistence, saved-school, and comparison endpoints are not implemented yet.
-- V1.11 saved-school and comparison state is local to the current browser. V2/V3 should move these records to user-owned backend persistence once authentication and privacy boundaries exist.
-- The frontend has a landing page, onboarding, search UI, school profile pages, a saved schools dashboard, a comparison workspace, route shell, UI primitives, and typed API client, but no backend preference persistence or authenticated saved-school/comparison persistence yet.
-- Onboarding stores a typed `PreferenceProfile` in browser `localStorage` and forwards supported filters such as state, setting, school type, and max net price to `/search`.
-- Search supports structured filters, sort controls, URL state, pagination, local save/compare actions, loading/empty/error states, and API-backed result cards.
-- School profiles call `GET /schools/{id}`, render fit summary placeholders, academics, cost, outcomes, campus life, data-quality metadata, save/compare controls, and a V2 similar-schools placeholder.
-- Saved schools and compare selections use browser `localStorage` in V1.11 because there is no authenticated user session yet. Saved schools are stored under `college-exploration.saved-schools.v1` with statuses `interested`, `applying`, `accepted`, `finalist`, and `removed`; compare selections are stored under `college-exploration.compare-schools.v1` with a 5-school limit.
-- `/dashboard` groups active saved schools by status, supports quick status changes/removal, and links back to profile pages. `/compare` fetches selected school profiles and renders deterministic metric comparisons, category winners, and tradeoff summaries for 2 to 5 schools.
-- The "Best fit" sort is a UI placeholder until the frontend calls `POST /rankings`.
-- Profile fit score, category scores, top reasons, top tradeoffs, and ranking version remain unavailable on `GET /schools/{id}` unless the backend later adds or composes ranking output. The profile page labels these states explicitly as unavailable and uses `data_confidence_score` only as data-completeness confidence.
-- Redis cache-aside is implemented for search, profiles, and rankings with lightweight hit/miss/write-failure logging. No semantic cache, distributed invalidation, pgvector integration, or deployment exists yet.
-- Performance validation is limited to reproducible cache hit logs and tests showing repeated calls avoid repository/database reads; no production latency metrics are available.
-- Seed data is synthetic and intended for deterministic local development, not factual school reporting.
-- Playwright smoke coverage exists for search, onboarding, school profiles, saved schools, compare tray behavior, compare limit enforcement, and comparison rendering.
-- README screenshot checklist for V1.13: landing page, onboarding completion, search with filters, school profile fit summary, profile missing-data state, saved schools dashboard, compare tray, and comparison workspace.
-- Documentation is intentionally concise and should be updated as each implementation step lands.
+Current metrics are intentionally limited to verified local evidence. See [docs/performance.md](docs/performance.md) for the running notes.
+
+- Search indexes exist for common filters and sorts on state, region, type, setting, enrollment, acceptance rate, graduation rate, tuition, and net price.
+- Cache tests verify repeated search/profile/ranking calls can avoid duplicate repository/database work.
+- Cache hit/miss logs include lightweight `db_call_avoided` and `db_call_required` flags.
+- No production p95, uptime, real-user usage, cache hit-rate, or database reduction claims have been measured yet.
+
+Future V3 work should add reproducible load tests, endpoint latency summaries, query plans, and cache hit-rate reporting before making stronger performance claims.
+
+## Screenshots / Demo Assets
+
+No real screenshots or GIFs are committed yet. The capture checklist is maintained in [docs/screenshots.md](docs/screenshots.md) and covers:
+
+- Landing page
+- Onboarding
+- Search/ranked search flow
+- School profile
+- Saved schools dashboard
+- Compare workflow
+
+Screenshots should be added only after capturing the real running product.
+
+## Known Limitations
+
+- Seed data is synthetic and intended for deterministic development, not factual school reporting.
+- Saved schools and comparisons are browser-local in V1 because authentication is not implemented.
+- The frontend search UI does not yet call `POST /rankings`; deterministic ranking is available through the API.
+- pgvector semantic search, similar schools, official data ingestion, analytics, rate limiting, and account persistence are future work.
+- Deployment configuration is documented and Dockerized, but no public hosted environment has been verified.
+- Performance claims are not production measurements.
+
+## Future Roadmap
+
+V2 focuses on recommendation and decision intelligence:
+
+- V2.1 Data ingestion pipeline
+- V2.2 pgvector semantic search
+- V2.3 Similar-school discovery
+- V2.4 Acceptance decision mode
+- V2.5 Cost/value calculator
+- V2.6 Sensitivity analysis
+- V2.7 Shareable decision report
+- V2.8 Analytics and ranking evaluation
+
+V3 focuses on hardening:
+
+- Authentication and account persistence
+- Observability and performance dashboards
+- Load testing and query optimization
+- Admin data quality tooling
+- Security and privacy hardening
+- Expanded end-to-end tests
+- Portfolio/demo polish
+
+## Resume-Aligned Engineering Highlights
+
+- Built a typed full-stack decision platform with Next.js, FastAPI, PostgreSQL, Redis, Docker, and GitHub Actions.
+- Implemented structured search over normalized school tables with SQLAlchemy repositories, parameterized queries, pagination, and indexed fields.
+- Developed a deterministic, versioned ranking engine with category scores, confidence, hard constraints, reason codes, and stable ordering.
+- Added Redis cache-aside for search, profile, and ranking responses with versioned keys, TTL policy, fallback behavior, and tests proving repeated calls avoid repository work.
+- Designed V1 product workflows across onboarding, search, school profiles, saved schools, and comparison while keeping data limitations visible.
+
+See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.1 Data ingestion pipeline**.

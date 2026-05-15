@@ -37,8 +37,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
   - Persistence remains localStorage-only until auth-backed V2/V3 user persistence exists.
 - [x] V1.12 Redis cache-aside
   - Cache repeated search, profile, and ranking reads with versioned keys.
-- [ ] V1.13 Deployment and README polish
-  - Deploy the app, add screenshots, document measured performance, and finalize setup notes.
+- [x] V1.13 Deployment and README polish
+  - Added Dockerfiles for frontend/backend, full-stack Docker Compose wiring, CORS environment configuration, CI typecheck and Docker Compose validation, deployment notes, performance notes, screenshot checklist, and recruiter-facing README polish.
+  - No public hosted deployment or production performance metrics have been claimed.
 
 ## V2: Recommendation and Decision Intelligence
 
@@ -77,7 +78,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-11: Completed V1.10 school profile frontend. Added the detail route, profile presentation sections, shared local save/compare state, dynamic metadata, profile smoke test, and docs updates. API assumption: `GET /schools/{id}` does not currently include `confidence_score` or `ranking_version`; the page uses `data_confidence_score` for data completeness and marks ranking fields unavailable.
 - 2026-05-15: Completed V1.11 saved schools and comparison MVP. Added localStorage-backed saved school statuses, `/dashboard`, a cross-page compare tray, `/compare`, deterministic comparison helpers, Playwright coverage, docs updates, and `acceptance_rate` on `GET /schools/{id}` for comparison metrics.
 - 2026-05-15: Completed V1.12 Redis cache-aside. Added Docker Redis support, environment-driven cache settings, centralized cache service, cache-aside reads for search/profile/ranking responses, versioned ranking keys, TTL policy documentation, hit/miss/fallback logging, and mock-backed cache tests.
+- 2026-05-15: Completed V1.13 deployment and README polish. Added production-oriented Dockerfiles, full-stack Compose services, local/prod environment documentation, narrow CORS configuration, CI frontend typecheck and Compose validation, architecture diagram, screenshot checklist, honest performance notes, and a recruiter-facing README. Public cloud deployment remains unverified.
 
 ## Next Recommended Task
 
-V1.13 Deployment and README polish.
+V2.1 Data ingestion pipeline.

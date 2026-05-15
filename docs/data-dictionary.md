@@ -56,7 +56,7 @@ Key fields: `id`, `email`, `display_name`, `auth_provider`, `created_at`, `updat
 
 ### `user_preferences`
 
-Basic placeholder table for onboarding preferences. Ranking logic is not implemented yet.
+Basic placeholder table for future persisted onboarding preferences. The V1 ranking engine is implemented in the backend service layer and currently consumes request-body preferences or browser-local onboarding state rather than this table.
 
 Key fields: `id`, `user_id`, `intended_major`, `home_state`, `max_annual_cost`, `weights`, `constraints`, `created_at`, `updated_at`.
 

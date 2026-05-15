@@ -1,6 +1,6 @@
 # Architecture
 
-This document captures the target architecture for the College Exploration Platform. It is a placeholder until the application layers are implemented.
+This document captures the current V1 architecture for the College Exploration Platform plus the planned V2/V3 expansion points.
 
 ## Target Shape
 
@@ -13,6 +13,35 @@ This document captures the target architecture for the College Exploration Platf
 - `data/processed`: cleaned local development data.
 - `data/seed`: small deterministic fixtures for tests and demos.
 - `infra`: local and cloud infrastructure notes and configuration.
+
+## System Diagram
+
+```mermaid
+flowchart LR
+    browser["Browser"]
+    next["Next.js app<br/>apps/web"]
+    fastapi["FastAPI API<br/>apps/api"]
+    postgres["PostgreSQL<br/>canonical structured data"]
+    redis["Redis<br/>cache-aside"]
+    pgvector["pgvector<br/>future V2 semantic search"]
+    actions["GitHub Actions"]
+    frontendHost["Vercel / equivalent"]
+    apiHost["AWS App Runner / ECS Fargate"]
+    managedPostgres["Managed PostgreSQL"]
+    managedRedis["Managed Redis"]
+
+    browser --> next
+    next -->|"HTTP JSON"| fastapi
+    fastapi -->|"repositories / SQLAlchemy"| postgres
+    fastapi -->|"versioned cache keys"| redis
+    fastapi -.->|"future embeddings"| pgvector
+    actions -->|"lint, typecheck, build, tests"| next
+    actions -->|"pytest, compose validation"| fastapi
+    next -. "deployment target" .-> frontendHost
+    fastapi -. "deployment target" .-> apiHost
+    postgres -. "production target" .-> managedPostgres
+    redis -. "production target" .-> managedRedis
+```
 
 ## Boundaries
 
@@ -101,6 +130,12 @@ The frontend talks to the backend over HTTP only. It does not query PostgreSQL a
 
 V1.11 saved-school and comparison state is browser-local because no authenticated user session exists. Saved schools are stored under `college-exploration.saved-schools.v1` with statuses `interested`, `applying`, `accepted`, `finalist`, and `removed`. Compare selections are stored under `college-exploration.compare-schools.v1`, deduplicated, capped at 5 schools, and shared by the sticky tray across pages. `/dashboard` reads the local saved-state snapshot; `/compare` reads local compare IDs and fetches full school profiles over `GET /schools/{id}` before rendering deterministic comparisons.
 
+## Deployment Shape
+
+V1.13 adds production-oriented Dockerfiles for the frontend and backend plus Docker Compose wiring for local full-stack validation. The documented deployment target is Vercel or equivalent for `apps/web`, AWS App Runner or ECS/Fargate for `apps/api`, managed PostgreSQL for the database, and managed Redis for cache-aside reads.
+
+GitHub Actions validates frontend lint/typecheck/build, Playwright smoke tests, backend tests, and Docker Compose syntax. It does not currently deploy to a public environment.
+
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, the frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, and browser-local comparisons are implemented. Backend preference persistence, authenticated saved schools/comparisons, semantic retrieval, and deployment pipeline are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, and CI validation are implemented. Backend preference persistence, authenticated saved schools/comparisons, semantic retrieval, public cloud deployment, production observability, and load-test reporting are not implemented yet.

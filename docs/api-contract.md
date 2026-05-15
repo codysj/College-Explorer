@@ -1,6 +1,6 @@
 # API Contract
 
-V1.12 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, Redis cache-aside for read-heavy API responses, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
+V1.13 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -307,6 +307,10 @@ Missing data behavior:
 ```
 
 Validation errors generally return `422`. Unexpected server errors return `500`.
+
+## Browser Access
+
+The API enables CORS for origins listed in `CORS_ORIGINS`. Local defaults allow `http://localhost:3000` and `http://127.0.0.1:3000` so the Next.js frontend can call FastAPI during development. Production deployments should set this to the exact hosted frontend origin.
 
 ## Query Strategy
 

@@ -1,4 +1,52 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: college-exploration-api
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-college}:${POSTGRES_PASSWORD:-college}@postgres:5432/${POSTGRES_DB:-college_exploration}
+      REDIS_URL: redis://redis:6379/0
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      CACHE_KEY_VERSION: ${CACHE_KEY_VERSION:-v1}
+      CACHE_SEARCH_TTL_SECONDS: ${CACHE_SEARCH_TTL_SECONDS:-300}
+      CACHE_PROFILE_TTL_SECONDS: ${CACHE_PROFILE_TTL_SECONDS:-3600}
+      CACHE_RANKING_TTL_SECONDS: ${CACHE_RANKING_TTL_SECONDS:-300}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    container_name: college-exploration-web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
   postgres:
     image: postgres:16
     container_name: college-exploration-postgres

@@ -28,6 +28,9 @@ jobs:
       - name: Lint frontend
         run: npm run lint
 
+      - name: Typecheck frontend
+        run: npm run typecheck
+
       - name: Build frontend
         run: npm run build
 
@@ -36,6 +39,16 @@ jobs:
 
       - name: Run frontend smoke tests
         run: npm run test:e2e
+
+  docker:
+    name: Docker config validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose file
+        run: docker compose config
 
   backend:
     name: Backend tests

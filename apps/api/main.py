@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError as PydanticValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.cors import CORSMiddleware
 
 from api.routes.health import router as health_router
 from api.routes.rankings import router as rankings_router
@@ -25,6 +26,14 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         description="Backend API foundation for the College Exploration Platform.",
     )
+    if settings.cors_origin_list:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origin_list,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["*"],
+        )
     app.include_router(health_router)
     app.include_router(schools_router)
     app.include_router(rankings_router)

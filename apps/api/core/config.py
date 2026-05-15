@@ -19,9 +19,16 @@ class Settings(BaseSettings):
     cache_search_ttl_seconds: int = Field(default=300, validation_alias="CACHE_SEARCH_TTL_SECONDS")
     cache_profile_ttl_seconds: int = Field(default=3600, validation_alias="CACHE_PROFILE_TTL_SECONDS")
     cache_ranking_ttl_seconds: int = Field(default=300, validation_alias="CACHE_RANKING_TTL_SECONDS")
-    cors_origins: list[str] = Field(default_factory=list)
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        validation_alias="CORS_ORIGINS",
+    )
 
     model_config = SettingsConfigDict(env_file=(".env", "../../.env"), env_file_encoding="utf-8", extra="ignore")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

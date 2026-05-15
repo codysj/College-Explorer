@@ -1,28 +1,47 @@
-# Screenshots
+# Screenshots and Demo Assets
 
-No committed product screenshots exist yet.
+No committed product screenshots or GIFs exist yet. Do not add fake screenshots, mock browser frames, or generated product captures. Every asset in this folder should come from the real running app.
 
-## Implemented UI Capture Targets
+Recommended future folder shape:
 
-- Landing page at `/`.
-- Onboarding flow at `/onboarding`, including profile completeness and weight sliders.
-- Search UI at `/search`, including filters, sort dropdown, active chips, result cards, pagination, local save/compare actions, compare tray, and empty/error/loading states.
-- Saved schools dashboard at `/dashboard`, including grouped statuses, quick status updates, removal, and empty states.
-- Comparison workspace at `/compare`, including top summary cards, responsive metrics table, category winners, deterministic tradeoff summary, and fewer-than-two-schools states.
+```text
+docs/assets/screenshots/
+docs/assets/gifs/
+```
 
-Search result cards are backed by `GET /schools/search`. Onboarding stores preferences locally and passes supported search filters forward. Saved schools and compare selections are local browser state until authentication and backend persistence are added. Ranking reason and tradeoff copy appears only when the backend returns those fields; current profile comparison summaries are deterministic and do not use generated text.
+## V1.13 Capture Checklist
 
-## Planned Capture Checklist
+| Asset | Route / source | Status | Notes |
+| --- | --- | --- | --- |
+| Landing page screenshot | `/` | Placeholder | Show the product framing and primary calls to action. |
+| Onboarding screenshot or GIF | `/onboarding` | Placeholder | Capture preference steps, completion state, and search handoff. |
+| Search screenshot | `/search` | Placeholder | Capture filters, result cards, sorting, save/compare controls, and compare tray. |
+| Ranked search evidence | `POST /rankings` and future ranked UI | Placeholder | Ranking API exists; frontend search does not yet call it. Do not imply ranked cards until wired. |
+| School profile screenshot | `/schools/1` | Placeholder | Capture profile sections, missing-data handling, and local actions. |
+| Saved schools dashboard screenshot | `/dashboard` | Placeholder | Capture grouped statuses and local persistence behavior. |
+| Compare workflow screenshot or GIF | `/compare` | Placeholder | Capture 2-5 selected schools, metric comparison, category winners, and tradeoffs. |
 
-- Landing page
-- Onboarding quiz
-- Search filters and result cards
-- School profile with fit breakdown
-- Comparison workspace
-- Saved schools dashboard
-- Sticky compare tray
-- Semantic search after V2
-- Decision report after V2
-- Architecture diagram and performance chart after measurements exist
+## GIF Checklist
 
-Screenshots should only be added when the underlying feature is implemented and representative of the real product state.
+- Onboarding to search handoff.
+- Search filters and compare tray selection.
+- School profile save/compare interaction.
+- Compare workspace with multiple schools.
+- Future V2 semantic search once implemented.
+- Future V2 decision report once implemented.
+
+## Capture Rules
+
+- Use the real app running against seeded local data.
+- Keep browser state intentional; clear unrelated localStorage before capture if needed.
+- Do not crop out missing-data labels or V1 limitations.
+- Do not show generated or unofficial college facts as real facts.
+- Do not include real student data.
+
+## Current Product Notes
+
+- Search result cards are backed by `GET /schools/search`.
+- Deterministic ranking is implemented through `POST /rankings`, but the frontend search route does not yet call it.
+- Onboarding stores a typed preference profile in browser `localStorage`.
+- Saved schools and comparison selections are browser-local until authenticated persistence is added.
+- Similar-school discovery and decision reports belong to V2.
