@@ -1,16 +1,20 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from api.deps import get_db
+from api.deps import get_cache_service, get_db
 from repositories.schools import SchoolRepository
 from schemas.rankings import RankingRequest, RankingResponse
+from services.cache import CacheService
 from services.ranking_service import RankingService
 
 router = APIRouter(prefix="/rankings", tags=["rankings"])
 
 
-def get_ranking_service(db: Session = Depends(get_db)) -> RankingService:
-    return RankingService(SchoolRepository(db))
+def get_ranking_service(
+    db: Session = Depends(get_db),
+    cache: CacheService = Depends(get_cache_service),
+) -> RankingService:
+    return RankingService(SchoolRepository(db), cache)
 
 
 @router.post(

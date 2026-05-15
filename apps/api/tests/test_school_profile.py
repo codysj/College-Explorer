@@ -10,6 +10,7 @@ from schemas.schools import (
     SchoolProfileResponse,
 )
 from services.schools import SchoolService
+from tests.test_cache_service import make_cache
 
 
 class FakeProfileService:
@@ -265,6 +266,7 @@ def test_service_computes_confidence_from_profile_completeness() -> None:
 
     service = SchoolService.__new__(SchoolService)
     service.repository = FakeRepository()
+    service.cache = make_cache()[0]
 
     profile = service.get_school_profile(10)
 

@@ -3,17 +3,21 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
-from api.deps import get_db
+from api.deps import get_cache_service, get_db
 from core.logging import get_logger
 from schemas.schools import SchoolProfileResponse, SearchRequest, SearchResponse
+from services.cache import CacheService
 from services.schools import SchoolService
 
 router = APIRouter(prefix="/schools", tags=["schools"])
 logger = get_logger(__name__)
 
 
-def get_school_service(db: Session = Depends(get_db)) -> SchoolService:
-    return SchoolService(db)
+def get_school_service(
+    db: Session = Depends(get_db),
+    cache: CacheService = Depends(get_cache_service),
+) -> SchoolService:
+    return SchoolService(db, cache)
 
 
 @router.get(

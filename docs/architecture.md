@@ -8,7 +8,7 @@ This document captures the target architecture for the College Exploration Platf
 - `apps/api`: FastAPI backend for typed REST endpoints, validation, search, ranking, comparison, and data access.
 - PostgreSQL: canonical structured college data and user-owned decision state. The V1.2 schema exists under `apps/api/alembic`.
 - pgvector: semantic retrieval for V2 after structured V1 search is stable.
-- Redis: cache-aside layer for repeated read-heavy queries after V1 APIs exist.
+- Redis: cache-aside layer for repeated read-heavy search, profile, and ranking responses.
 - `data/raw`: raw source snapshots, usually large and not committed.
 - `data/processed`: cleaned local development data.
 - `data/seed`: small deterministic fixtures for tests and demos.
@@ -65,6 +65,20 @@ Profile responses keep missing values as `null`, list missing dot-paths in `data
 
 Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: they produce neutral category fit and lower confidence rather than zero-valued penalties. The ranking version is currently `v1.0`.
 
+## Cache Strategy
+
+V1.12 adds a centralized cache service in `apps/api/services/cache.py`. Routes still call services, and services decide whether to return a cached response or call the repository. Redis-specific behavior is isolated behind a small backend abstraction so the API can fall back to normal database reads when Redis is unavailable.
+
+Cached resources:
+
+- Search responses use keys based on all search filters, pagination, sort, and direction. TTL: 300 seconds.
+- School profiles use keys based on `school_id`. TTL: 3600 seconds.
+- Ranking responses use keys based on the full ranking request plus the deterministic `RANKING_VERSION`. TTL: 300 seconds.
+
+All keys include `CACHE_KEY_VERSION` so a deployment or operator can invalidate the namespace without deleting individual keys. Ranking keys also include the ranking formula version, so future formula updates cannot reuse stale ranking output from an older version.
+
+Cache logging records `cache_hit`, `cache_miss`, Redis unavailable fallback, and write/invalidation failures. Cache hits include `db_call_avoided=true`; misses include `db_call_required=true` for lightweight performance validation without claiming production latency.
+
 ## Frontend Structure
 
 The V1 frontend lives in `apps/web`:
@@ -89,4 +103,4 @@ V1.11 saved-school and comparison state is browser-local because no authenticate
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, deterministic ranking, the frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, and browser-local comparisons are implemented. Backend preference persistence, authenticated saved schools/comparisons, cache, semantic retrieval, and deployment pipeline are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, the frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, and browser-local comparisons are implemented. Backend preference persistence, authenticated saved schools/comparisons, semantic retrieval, and deployment pipeline are not implemented yet.

@@ -35,7 +35,7 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
   - Added typed browser-local saved school state with statuses, dashboard grouping, quick status updates, removal, duplicate prevention, and profile links.
   - Added typed browser-local compare state, sticky cross-page tray, 5-school limit, `/compare` workspace, deterministic metric summaries, category winners, and tradeoff summaries.
   - Persistence remains localStorage-only until auth-backed V2/V3 user persistence exists.
-- [ ] V1.12 Redis cache-aside
+- [x] V1.12 Redis cache-aside
   - Cache repeated search, profile, and ranking reads with versioned keys.
 - [ ] V1.13 Deployment and README polish
   - Deploy the app, add screenshots, document measured performance, and finalize setup notes.
@@ -76,7 +76,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 
 - 2026-05-11: Completed V1.10 school profile frontend. Added the detail route, profile presentation sections, shared local save/compare state, dynamic metadata, profile smoke test, and docs updates. API assumption: `GET /schools/{id}` does not currently include `confidence_score` or `ranking_version`; the page uses `data_confidence_score` for data completeness and marks ranking fields unavailable.
 - 2026-05-15: Completed V1.11 saved schools and comparison MVP. Added localStorage-backed saved school statuses, `/dashboard`, a cross-page compare tray, `/compare`, deterministic comparison helpers, Playwright coverage, docs updates, and `acceptance_rate` on `GET /schools/{id}` for comparison metrics.
+- 2026-05-15: Completed V1.12 Redis cache-aside. Added Docker Redis support, environment-driven cache settings, centralized cache service, cache-aside reads for search/profile/ranking responses, versioned ranking keys, TTL policy documentation, hit/miss/fallback logging, and mock-backed cache tests.
 
 ## Next Recommended Task
 
-V1.12 Redis cache-aside.
+V1.13 Deployment and README polish.

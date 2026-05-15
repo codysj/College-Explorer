@@ -1,6 +1,6 @@
 # API Contract
 
-V1.11 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
+V1.12 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, Redis cache-aside for read-heavy API responses, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -315,6 +315,26 @@ Structured search joins `schools` to `school_costs` and `school_academics` with 
 School profile reads join `schools` to academics, costs, outcomes, and campus life with left joins in one repository query. The service layer composes the nested profile response, computes missing-field metadata, and leaves ranking and similar-school placeholders empty.
 
 Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life` with left joins in one repository query. The ranking service applies hard constraints, computes category scores, confidence, reason codes, and tradeoffs in memory for V1 scale.
+
+## Cache Behavior
+
+Caching is transparent to clients and does not change request or response contracts. The backend checks Redis before repository/database work, stores successful responses on misses, and falls back to normal execution if Redis is unavailable.
+
+| Resource | Key inputs | TTL |
+| --- | --- | --- |
+| Search | Resource name, all filters, sort, direction, page, page size, `CACHE_KEY_VERSION` | 300 seconds |
+| School profile | Resource name, `school_id`, `CACHE_KEY_VERSION` | 3600 seconds |
+| Ranking | Resource name, full request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+
+Example key shapes:
+
+```text
+college-exploration:cache:v1:search:{sha256-digest}
+college-exploration:cache:v1:school-profile:{sha256-digest}
+college-exploration:cache:v1:ranking:{sha256-digest}
+```
+
+Ranking keys include `RANKING_VERSION` so cached rankings cannot cross deterministic formula versions.
 
 ## Planned V1 Endpoints
 

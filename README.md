@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.11 saved schools and comparison MVP complete. Redis, pgvector, authenticated persistence, and deployment are intentionally not implemented yet.
+Status: V1.12 Redis cache-aside complete. pgvector, authenticated persistence, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -23,18 +23,18 @@ Target architecture is documented in [docs/architecture.md](docs/architecture.md
 - `apps/web`: Next.js frontend.
 - `apps/api`: FastAPI backend and Alembic migrations.
 - PostgreSQL for structured college data. pgvector is planned for V2 semantic retrieval and is not enabled yet.
-- Redis for cache-aside reads after the core V1 flows exist.
+- Redis for cache-aside reads on search, profile, and ranking responses.
 - `data/raw`, `data/processed`, and `data/seed` for source snapshots, cleaned data, and deterministic fixtures.
 - `infra` for local and cloud infrastructure notes.
 - `tests/e2e` for future end-to-end coverage.
 
 ## Local Setup
 
-The local PostgreSQL database can be started with Docker Compose:
+The local PostgreSQL database and Redis cache can be started with Docker Compose:
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
 ### Python Setup
@@ -131,6 +131,35 @@ Missing data is treated as unknown. The API returns `null` for missing values, l
 
 `POST /rankings` ranks search-card results against a supplied preference profile using deterministic V1.0 category scoring, normalized weights, confidence scores, hard constraints, and reason-code explanations. Ranking does not use semantic search, ML models, or LLM-generated scoring.
 
+### Redis Cache
+
+The backend uses Redis as an optional cache-aside layer for repeated read-heavy responses:
+
+- `GET /schools/search`: 5 minute TTL.
+- `GET /schools/{id}`: 60 minute TTL.
+- `POST /rankings`: 5 minute TTL.
+
+Cache keys include the endpoint resource type, normalized request parameters, `CACHE_KEY_VERSION`, and `RANKING_VERSION` for ranking responses. Example key shapes:
+
+```text
+college-exploration:cache:v1:search:{sha256-digest}
+college-exploration:cache:v1:school-profile:{sha256-digest}
+college-exploration:cache:v1:ranking:{sha256-digest}
+```
+
+Redis configuration:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `REDIS_URL` | `redis://localhost:6379/0` | Backend Redis connection URL. |
+| `REDIS_ENABLED` | `true` | Set to `false` to use database reads only. |
+| `CACHE_KEY_VERSION` | `v1` | Manual namespace bump for cache invalidation. |
+| `CACHE_SEARCH_TTL_SECONDS` | `300` | Search response TTL. |
+| `CACHE_PROFILE_TTL_SECONDS` | `3600` | School profile response TTL. |
+| `CACHE_RANKING_TTL_SECONDS` | `300` | Ranking response TTL. |
+
+If Redis is down or disabled, the API logs the fallback and continues serving from PostgreSQL.
+
 ### Frontend Setup
 
 The V1.6 frontend lives in `apps/web` and uses the Next.js App Router with TypeScript, Tailwind CSS, and small shadcn/ui-compatible component primitives.
@@ -200,7 +229,7 @@ Current validation commands are:
 py -3.12 --version
 .\.venv\Scripts\activate
 python --version
-docker compose up -d postgres
+docker compose up -d postgres redis
 cd apps/api
 alembic upgrade head
 python scripts/seed_database.py --reset
@@ -233,8 +262,8 @@ Expected future commands:
 - `/dashboard` groups active saved schools by status, supports quick status changes/removal, and links back to profile pages. `/compare` fetches selected school profiles and renders deterministic metric comparisons, category winners, and tradeoff summaries for 2 to 5 schools.
 - The "Best fit" sort is a UI placeholder until the frontend calls `POST /rankings`.
 - Profile fit score, category scores, top reasons, top tradeoffs, and ranking version remain unavailable on `GET /schools/{id}` unless the backend later adds or composes ranking output. The profile page labels these states explicitly as unavailable and uses `data_confidence_score` only as data-completeness confidence.
-- No Redis cache, pgvector integration, or deployment exists yet.
-- No performance metrics are available.
+- Redis cache-aside is implemented for search, profiles, and rankings with lightweight hit/miss/write-failure logging. No semantic cache, distributed invalidation, pgvector integration, or deployment exists yet.
+- Performance validation is limited to reproducible cache hit logs and tests showing repeated calls avoid repository/database reads; no production latency metrics are available.
 - Seed data is synthetic and intended for deterministic local development, not factual school reporting.
 - Playwright smoke coverage exists for search, onboarding, school profiles, saved schools, compare tray behavior, compare limit enforcement, and comparison rendering.
 - README screenshot checklist for V1.13: landing page, onboarding completion, search with filters, school profile fit summary, profile missing-data state, saved schools dashboard, compare tray, and comparison workspace.

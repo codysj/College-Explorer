@@ -13,6 +13,12 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://college:college@localhost:5432/college_exploration",
         validation_alias="DATABASE_URL",
     )
+    redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
+    redis_enabled: bool = Field(default=True, validation_alias="REDIS_ENABLED")
+    cache_key_version: str = Field(default="v1", validation_alias="CACHE_KEY_VERSION")
+    cache_search_ttl_seconds: int = Field(default=300, validation_alias="CACHE_SEARCH_TTL_SECONDS")
+    cache_profile_ttl_seconds: int = Field(default=3600, validation_alias="CACHE_PROFILE_TTL_SECONDS")
+    cache_ranking_ttl_seconds: int = Field(default=300, validation_alias="CACHE_RANKING_TTL_SECONDS")
     cors_origins: list[str] = Field(default_factory=list)
 
     model_config = SettingsConfigDict(env_file=(".env", "../../.env"), env_file_encoding="utf-8", extra="ignore")

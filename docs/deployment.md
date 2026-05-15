@@ -24,6 +24,29 @@ npm run lint
 npm run build
 ```
 
+## Backend Configuration
+
+Local PostgreSQL and Redis services are defined in `docker-compose.yml`:
+
+```powershell
+docker compose up -d postgres redis
+docker compose config
+```
+
+The FastAPI backend expects:
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | SQLAlchemy PostgreSQL connection URL. |
+| `REDIS_URL` | Redis connection URL for cache-aside reads. |
+| `REDIS_ENABLED` | Set `false` to disable Redis and read through to PostgreSQL. |
+| `CACHE_KEY_VERSION` | Cache namespace version for manual invalidation. |
+| `CACHE_SEARCH_TTL_SECONDS` | Search response TTL, default `300`. |
+| `CACHE_PROFILE_TTL_SECONDS` | School profile response TTL, default `3600`. |
+| `CACHE_RANKING_TTL_SECONDS` | Ranking response TTL, default `300`. |
+
+Redis outages should not break local/dev API behavior. The backend logs Redis unavailable fallback and continues with normal repository/database reads.
+
 ## Rules
 
 - Secrets must come from environment variables or cloud secret management.

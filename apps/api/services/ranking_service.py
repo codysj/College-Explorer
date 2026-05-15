@@ -8,6 +8,7 @@ from repositories.schools import SchoolRepository
 from schemas.preferences import Preference
 from schemas.rankings import RankingRequest, RankingResponse
 from schemas.schools import SchoolSearchResult
+from services.cache import CacheService, NullCacheBackend
 
 
 RANKING_VERSION = "v1.0"
@@ -61,17 +62,23 @@ class RankedSchool:
 
 
 class RankingService:
-    def __init__(self, repository: SchoolRepository) -> None:
+    def __init__(self, repository: SchoolRepository, cache: CacheService | None = None) -> None:
         self.repository = repository
+        self.cache = cache or CacheService(NullCacheBackend(), "v1", 300, 3600, 300)
 
     def rank_schools(self, request: RankingRequest) -> RankingResponse:
+        cache_key = self.cache.ranking_key(request, RANKING_VERSION)
+        cached = self.cache.get_model(cache_key, RankingResponse)
+        if cached is not None:
+            return cached
+
         rows = self.repository.get_ranking_candidate_rows(request.filters)
         ranked_rows = self.rank_rows(rows, request.preferences)
         total_results = len(ranked_rows)
         start = (request.filters.page - 1) * request.filters.page_size
         end = start + request.filters.page_size
 
-        return RankingResponse(
+        response = RankingResponse(
             ranking_version=RANKING_VERSION,
             results=[self._to_search_result(ranked) for ranked in ranked_rows[start:end]],
             page=request.filters.page,
@@ -79,6 +86,8 @@ class RankingService:
             total_results=total_results,
             has_next=end < total_results,
         )
+        self.cache.set_model(cache_key, response, self.cache.ranking_ttl_seconds)
+        return response
 
     def rank_rows(self, rows: Iterable[dict[str, object]], preferences: Preference) -> list[RankedSchool]:
         weights = normalize_weights(preferences.weights)

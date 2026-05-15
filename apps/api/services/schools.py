@@ -10,6 +10,7 @@ from schemas.schools import (
     SearchRequest,
     SearchResponse,
 )
+from services.cache import CacheService, NullCacheBackend
 
 
 PROFILE_COMPLETENESS_FIELDS = (
@@ -46,10 +47,16 @@ PROFILE_COMPLETENESS_FIELDS = (
 
 
 class SchoolService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, cache: CacheService | None = None) -> None:
         self.repository = SchoolRepository(db)
+        self.cache = cache or CacheService(NullCacheBackend(), "v1", 300, 3600, 300)
 
     def get_school_profile(self, school_id: int) -> SchoolProfileResponse | None:
+        cache_key = self.cache.profile_key(school_id)
+        cached = self.cache.get_model(cache_key, SchoolProfileResponse)
+        if cached is not None:
+            return cached
+
         row = self.repository.get_school_profile_row(school_id)
         if row is None:
             return None
@@ -102,17 +109,25 @@ class SchoolService:
             (len(PROFILE_COMPLETENESS_FIELDS) - len(missing_fields)) / len(PROFILE_COMPLETENESS_FIELDS),
             4,
         )
+        self.cache.set_model(cache_key, profile, self.cache.profile_ttl_seconds)
         return profile
 
     def search_schools(self, filters: SearchRequest) -> SearchResponse:
+        cache_key = self.cache.search_key(filters)
+        cached = self.cache.get_model(cache_key, SearchResponse)
+        if cached is not None:
+            return cached
+
         results, total_results = self.repository.search_schools(filters)
-        return SearchResponse(
+        response = SearchResponse(
             results=results,
             page=filters.page,
             page_size=filters.page_size,
             total_results=total_results,
             has_next=filters.page * filters.page_size < total_results,
         )
+        self.cache.set_model(cache_key, response, self.cache.search_ttl_seconds)
+        return response
 
     def _missing_fields(self, profile: SchoolProfileResponse) -> list[str]:
         payload = profile.model_dump()

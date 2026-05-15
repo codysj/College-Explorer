@@ -6,6 +6,8 @@ V1.9 implements a deterministic ranking engine in the FastAPI backend. Scores, r
 
 The initial ranking version is `v1.0`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
 
+Ranking cache keys include this version. A future ranking formula change must bump the version so cached responses from older deterministic scoring logic cannot be reused.
+
 ## Categories
 
 All category scores are normalized to a `0` to `100` scale. Missing data is not treated as zero. When a category has no usable data, the category receives a neutral score of `50.0` and `0.0` confidence so the uncertainty is visible separately from fit.
