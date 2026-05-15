@@ -1,6 +1,6 @@
 # API Contract
 
-V1.9 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, and a frontend-only local preference profile. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
+V1.11 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -231,6 +231,7 @@ Response `200`:
   "type": "Public",
   "setting": "Suburban",
   "enrollment": 6200,
+  "acceptance_rate": 0.64,
   "academics": {
     "majors": ["Biology", "Psychology", "Business"],
     "popular_majors": ["Biology", "Psychology", "Business"],
@@ -265,7 +266,7 @@ Response `200`:
     "campus_life.weather_band",
     "campus_life.diversity_metrics"
   ],
-  "data_confidence_score": 0.8571,
+  "data_confidence_score": 0.8621,
   "fit_score": null,
   "category_scores": {},
   "top_reasons": [],
@@ -278,7 +279,7 @@ Response schema:
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `school_id`, `name`, `city`, `state`, `region`, `type`, `setting`, `enrollment` | scalar | Core identity and search fields from `schools`. |
+| `school_id`, `name`, `city`, `state`, `region`, `type`, `setting`, `enrollment`, `acceptance_rate` | scalar | Core identity and search fields from `schools`. |
 | `academics` | object | `majors`, `popular_majors`, `graduation_rate`, `retention_rate`, and `student_faculty_ratio`. Current seed data has one majors array, so both major fields are populated from `top_majors`. |
 | `cost` | object | Tuition, net price, aid, and debt fields from `school_costs`. |
 | `outcomes` | object | Earnings and repayment from `school_outcomes`; `completion_rate` and `outcome_percentiles` remain `null` until those fields exist. |
@@ -321,10 +322,19 @@ Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcom
 | --- | --- | --- | --- |
 | `POST` | `/preferences` | Create or update onboarding preference profile. | V1.8 |
 | `POST` | `/rankings` | Rank candidate schools against deterministic preferences. | Implemented in V1.9 |
-| `POST` | `/saved-schools` | Save or update school list status. | V1.11 |
-| `GET` | `/saved-schools` | Fetch saved schools. | V1.11 |
-| `POST` | `/comparisons` | Create a comparison session. | V1.11 |
-| `GET` | `/comparisons/{id}` | Read comparison output. | V1.11 |
+| `POST` | `/saved-schools` | Save or update school list status. | Planned after auth |
+| `GET` | `/saved-schools` | Fetch saved schools. | Planned after auth |
+| `POST` | `/comparisons` | Create a comparison session. | Planned after auth |
+| `GET` | `/comparisons/{id}` | Read comparison output. | Planned after auth |
+
+The V1.11 frontend does not call these planned saved-school or comparison endpoints because there is no authenticated user/session boundary. It persists state locally in browser `localStorage` instead:
+
+| Key | Purpose |
+| --- | --- |
+| `college-exploration.saved-schools.v1` | Saved school snapshots with status `interested`, `applying`, `accepted`, `finalist`, or `removed`. |
+| `college-exploration.compare-schools.v1` | Deduplicated compare school snapshots capped at 5 schools. |
+
+Future V2/V3 persistence should map these local records to user-owned backend records after authentication and privacy documentation are in place.
 
 ## Frontend-Only V1.8 Preference Profile
 

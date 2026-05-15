@@ -72,15 +72,21 @@ The V1 frontend lives in `apps/web`:
 - `app/`: App Router layout, landing page, onboarding page, search page, loading state, not-found page, and route-level error boundary.
 - `components/ui/`: Small typed UI primitives that follow shadcn/ui-compatible composition patterns without introducing a generated component registry yet.
 - `components/onboarding/`: Multi-step local preference quiz for academic, cost, career, location, campus, admissions, and category-weight inputs.
-- `components/search/`: URL-synced school search experience, result cards, filter panel, pagination, and local compare tray.
+- `components/search/`: URL-synced school search experience, result cards, filter panel, pagination, and save/compare actions.
+- `components/dashboard/`: Browser-local saved schools dashboard grouped by decision status.
+- `components/compare/`: Sticky compare tray and comparison workspace for 2 to 5 locally selected schools.
 - `lib/api-client.ts`: Safe fetch wrapper for backend calls, JSON error handling, and typed response usage.
 - `lib/preferences.ts`: Local preference profile schema, completeness calculation, localStorage persistence, and search-parameter handoff.
 - `lib/search.ts`: Frontend search filter parsing, API query serialization, and sort mapping.
+- `lib/school-actions.ts`: Typed browser-local saved-school and compare state, including legacy ID migration, duplicate prevention, status updates, and a 5-school compare limit.
+- `lib/comparison.ts`: Deterministic comparison summary and category winner helpers. It does not call an LLM or invent missing school facts.
 - `lib/env.ts`: Environment-based API base URL resolution using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`.
 - `types/api.ts`: Frontend TypeScript contracts for currently consumed API shapes.
 
-The frontend talks to the backend over HTTP only. It does not query PostgreSQL and does not compute ranking scores. The onboarding page stores a typed V1 local preference profile in browser storage because `POST /preferences` is still planned. After completion, it routes to `/search` with the subset of preferences currently supported by `GET /schools/search`. The search page keeps filters, sort, and pagination in the URL, calls `GET /schools/search`, and treats ranking fields as optional placeholders. Local save and compare state is intentionally browser-only until persistence arrives later in V1.
+The frontend talks to the backend over HTTP only. It does not query PostgreSQL and does not compute ranking scores. The onboarding page stores a typed V1 local preference profile in browser storage because `POST /preferences` is still planned. After completion, it routes to `/search` with the subset of preferences currently supported by `GET /schools/search`. The search page keeps filters, sort, and pagination in the URL, calls `GET /schools/search`, and treats ranking fields as optional placeholders.
+
+V1.11 saved-school and comparison state is browser-local because no authenticated user session exists. Saved schools are stored under `college-exploration.saved-schools.v1` with statuses `interested`, `applying`, `accepted`, `finalist`, and `removed`. Compare selections are stored under `college-exploration.compare-schools.v1`, deduplicated, capped at 5 schools, and shared by the sticky tray across pages. `/dashboard` reads the local saved-state snapshot; `/compare` reads local compare IDs and fetches full school profiles over `GET /schools/{id}` before rendering deterministic comparisons.
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, deterministic ranking, the frontend foundation, onboarding, and the search UI are implemented. Backend preference persistence, persisted saved schools, full comparisons, frontend profile workflows, cache, semantic retrieval, and deployment pipeline are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, the frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, and browser-local comparisons are implemented. Backend preference persistence, authenticated saved schools/comparisons, cache, semantic retrieval, and deployment pipeline are not implemented yet.

@@ -21,6 +21,7 @@ PROFILE_COMPLETENESS_FIELDS = (
     "type",
     "setting",
     "enrollment",
+    "acceptance_rate",
     "academics.majors",
     "academics.popular_majors",
     "academics.graduation_rate",
@@ -64,6 +65,7 @@ class SchoolService:
             type=str(row["type"]),
             setting=str(row["setting"]),
             enrollment=row["enrollment"],
+            acceptance_rate=self._to_float(row["acceptance_rate"]),
             academics=SchoolProfileAcademics(
                 majors=top_majors,
                 popular_majors=top_majors,

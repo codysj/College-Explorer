@@ -95,8 +95,8 @@ export function SchoolProfilePage({ schoolId }: SchoolProfilePageProps) {
         isLoading={isLoading}
         isSaved={isSaved}
         profile={profile}
-        onToggleCompare={() => toggleCompare(profile.school_id)}
-        onToggleSaved={() => toggleSaved(profile.school_id)}
+        onToggleCompare={() => toggleCompare(profile)}
+        onToggleSaved={() => toggleSaved(profile)}
       />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">

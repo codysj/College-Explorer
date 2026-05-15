@@ -78,6 +78,7 @@ class SchoolProfileResponse(BaseModel):
     type: str
     setting: str
     enrollment: int | None = None
+    acceptance_rate: float | None = None
     academics: SchoolProfileAcademics
     cost: SchoolProfileCost
     outcomes: SchoolProfileOutcomes

@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack decision-support product for helping prospective and admitted students discover, compare, rank, and justify college choices with transparent data and deterministic scoring.
 
-Status: V1.10 school profile frontend complete. Redis, pgvector, persisted saved schools, comparisons, and deployment are intentionally not implemented yet.
+Status: V1.11 saved schools and comparison MVP complete. Redis, pgvector, authenticated persistence, and deployment are intentionally not implemented yet.
 
 ## Project Thesis
 
@@ -156,6 +156,8 @@ Useful local URL:
 - Web app: `http://localhost:3000`
 - Onboarding: `http://localhost:3000/onboarding`
 - Search UI: `http://localhost:3000/search`
+- Saved schools dashboard: `http://localhost:3000/dashboard`
+- Comparison workspace: `http://localhost:3000/compare`
 - School profile: `http://localhost:3000/schools/1`
 
 Frontend environment:
@@ -222,15 +224,18 @@ Expected future commands:
 ## Limitations
 
 - `/health`, `/ready`, `/schools/search`, `/schools/{id}`, and `/rankings` exist. Preference persistence, saved-school, and comparison endpoints are not implemented yet.
-- The frontend has a landing page, onboarding, search UI, school profile pages, route shell, UI primitives, and typed API client, but no backend preference persistence, persisted saved-school flows, or full comparison workflow yet.
+- V1.11 saved-school and comparison state is local to the current browser. V2/V3 should move these records to user-owned backend persistence once authentication and privacy boundaries exist.
+- The frontend has a landing page, onboarding, search UI, school profile pages, a saved schools dashboard, a comparison workspace, route shell, UI primitives, and typed API client, but no backend preference persistence or authenticated saved-school/comparison persistence yet.
 - Onboarding stores a typed `PreferenceProfile` in browser `localStorage` and forwards supported filters such as state, setting, school type, and max net price to `/search`.
-- Search supports structured filters, sort controls, URL state, pagination, local save/compare state, loading/empty/error states, and API-backed result cards.
-- School profiles call `GET /schools/{id}`, render fit summary placeholders, academics, cost, outcomes, campus life, data-quality metadata, and a V2 similar-schools placeholder.
+- Search supports structured filters, sort controls, URL state, pagination, local save/compare actions, loading/empty/error states, and API-backed result cards.
+- School profiles call `GET /schools/{id}`, render fit summary placeholders, academics, cost, outcomes, campus life, data-quality metadata, save/compare controls, and a V2 similar-schools placeholder.
+- Saved schools and compare selections use browser `localStorage` in V1.11 because there is no authenticated user session yet. Saved schools are stored under `college-exploration.saved-schools.v1` with statuses `interested`, `applying`, `accepted`, `finalist`, and `removed`; compare selections are stored under `college-exploration.compare-schools.v1` with a 5-school limit.
+- `/dashboard` groups active saved schools by status, supports quick status changes/removal, and links back to profile pages. `/compare` fetches selected school profiles and renders deterministic metric comparisons, category winners, and tradeoff summaries for 2 to 5 schools.
 - The "Best fit" sort is a UI placeholder until the frontend calls `POST /rankings`.
 - Profile fit score, category scores, top reasons, top tradeoffs, and ranking version remain unavailable on `GET /schools/{id}` unless the backend later adds or composes ranking output. The profile page labels these states explicitly as unavailable and uses `data_confidence_score` only as data-completeness confidence.
 - No Redis cache, pgvector integration, or deployment exists yet.
 - No performance metrics are available.
 - Seed data is synthetic and intended for deterministic local development, not factual school reporting.
-- Playwright smoke coverage exists for search, onboarding, and school profiles.
-- README screenshot checklist for V1.13: landing page, onboarding completion, search with filters, school profile fit summary, profile missing-data state, and compare tray.
+- Playwright smoke coverage exists for search, onboarding, school profiles, saved schools, compare tray behavior, compare limit enforcement, and comparison rendering.
+- README screenshot checklist for V1.13: landing page, onboarding completion, search with filters, school profile fit summary, profile missing-data state, saved schools dashboard, compare tray, and comparison workspace.
 - Documentation is intentionally concise and should be updated as each implementation step lands.

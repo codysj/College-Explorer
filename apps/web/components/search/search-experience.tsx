@@ -62,7 +62,6 @@ export function SearchExperience() {
   const [retryNonce, setRetryNonce] = useState(0);
   const [preferenceProfile, setPreferenceProfile] = useState<PreferenceProfile | null>(null);
   const {
-    clearCompare,
     compareIds,
     compareLimit,
     savedIds,
@@ -119,7 +118,6 @@ export function SearchExperience() {
   const results = response?.results ?? [];
   const totalResults = response?.total_results ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalResults / (response?.page_size ?? 10)));
-  const selectedSchools = results.filter((school) => compareIds.has(school.school_id));
 
   const updateFilter = useCallback(
     <TKey extends keyof SearchFilters>(key: TKey, value: SearchFilters[TKey]) => {
@@ -161,20 +159,30 @@ export function SearchExperience() {
           </p>
         </div>
 
-        <label className="flex min-w-56 flex-col gap-2 text-sm font-medium text-foreground">
-          Sort
-          <select
-            className="h-11 rounded-md border border-border bg-white px-3 text-sm outline-none transition focus:border-primary"
-            value={draftFilters.sort}
-            onChange={(event) => updateFilter("sort", event.target.value as SortValue)}
-          >
-            {sortOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex gap-2">
+            <Button asChild variant="secondary">
+              <Link href="/dashboard">Dashboard</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/compare">Compare</Link>
+            </Button>
+          </div>
+          <label className="flex min-w-56 flex-col gap-2 text-sm font-medium text-foreground">
+            Sort
+            <select
+              className="h-11 rounded-md border border-border bg-white px-3 text-sm outline-none transition focus:border-primary"
+              value={draftFilters.sort}
+              onChange={(event) => updateFilter("sort", event.target.value as SortValue)}
+            >
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
@@ -247,13 +255,6 @@ export function SearchExperience() {
           ) : null}
         </section>
       </div>
-
-      <CompareTray
-        schools={selectedSchools}
-        selectionLimit={compareLimit}
-        selectedCount={compareIds.size}
-        onClear={clearCompare}
-      />
     </main>
   );
 }
@@ -411,8 +412,8 @@ type SchoolCardProps = {
   isCompared: boolean;
   isSaved: boolean;
   school: SchoolSearchCard;
-  onToggleCompare: (schoolId: number) => void;
-  onToggleSaved: (schoolId: number) => void;
+  onToggleCompare: (school: SchoolSearchCard) => void;
+  onToggleSaved: (school: SchoolSearchCard) => void;
 };
 
 function SchoolCard({
@@ -466,7 +467,7 @@ function SchoolCard({
           <Button
             type="button"
             variant={isSaved ? "primary" : "secondary"}
-            onClick={() => onToggleSaved(school.school_id)}
+            onClick={() => onToggleSaved(school)}
           >
             {isSaved ? <BookmarkCheck className="h-4 w-4" aria-hidden="true" /> : <Bookmark className="h-4 w-4" aria-hidden="true" />}
             {isSaved ? "Saved" : "Save"}
@@ -475,7 +476,7 @@ function SchoolCard({
             disabled={compareDisabled}
             type="button"
             variant={isCompared ? "primary" : "secondary"}
-            onClick={() => onToggleCompare(school.school_id)}
+            onClick={() => onToggleCompare(school)}
           >
             <GitCompare className="h-4 w-4" aria-hidden="true" />
             {isCompared ? "Added" : "Compare"}
@@ -574,48 +575,6 @@ function Pagination({
         Next
         <ChevronRight className="h-4 w-4" aria-hidden="true" />
       </Button>
-    </div>
-  );
-}
-
-function CompareTray({
-  onClear,
-  selectionLimit,
-  schools,
-  selectedCount,
-}: {
-  onClear: () => void;
-  selectionLimit: number;
-  schools: SchoolSearchCard[];
-  selectedCount: number;
-}) {
-  if (selectedCount === 0) return null;
-
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-white/95 px-5 py-4 shadow-soft backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-foreground">
-            Compare tray: {selectedCount} selected
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Select 2 to {selectionLimit} schools. Full comparison arrives in V1.11.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {schools.slice(0, 5).map((school) => (
-            <Badge key={school.school_id} variant="outline">
-              {school.name}
-            </Badge>
-          ))}
-          <Button disabled={selectedCount < 2} asChild variant="primary">
-            <Link href="/compare">Compare</Link>
-          </Button>
-          <Button type="button" variant="ghost" onClick={onClear}>
-            Clear
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

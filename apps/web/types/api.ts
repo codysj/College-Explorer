@@ -34,6 +34,7 @@ export type SchoolProfile = {
   type: string;
   setting: string;
   enrollment: number | null;
+  acceptance_rate: number | null;
   academics: {
     majors: string[] | null;
     popular_majors: string[] | null;

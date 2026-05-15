@@ -26,6 +26,7 @@ class SchoolRepository(BaseRepository[School]):
                 School.type,
                 School.setting,
                 School.undergraduate_enrollment.label("enrollment"),
+                School.acceptance_rate,
                 SchoolAcademics.top_majors,
                 SchoolAcademics.graduation_rate,
                 SchoolAcademics.retention_rate,

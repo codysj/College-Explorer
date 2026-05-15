@@ -9,6 +9,7 @@ const profile = {
   type: "Public",
   setting: "Suburban",
   enrollment: 6200,
+  acceptance_rate: 0.64,
   academics: {
     majors: ["Biology", "Psychology", "Business"],
     popular_majors: ["Biology", "Psychology", "Business"],

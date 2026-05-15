@@ -26,6 +26,7 @@ class FakeProfileService:
                 type="Public",
                 setting="Urban",
                 enrollment=11800,
+                acceptance_rate=0.44,
                 academics=SchoolProfileAcademics(
                     majors=["Computer Science", "Engineering"],
                     popular_majors=["Computer Science", "Engineering"],
@@ -73,6 +74,7 @@ class FakeProfileService:
             type="Public",
             setting="Suburban",
             enrollment=6200,
+            acceptance_rate=0.64,
             academics=SchoolProfileAcademics(
                 majors=["Biology", "Psychology", "Business"],
                 popular_majors=["Biology", "Psychology", "Business"],
@@ -125,6 +127,7 @@ def test_valid_school_id_returns_full_profile(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["school_id"] == 1
+    assert payload["acceptance_rate"] == 0.64
     assert payload["academics"]["popular_majors"] == ["Biology", "Psychology", "Business"]
     assert payload["cost"]["net_price"] == 22100
     assert payload["outcomes"]["repayment_rate"] == 0.76
@@ -187,6 +190,7 @@ def test_response_structure_correctness(client: TestClient) -> None:
         "type",
         "setting",
         "enrollment",
+        "acceptance_rate",
         "academics",
         "cost",
         "outcomes",
@@ -241,6 +245,7 @@ def test_service_computes_confidence_from_profile_completeness() -> None:
                 "type": "Public",
                 "setting": "Urban",
                 "enrollment": None,
+                "acceptance_rate": None,
                 "top_majors": ["Biology"],
                 "graduation_rate": None,
                 "retention_rate": 0.8,
@@ -267,4 +272,5 @@ def test_service_computes_confidence_from_profile_completeness() -> None:
     assert profile.enrollment is None
     assert "enrollment" in profile.data_fields_missing
     assert "outcomes.completion_rate" in profile.data_fields_missing
-    assert profile.data_confidence_score == 0.6071
+    assert "acceptance_rate" in profile.data_fields_missing
+    assert profile.data_confidence_score == 0.5862

@@ -31,8 +31,10 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
   - Added backend deterministic ranking service, weighted category scoring, confidence, hard constraints, reason-code explanations, `POST /rankings`, tests, and scoring/API documentation.
 - [x] V1.10 School profile frontend
   - Added `/schools/[id]` with typed profile fetching, metadata, loading/error states, profile sections, explicit unavailable-data handling, local save/compare integration, and Playwright smoke coverage.
-- [ ] V1.11 Saved schools and comparison MVP
-  - Add saved school state and side-by-side comparison workflow.
+- [x] V1.11 Saved schools and comparison MVP
+  - Added typed browser-local saved school state with statuses, dashboard grouping, quick status updates, removal, duplicate prevention, and profile links.
+  - Added typed browser-local compare state, sticky cross-page tray, 5-school limit, `/compare` workspace, deterministic metric summaries, category winners, and tradeoff summaries.
+  - Persistence remains localStorage-only until auth-backed V2/V3 user persistence exists.
 - [ ] V1.12 Redis cache-aside
   - Cache repeated search, profile, and ranking reads with versioned keys.
 - [ ] V1.13 Deployment and README polish
@@ -73,7 +75,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-09: Completed V1.9 deterministic ranking engine. Added V1.0 category scoring, normalized weights, hard constraints, deterministic reasons/tradeoffs, ranked API output, backend tests, and scoring methodology docs.
 
 - 2026-05-11: Completed V1.10 school profile frontend. Added the detail route, profile presentation sections, shared local save/compare state, dynamic metadata, profile smoke test, and docs updates. API assumption: `GET /schools/{id}` does not currently include `confidence_score` or `ranking_version`; the page uses `data_confidence_score` for data completeness and marks ranking fields unavailable.
+- 2026-05-15: Completed V1.11 saved schools and comparison MVP. Added localStorage-backed saved school statuses, `/dashboard`, a cross-page compare tray, `/compare`, deterministic comparison helpers, Playwright coverage, docs updates, and `acceptance_rate` on `GET /schools/{id}` for comparison metrics.
 
 ## Next Recommended Task
 
-V1.11 Saved schools and comparison MVP.
+V1.12 Redis cache-aside.
