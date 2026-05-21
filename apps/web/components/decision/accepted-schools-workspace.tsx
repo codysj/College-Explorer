@@ -24,10 +24,15 @@ import type { DecisionReportResponse } from "@/types/api";
 
 export function AcceptedSchoolsWorkspace() {
   const { savedSchools, updateSavedStatus } = useSchoolActionState();
+  const [localStateReady, setLocalStateReady] = useState(false);
   const candidates = useMemo(() => getDecisionCandidates(getVisibleSavedSchools(savedSchools)), [savedSchools]);
   const [offers, setOffers] = useState<DecisionOfferDraft[]>([]);
   const [report, setReport] = useState<DecisionReportResponse | null>(null);
   const [saveState, setSaveState] = useState<string>("Local");
+
+  useEffect(() => {
+    setLocalStateReady(true);
+  }, []);
 
   useEffect(() => {
     setOffers((current) => mergeOffersWithCandidates(candidates, current.length ? current : readDecisionOffers()));
@@ -97,13 +102,15 @@ export function AcceptedSchoolsWorkspace() {
         </div>
       </header>
 
-      {candidates.length === 0 ? (
+      {localStateReady && candidates.length === 0 ? (
         <EmptyState
-          title="No accepted schools yet"
+          title="No admitted schools yet"
           description="Mark saved schools as accepted or finalist to start the decision workspace."
           action={<Link href="/dashboard">Review saved schools</Link>}
         />
-      ) : (
+      ) : null}
+
+      {candidates.length > 0 ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
           <section className="space-y-4">
             {candidates.map((school) => {
@@ -121,7 +128,7 @@ export function AcceptedSchoolsWorkspace() {
           </section>
           <DecisionSummaryPanel report={report} />
         </div>
-      )}
+      ) : null}
     </main>
   );
 }

@@ -100,8 +100,10 @@ test("edits accepted-school offers and generates a decision summary", async ({ p
 
   await page.goto("/decision");
 
-  await expect(page.getByRole("heading", { name: "Accepted schools" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Accepted schools", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Estimated yearly cost").first()).toBeVisible();
   await page.getByLabel("Estimated yearly cost").first().fill("18000");
+  await expect(page.getByLabel("Unresolved concerns/questions").first()).toBeVisible();
   await page.getByLabel("Unresolved concerns/questions").first().fill("Confirm housing package");
   await page.getByRole("button", { name: "Save offer" }).first().click();
   await page.getByRole("button", { name: "Generate summary" }).click();
