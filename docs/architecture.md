@@ -62,9 +62,23 @@ The V1.3 FastAPI foundation lives in `apps/api`:
 - `schemas/`: Pydantic API request/response models.
 - `repositories/`: data access layer. SQL belongs here, not in route handlers.
 - `services/`: business logic layer placeholders between routes and repositories.
+- `ingestion/`: deterministic V2.1 CSV pipeline for public college-data snapshots.
 - `tests/`: pytest tests for backend behavior.
 
 Request flow should be `routes -> services -> repositories -> database`. Routes own HTTP concerns, services own product logic, repositories own persistence, and models mirror database tables.
+
+## Data Ingestion Pipeline
+
+V2.1 keeps ingestion separate from API routes. `apps/api/ingestion/college_data.py` implements a deterministic CSV pipeline:
+
+1. Raw import reads public college-data style snapshots from `data/raw` or small test fixtures.
+2. Normalization maps source-style columns such as `UNITID`, `INSTNM`, `CONTROL`, `LOCALE`, and Scorecard metric names into the product school schema.
+3. Missing-value handling converts blanks, `NULL`, `NaN`, and privacy-suppressed tokens to `None`; missing numeric values are never converted to zero.
+4. Derived attributes fill product-friendly fields such as region from state, school type from control code, setting from locale code, and net price from the applicable public/private source field.
+5. Validation checks required identity fields, duplicate unit IDs, known rate ranges, nonnegative numeric values, and unavailable ranking inputs.
+6. Seed/refresh output writes deterministic canonical CSV rows sorted by `unitid`.
+
+The CLI in `apps/api/scripts/ingest_college_data.py` exposes `import`, `validate`, `seed`, and `refresh` commands. Generated outputs are intended for local seeding with `scripts/seed_database.py`; large raw snapshots and processed outputs are not committed. Source metadata is carried through to `schools.source_name`, `schools.source_year`, `schools.data_version`, `schools.imported_at`, and `schools.refreshed_at`.
 
 ## School API Query Strategy
 
@@ -138,4 +152,4 @@ GitHub Actions validates frontend lint/typecheck/build, Playwright smoke tests, 
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, and CI validation are implemented. Backend preference persistence, authenticated saved schools/comparisons, semantic retrieval, public cloud deployment, production observability, and load-test reporting are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, and the V2.1 ingestion pipeline are implemented. Backend preference persistence, authenticated saved schools/comparisons, semantic retrieval, public cloud deployment, production observability, and load-test reporting are not implemented yet.

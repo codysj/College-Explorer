@@ -1,0 +1,4 @@
+UNITID,INSTNM,CITY,STABBR,CONTROL,LOCALE,UGDS,ADM_RATE,LATITUDE,LONGITUDE,programs.cip_4_digit.title,C150_4,RET_FT4,STUFACR,TUITIONFEE_IN,TUITIONFEE_OUT,NPT4_PUB,NPT4_PRIV,GRANT_AMT,DEBT_MDN,MD_EARN_WNE_P10,RPY_3YR_RT,housing_available,sports_division,greek_life_rate,culture_tags
+100001,Example Public University,Example City,CA,1,11,12000,0.6500,34.050000,-118.250000,Computer Science|Business,0.7200,0.8400,16.0,11000,32000,18500,,9000,21000,62000,0.7800,true,DI,0.1200,urban|research
+100002,Missing Value College,Smalltown,VT,2,32,2400,PrivacySuppressed,44.480000,-73.210000,Biology|Education,0.6800,,12.0,42000,42000,,29500,23000,,51000,,false,DIII,,small-classes|rural
+

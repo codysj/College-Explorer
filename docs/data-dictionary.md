@@ -7,7 +7,7 @@ V1.2 defines the initial PostgreSQL schema and deterministic seed data. The seed
 - Missing values are stored as `NULL`, not `0`, unless zero is the real value.
 - Rates are stored as decimals from `0` to `1`.
 - Dollar amounts are stored as whole-dollar integers.
-- School records include `source_name` and `source_year`; V1.2 seed rows use `synthetic_v1_seed` and `2026`.
+- School records include `source_name`, `source_year`, `data_version`, `imported_at`, and `refreshed_at`; legacy V1 seed rows default to `synthetic_v1_seed`, `2026`, and `v1_seed`.
 - Tables with user-owned or mutable data include `created_at`; most also include `updated_at`.
 
 ## Tables
@@ -16,7 +16,7 @@ V1.2 defines the initial PostgreSQL schema and deterministic seed data. The seed
 
 Canonical institution identity and search fields.
 
-Key fields: `id`, `unitid`, `name`, `city`, `state`, `region`, `type`, `setting`, `undergraduate_enrollment`, `acceptance_rate`, `latitude`, `longitude`, `source_name`, `source_year`, `created_at`, `updated_at`.
+Key fields: `id`, `unitid`, `name`, `city`, `state`, `region`, `type`, `setting`, `undergraduate_enrollment`, `acceptance_rate`, `latitude`, `longitude`, `source_name`, `source_year`, `data_version`, `imported_at`, `refreshed_at`, `created_at`, `updated_at`.
 
 Indexes: `state`, `region`, `type`, `setting`, `undergraduate_enrollment`, `acceptance_rate`.
 
@@ -90,8 +90,23 @@ Key fields: `id`, `user_id`, `event_name`, `entity_type`, `entity_id`, `metadata
 
 Indexes: `user_id`, `event_name`, `created_at`.
 
+## V2.1 Ingestion Fields
+
+The V2.1 ingestion pipeline writes product-ready school seed CSVs with the same school, academic, cost, outcome, and campus-life columns used by `scripts/seed_database.py`, plus source metadata.
+
+| Field | Meaning |
+| --- | --- |
+| `source_name` | Human-readable dataset/source label, such as `public_college_snapshot` or a local fixture name. |
+| `source_year` | Reporting year for the source snapshot. |
+| `data_version` | Deterministic operator-supplied version string for the ingested snapshot. |
+| `imported_at` | Timestamp attached when raw data is normalized/imported. |
+| `refreshed_at` | Timestamp attached when the refresh command regenerates product-ready output. |
+
+Validation warnings call out unavailable ranking inputs so missing data lowers confidence in downstream scoring instead of silently distorting fit scores.
+
 ## Placeholder vs. Real Data
 
 - V1.2 school records are synthetic fixtures with plausible ranges.
+- V2.1 includes small public-data-style fixtures for pipeline tests, not full official datasets.
 - User, preference, saved-school, comparison, and event tables are structural placeholders for future V1 features.
-- Public source ingestion, official College Scorecard/IPEDS mapping, and data freshness reporting belong to later tasks.
+- Full official College Scorecard/IPEDS snapshot operations and data freshness UI belong to later tasks.

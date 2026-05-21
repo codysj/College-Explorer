@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
 
-Status: V1.13 deployment and README polish complete. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, and deployment documentation. Public cloud deployment, authenticated persistence, pgvector semantic search, and official college-data ingestion remain future work.
+Status: V2.1 data ingestion pipeline is locally implemented after the V1.13 deployment polish baseline. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, and a deterministic public-college-snapshot ingestion path. Public cloud deployment, authenticated persistence, pgvector semantic search, and full official dataset ingestion remain future work.
 
 ## Product Overview
 
@@ -28,6 +28,7 @@ The engineering thesis is that a consumer-facing product can stay trustworthy wh
 - PostgreSQL schema for schools, academics, costs, outcomes, campus life, users, saved schools, comparisons, and events.
 - Synthetic deterministic seed dataset for local development and tests.
 - Redis cache-aside for repeated search, profile, and ranking responses with versioned keys and TTLs.
+- Deterministic V2.1 ingestion pipeline for small public college-data snapshots.
 - Browser-local saved-school and comparison state for V1 demo flows.
 - Playwright smoke coverage for onboarding, search, profiles, saved schools, and compare behavior.
 - Docker Compose support for frontend, backend, PostgreSQL, and Redis.
@@ -72,7 +73,7 @@ See [docs/architecture.md](docs/architecture.md) for the deeper architecture not
 | --- | --- |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, Playwright |
 | Backend | FastAPI, Pydantic, SQLAlchemy, Alembic, pytest |
-| Data | PostgreSQL 16, deterministic CSV seed data |
+| Data | PostgreSQL 16, deterministic CSV seed data, public snapshot ingestion CLI |
 | Cache | Redis 7 cache-aside |
 | DevOps | Docker Compose, GitHub Actions, Vercel/AWS deployment notes |
 | Future V2 | pgvector semantic retrieval, data ingestion pipeline, similar-school discovery |
@@ -167,6 +168,21 @@ Implemented endpoints:
 
 API docs are generated locally at `http://127.0.0.1:8000/docs`. The contract details live in [docs/api-contract.md](docs/api-contract.md).
 
+## Data Ingestion
+
+V2.1 adds a deterministic backend ingestion CLI for public college-data style CSV snapshots. Raw datasets should stay out of git under `data/raw`; generated processed CSVs are written under `data/processed` and are also ignored by git.
+
+```powershell
+cd apps/api
+python scripts/ingest_college_data.py import --raw-file ..\..\data\raw\college_snapshot.csv --source-year 2024 --data-version scorecard-2024
+python scripts/ingest_college_data.py validate --raw-file ..\..\data\raw\college_snapshot.csv --source-year 2024 --data-version scorecard-2024
+python scripts/ingest_college_data.py seed --raw-file ..\..\data\raw\college_snapshot.csv --output-file ..\..\data\processed\schools_ingested.csv --source-year 2024 --data-version scorecard-2024
+python scripts/ingest_college_data.py refresh --raw-file ..\..\data\raw\college_snapshot.csv --output-file ..\..\data\processed\schools_ingested.csv --source-year 2024 --data-version scorecard-2024
+python scripts/seed_database.py --reset --seed-file ..\..\data\processed\schools_ingested.csv
+```
+
+The stages are raw import, normalization, missing-value handling, derived attributes, validation, and seed/refresh output. Missing numeric values remain blank in CSV output and load as `NULL`, not `0`.
+
 ## Ranking Methodology Summary
 
 Ranking is deterministic and versioned as `v1.0`. The backend computes category scores for academic fit, cost, career, location, campus, and admissions realism, then normalizes user weights and returns:
@@ -257,10 +273,10 @@ Screenshots should be added only after capturing the real running product.
 
 ## Known Limitations
 
-- Seed data is synthetic and intended for deterministic development, not factual school reporting.
+- Seed data is synthetic or fixture-sized and intended for deterministic development, not factual school reporting.
 - Saved schools and comparisons are browser-local in V1 because authentication is not implemented.
 - The frontend search UI does not yet call `POST /rankings`; deterministic ranking is available through the API.
-- pgvector semantic search, similar schools, official data ingestion, analytics, rate limiting, and account persistence are future work.
+- pgvector semantic search, similar schools, full official dataset operations, analytics, rate limiting, and account persistence are future work.
 - Deployment configuration is documented and Dockerized, but no public hosted environment has been verified.
 - Performance claims are not production measurements.
 

@@ -28,6 +28,9 @@ class School(Base):
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     source_name: Mapped[str] = mapped_column(String(80), nullable=False)
     source_year: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    data_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -43,7 +43,10 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 
 ## V2: Recommendation and Decision Intelligence
 
-- [ ] V2.1 Data ingestion pipeline
+- [x] V2.1 Data ingestion pipeline
+  - Added deterministic raw import, normalization, missing-value handling, derived attributes, validation, and seed/refresh CSV output.
+  - Added source metadata fields, public-data-style fixtures, and focused ingestion tests.
+  - Full local pytest validation still needs a Python 3.12 environment with project dependencies installed; dependency-light CLI and manual ingestion test validation passed.
 - [ ] V2.2 pgvector semantic search
 - [ ] V2.3 Similar-school discovery
 - [ ] V2.4 Acceptance decision mode
@@ -79,7 +82,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-15: Completed V1.11 saved schools and comparison MVP. Added localStorage-backed saved school statuses, `/dashboard`, a cross-page compare tray, `/compare`, deterministic comparison helpers, Playwright coverage, docs updates, and `acceptance_rate` on `GET /schools/{id}` for comparison metrics.
 - 2026-05-15: Completed V1.12 Redis cache-aside. Added Docker Redis support, environment-driven cache settings, centralized cache service, cache-aside reads for search/profile/ranking responses, versioned ranking keys, TTL policy documentation, hit/miss/fallback logging, and mock-backed cache tests.
 - 2026-05-15: Completed V1.13 deployment and README polish. Added production-oriented Dockerfiles, full-stack Compose services, local/prod environment documentation, narrow CORS configuration, CI frontend typecheck and Compose validation, architecture diagram, screenshot checklist, honest performance notes, and a recruiter-facing README. Public cloud deployment remains unverified.
+- 2026-05-20: Completed V2.1 data ingestion pipeline. Added deterministic raw import, normalization, missing-value handling, derived attributes, validation, seed/refresh CSV output, source metadata columns, fixture coverage, and ingestion usage docs.
 
 ## Next Recommended Task
 
-V2.1 Data ingestion pipeline.
+V2.2 pgvector semantic search.
