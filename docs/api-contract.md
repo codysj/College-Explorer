@@ -1,6 +1,6 @@
 # API Contract
 
-V1.13 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
+V2.2 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and similar-school discovery are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -203,6 +203,89 @@ Hard constraints:
 - `strict_constraints` may also list strict dimensions, such as `["major", "cost"]`.
 - Unknown data is not treated as zero and does not count as a violation by itself.
 
+### `POST /semantic-search`
+
+Natural-language school search using hybrid retrieval. The endpoint retrieves vector candidates when embeddings exist, falls back to deterministic lexical matching when they do not, applies structured filters and hard constraints, then re-ranks candidates with the deterministic ranking engine. Vector similarity never overrides hard constraints or final structured ranking.
+
+Request body:
+
+```json
+{
+  "query": "affordable data science schools near cities",
+  "filters": {
+    "setting": "Urban",
+    "max_net_price": 30000,
+    "page": 1,
+    "page_size": 10
+  },
+  "preferences": {
+    "intended_major": "Data Science",
+    "max_annual_cost": 30000,
+    "weights": {
+      "academic": 0.35,
+      "cost": 0.25,
+      "career": 0.25,
+      "campus": 0.15
+    },
+    "constraints": {
+      "strict_cost": true
+    }
+  },
+  "candidate_limit": 50
+}
+```
+
+Request fields:
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `query` | string | Required natural-language query, 3 to 240 chars. |
+| `filters` | object | Optional `SearchRequest` fields from `GET /schools/search`; page/page_size control the final ranked response page. |
+| `preferences` | object | Optional deterministic ranking preferences; hard constraints are honored after retrieval. |
+| `candidate_limit` | integer | Optional vector/fallback candidate count, `1` to `200`, defaults to `50`. |
+
+Response `200`:
+
+```json
+{
+  "ranking_version": "v1.0",
+  "embedding_model": "local-hash-embedding-v1",
+  "embedding_type": "school_search_document",
+  "retrieval_mode": "deterministic_fallback",
+  "results": [
+    {
+      "school_id": 2,
+      "name": "Bayview Technical University",
+      "city": "New Haven",
+      "state": "CT",
+      "type": "Public",
+      "setting": "Urban",
+      "enrollment": 11800,
+      "acceptance_rate": 0.52,
+      "net_price": 24400,
+      "graduation_rate": 0.78,
+      "fit_score": 86.42,
+      "confidence_score": 0.95,
+      "category_scores": {
+        "academic": 92.0,
+        "cost": 82.5
+      },
+      "top_reasons": ["academic_major_match", "cost_within_budget"],
+      "top_tradeoffs": [],
+      "ranking_version": "v1.0",
+      "semantic_score": 0.71,
+      "match_reasons": ["major_match", "setting_match", "cost_value_match"]
+    }
+  ],
+  "page": 1,
+  "page_size": 10,
+  "total_results": 1,
+  "has_next": false
+}
+```
+
+`retrieval_mode` is `pgvector` when stored vectors are used and `deterministic_fallback` when embeddings are missing or unavailable. `match_reasons` may include `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
+
 ### `GET /schools/{id}`
 
 Full school profile composed from `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life`. The endpoint uses a single repository query with left joins so missing optional profile rows or fields are represented as `null` rather than causing N+1 relationship loads.
@@ -320,6 +403,8 @@ School profile reads join `schools` to academics, costs, outcomes, and campus li
 
 Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life` with left joins in one repository query. The ranking service applies hard constraints, computes category scores, confidence, reason codes, and tradeoffs in memory for V1 scale.
 
+Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. The semantic service applies filters and hard constraints after candidate retrieval and delegates final ordering to the ranking service.
+
 ## Cache Behavior
 
 Caching is transparent to clients and does not change request or response contracts. The backend checks Redis before repository/database work, stores successful responses on misses, and falls back to normal execution if Redis is unavailable.
@@ -329,6 +414,7 @@ Caching is transparent to clients and does not change request or response contra
 | Search | Resource name, all filters, sort, direction, page, page size, `CACHE_KEY_VERSION` | 300 seconds |
 | School profile | Resource name, `school_id`, `CACHE_KEY_VERSION` | 3600 seconds |
 | Ranking | Resource name, full request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Semantic search | Resource name, normalized query, filters, preferences, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 
 Example key shapes:
 

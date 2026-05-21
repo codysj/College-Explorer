@@ -42,7 +42,7 @@ Compose starts:
 
 - `web`: Next.js standalone production server on `http://localhost:3000`.
 - `api`: FastAPI container on `http://localhost:8000`.
-- `postgres`: PostgreSQL 16 on port `5432`.
+- `postgres`: PostgreSQL 16 with pgvector support on port `5432`.
 - `redis`: Redis 7 on port `6379`.
 
 The API container runs Alembic migrations on startup. It does not reset or seed data automatically, because automatic destructive seed resets are unsafe for shared environments. Seed manually when needed:
@@ -105,7 +105,7 @@ Do not run `python scripts/seed_database.py --reset` against production data.
 
 Local: Docker Compose `postgres` service.
 
-Production-like target: AWS RDS PostgreSQL or equivalent managed PostgreSQL.
+Production-like target: AWS RDS PostgreSQL or equivalent managed PostgreSQL with the `vector` extension available before running V2.2 migrations.
 
 Required setup:
 

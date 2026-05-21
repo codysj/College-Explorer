@@ -47,7 +47,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
   - Added deterministic raw import, normalization, missing-value handling, derived attributes, validation, and seed/refresh CSV output.
   - Added source metadata fields, public-data-style fixtures, and focused ingestion tests.
   - Full local pytest validation still needs a Python 3.12 environment with project dependencies installed; dependency-light CLI and manual ingestion test validation passed.
-- [ ] V2.2 pgvector semantic search
+- [x] V2.2 pgvector semantic search
+  - Added pgvector embedding storage, deterministic school search documents, local/test hash embeddings, refresh CLI, semantic endpoint, hybrid retrieval with deterministic re-ranking, Redis cache keys, and focused backend tests.
+  - Full migration validation against PostgreSQL still needs local Docker/Postgres because the current shell did not have system Python on PATH; `.venv` Python test validation passed for semantic-search coverage.
 - [ ] V2.3 Similar-school discovery
 - [ ] V2.4 Acceptance decision mode
 - [ ] V2.5 Cost/value calculator
@@ -83,7 +85,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-15: Completed V1.12 Redis cache-aside. Added Docker Redis support, environment-driven cache settings, centralized cache service, cache-aside reads for search/profile/ranking responses, versioned ranking keys, TTL policy documentation, hit/miss/fallback logging, and mock-backed cache tests.
 - 2026-05-15: Completed V1.13 deployment and README polish. Added production-oriented Dockerfiles, full-stack Compose services, local/prod environment documentation, narrow CORS configuration, CI frontend typecheck and Compose validation, architecture diagram, screenshot checklist, honest performance notes, and a recruiter-facing README. Public cloud deployment remains unverified.
 - 2026-05-20: Completed V2.1 data ingestion pipeline. Added deterministic raw import, normalization, missing-value handling, derived attributes, validation, seed/refresh CSV output, source metadata columns, fixture coverage, and ingestion usage docs.
+- 2026-05-21: Completed V2.2 pgvector semantic search. Added school embedding table/migration, structured document generation, local deterministic embedding provider, refresh CLI, `POST /semantic-search`, pgvector/fallback candidate retrieval, structured hard-constraint preservation, semantic reason tags, cache keys, and tests.
 
 ## Next Recommended Task
 
-V2.2 pgvector semantic search.
+V2.3 Similar-school discovery.

@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
 
-Status: V2.1 data ingestion pipeline is locally implemented after the V1.13 deployment polish baseline. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, and a deterministic public-college-snapshot ingestion path. Public cloud deployment, authenticated persistence, pgvector semantic search, and full official dataset ingestion remain future work.
+Status: V2.2 pgvector semantic search is locally implemented after the V2.1 ingestion pipeline. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, and explainable hybrid semantic search. Public cloud deployment, authenticated persistence, similar-school discovery, and full official dataset ingestion remain future work.
 
 ## Product Overview
 
@@ -29,6 +29,7 @@ The engineering thesis is that a consumer-facing product can stay trustworthy wh
 - Synthetic deterministic seed dataset for local development and tests.
 - Redis cache-aside for repeated search, profile, and ranking responses with versioned keys and TTLs.
 - Deterministic V2.1 ingestion pipeline for small public college-data snapshots.
+- pgvector-backed V2.2 semantic retrieval with deterministic local fallback and final ranking controlled by structured scoring.
 - Browser-local saved-school and comparison state for V1 demo flows.
 - Playwright smoke coverage for onboarding, search, profiles, saved schools, and compare behavior.
 - Docker Compose support for frontend, backend, PostgreSQL, and Redis.
@@ -42,7 +43,7 @@ flowchart LR
     api["FastAPI backend<br/>apps/api"]
     pg["PostgreSQL<br/>structured school data"]
     redis["Redis<br/>cache-aside"]
-    pgvector["pgvector<br/>V2 semantic retrieval placeholder"]
+    pgvector["pgvector<br/>V2 semantic retrieval"]
     gha["GitHub Actions<br/>lint, typecheck, build, tests"]
     vercel["Vercel or equivalent<br/>frontend host"]
     aws["AWS App Runner / ECS Fargate<br/>API container"]
@@ -53,7 +54,7 @@ flowchart LR
     web -->|"typed HTTP API"| api
     api -->|"SQLAlchemy repositories"| pg
     api -->|"cache get/set"| redis
-    api -. "future V2 embeddings" .-> pgvector
+    api -->|"school search embeddings"| pgvector
 
     gha --> web
     gha --> api
@@ -73,10 +74,10 @@ See [docs/architecture.md](docs/architecture.md) for the deeper architecture not
 | --- | --- |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, Playwright |
 | Backend | FastAPI, Pydantic, SQLAlchemy, Alembic, pytest |
-| Data | PostgreSQL 16, deterministic CSV seed data, public snapshot ingestion CLI |
+| Data | PostgreSQL 16 with pgvector, deterministic CSV seed data, public snapshot ingestion CLI |
 | Cache | Redis 7 cache-aside |
 | DevOps | Docker Compose, GitHub Actions, Vercel/AWS deployment notes |
-| Future V2 | pgvector semantic retrieval, data ingestion pipeline, similar-school discovery |
+| V2 recommendation | deterministic ingestion, pgvector semantic retrieval, similar-school discovery |
 
 ## Local Development Setup
 
@@ -165,6 +166,7 @@ Implemented endpoints:
 - `GET /schools/search`: structured filters, deterministic sorting, pagination, search-card response fields.
 - `GET /schools/{id}`: full profile assembled from school, academics, cost, outcome, and campus-life tables.
 - `POST /rankings`: deterministic fit ranking against a preference profile.
+- `POST /semantic-search`: natural-language school search with hybrid retrieval, hard constraints, deterministic re-ranking, and reason tags.
 
 API docs are generated locally at `http://127.0.0.1:8000/docs`. The contract details live in [docs/api-contract.md](docs/api-contract.md).
 
@@ -182,6 +184,19 @@ python scripts/seed_database.py --reset --seed-file ..\..\data\processed\schools
 ```
 
 The stages are raw import, normalization, missing-value handling, derived attributes, validation, and seed/refresh output. Missing numeric values remain blank in CSV output and load as `NULL`, not `0`.
+
+## Semantic Search
+
+V2.2 adds `POST /semantic-search`. It builds school search documents from structured fields, retrieves pgvector candidates when embeddings exist, applies structured filters and hard constraints, then re-ranks with the deterministic ranking engine.
+
+Generate local deterministic embeddings after migrations and seeding:
+
+```powershell
+cd apps/api
+python scripts/refresh_embeddings.py
+```
+
+The CLI uses the built-in `local-hash-embedding-v1` provider, so tests and local development do not require paid API keys. If embeddings are missing or pgvector is unavailable, the endpoint uses a deterministic lexical fallback over the same generated school documents.
 
 ## Ranking Methodology Summary
 
@@ -214,7 +229,7 @@ Recommended production-like deployment:
 
 - Frontend: Vercel or equivalent Next.js host from `apps/web`.
 - Backend: AWS App Runner or ECS/Fargate using `apps/api/Dockerfile`.
-- PostgreSQL: managed PostgreSQL such as AWS RDS.
+- PostgreSQL: managed PostgreSQL such as AWS RDS with the `vector` extension available for semantic search.
 - Redis: managed Redis such as AWS ElastiCache.
 - CI: GitHub Actions runs frontend lint/typecheck/build, Playwright smoke tests, backend tests, and Docker Compose config validation.
 
@@ -276,7 +291,7 @@ Screenshots should be added only after capturing the real running product.
 - Seed data is synthetic or fixture-sized and intended for deterministic development, not factual school reporting.
 - Saved schools and comparisons are browser-local in V1 because authentication is not implemented.
 - The frontend search UI does not yet call `POST /rankings`; deterministic ranking is available through the API.
-- pgvector semantic search, similar schools, full official dataset operations, analytics, rate limiting, and account persistence are future work.
+- Similar schools, full official dataset operations, analytics, rate limiting, and account persistence are future work.
 - Deployment configuration is documented and Dockerized, but no public hosted environment has been verified.
 - Performance claims are not production measurements.
 
@@ -303,4 +318,4 @@ V3 focuses on hardening:
 - Expanded end-to-end tests
 - Portfolio/demo polish
 
-See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.1 Data ingestion pipeline**.
+See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.3 Similar-school discovery**.

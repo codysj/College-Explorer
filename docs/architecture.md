@@ -7,7 +7,7 @@ This document captures the current V1 architecture for the College Exploration P
 - `apps/web`: Next.js frontend for onboarding, search, school profiles, comparison, and decision workflows.
 - `apps/api`: FastAPI backend for typed REST endpoints, validation, search, ranking, comparison, and data access.
 - PostgreSQL: canonical structured college data and user-owned decision state. The V1.2 schema exists under `apps/api/alembic`.
-- pgvector: semantic retrieval for V2 after structured V1 search is stable.
+- pgvector: V2.2 semantic school retrieval over generated structured school search documents.
 - Redis: cache-aside layer for repeated read-heavy search, profile, and ranking responses.
 - `data/raw`: raw source snapshots, usually large and not committed.
 - `data/processed`: cleaned local development data.
@@ -23,7 +23,7 @@ flowchart LR
     fastapi["FastAPI API<br/>apps/api"]
     postgres["PostgreSQL<br/>canonical structured data"]
     redis["Redis<br/>cache-aside"]
-    pgvector["pgvector<br/>future V2 semantic search"]
+    pgvector["pgvector<br/>semantic school search"]
     actions["GitHub Actions"]
     frontendHost["Vercel / equivalent"]
     apiHost["AWS App Runner / ECS Fargate"]
@@ -34,7 +34,7 @@ flowchart LR
     next -->|"HTTP JSON"| fastapi
     fastapi -->|"repositories / SQLAlchemy"| postgres
     fastapi -->|"versioned cache keys"| redis
-    fastapi -.->|"future embeddings"| pgvector
+    fastapi -->|"school search embeddings"| pgvector
     actions -->|"lint, typecheck, build, tests"| next
     actions -->|"pytest, compose validation"| fastapi
     next -. "deployment target" .-> frontendHost
@@ -108,6 +108,14 @@ Profile responses keep missing values as `null`, list missing dot-paths in `data
 
 Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: they produce neutral category fit and lower confidence rather than zero-valued penalties. The ranking version is currently `v1.0`.
 
+`POST /semantic-search` adds V2.2 hybrid retrieval:
+
+- `services/semantic_search.py` builds deterministic school search documents from school identity, location, type/setting, majors, costs, outcomes, campus/culture tags, and V2.1 source metadata.
+- `scripts/refresh_embeddings.py` writes versioned embeddings to `school_embeddings` using the local deterministic provider unless a future provider is wired in.
+- The repository retrieves pgvector candidates from `school_embeddings` when vectors are available. If embeddings or pgvector are unavailable, the service uses a deterministic lexical fallback over the same generated documents.
+- Structured filters and ranking hard constraints are applied after retrieval. Vector similarity narrows candidates but does not override hard constraints or final deterministic ranking.
+- Responses expose semantic match reason tags such as `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
+
 ## Cache Strategy
 
 V1.12 adds a centralized cache service in `apps/api/services/cache.py`. Routes still call services, and services decide whether to return a cached response or call the repository. Redis-specific behavior is isolated behind a small backend abstraction so the API can fall back to normal database reads when Redis is unavailable.
@@ -117,6 +125,7 @@ Cached resources:
 - Search responses use keys based on all search filters, pagination, sort, and direction. TTL: 300 seconds.
 - School profiles use keys based on `school_id`. TTL: 3600 seconds.
 - Ranking responses use keys based on the full ranking request plus the deterministic `RANKING_VERSION`. TTL: 300 seconds.
+- Semantic search responses use normalized query text, filters, preferences, embedding type/model, and `RANKING_VERSION`. TTL: 300 seconds.
 
 All keys include `CACHE_KEY_VERSION` so a deployment or operator can invalidate the namespace without deleting individual keys. Ranking keys also include the ranking formula version, so future formula updates cannot reuse stale ranking output from an older version.
 
@@ -152,4 +161,4 @@ GitHub Actions validates frontend lint/typecheck/build, Playwright smoke tests, 
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, and the V2.1 ingestion pipeline are implemented. Backend preference persistence, authenticated saved schools/comparisons, semantic retrieval, public cloud deployment, production observability, and load-test reporting are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, the V2.1 ingestion pipeline, and V2.2 semantic retrieval are implemented. Backend preference persistence, authenticated saved schools/comparisons, similar-school discovery, public cloud deployment, production observability, and load-test reporting are not implemented yet.

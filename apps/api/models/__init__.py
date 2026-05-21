@@ -5,6 +5,7 @@ from models.school import (
     SchoolAcademics,
     SchoolCampusLife,
     SchoolCosts,
+    SchoolEmbedding,
     SchoolOutcomes,
 )
 from models.user import SavedSchool, User, UserPreference
@@ -18,6 +19,7 @@ __all__ = [
     "SchoolAcademics",
     "SchoolCampusLife",
     "SchoolCosts",
+    "SchoolEmbedding",
     "SchoolOutcomes",
     "User",
     "UserPreference",

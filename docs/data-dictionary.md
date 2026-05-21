@@ -48,6 +48,22 @@ One row per school for campus-life attributes.
 
 Key fields: `school_id`, `housing_available`, `sports_division`, `greek_life_rate`, `culture_tags`, `created_at`.
 
+### `school_embeddings`
+
+V2.2 pgvector storage for generated school search document embeddings. Rows are metadata-versioned so embedding providers or document construction can change without silently reusing stale vectors.
+
+Key fields: `school_id`, `embedding_type`, `embedding_model`, `vector`, `text_snapshot_hash`, `created_at`, `refreshed_at`.
+
+Primary key: `school_id`, `embedding_type`, `embedding_model`.
+
+Indexes: `embedding_type`/`embedding_model`, cosine `ivfflat` pgvector index on `vector`.
+
+Current embedding type: `school_search_document`.
+
+Current local/test embedding model: `local-hash-embedding-v1`.
+
+The search document text is generated from structured school fields only: name, location, type/setting, majors/program tags, cost/value summaries, outcome summaries, campus/culture tags, and V2.1 source metadata. Generated vectors are not source-of-truth facts and should not be committed as large data files.
+
 ### `users`
 
 Basic placeholder user identity table for future saved-school and comparison work.
@@ -109,4 +125,4 @@ Validation warnings call out unavailable ranking inputs so missing data lowers c
 - V1.2 school records are synthetic fixtures with plausible ranges.
 - V2.1 includes small public-data-style fixtures for pipeline tests, not full official datasets.
 - User, preference, saved-school, comparison, and event tables are structural placeholders for future V1 features.
-- Full official College Scorecard/IPEDS snapshot operations and data freshness UI belong to later tasks.
+- Full official College Scorecard/IPEDS snapshot operations, similar-school discovery, and data freshness UI belong to later tasks.

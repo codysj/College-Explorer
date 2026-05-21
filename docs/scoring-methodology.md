@@ -49,6 +49,23 @@ If no usable weights are provided, V1.9 uses these defaults:
 
 The overall `fit_score` is the weighted sum of category scores, rounded to two decimals.
 
+## Hybrid Semantic Search
+
+V2.2 semantic search does not change `RANKING_VERSION` or the deterministic scoring formulas. `POST /semantic-search` uses vector similarity only as candidate retrieval. After retrieval, the service applies structured filters and ranking hard constraints, then calls the existing deterministic ranking engine for final ordering, scores, confidence, reasons, and tradeoffs.
+
+If stored embeddings are missing or pgvector is unavailable, semantic search uses a deterministic lexical fallback over the same generated school search documents. This fallback is stable for local development and tests and does not require paid API keys.
+
+Semantic match tags are separate from ranking reason codes. They explain retrieval alignment only and may include:
+
+- `major_match`
+- `location_match`
+- `setting_match`
+- `cost_value_match`
+- `outcomes_match`
+- `campus_culture_match`
+
+These tags do not alter `fit_score`, category scores, hard-constraint behavior, or final ranked order.
+
 ## Confidence
 
 Confidence is separate from fit. Each category tracks how much of its scoring signal was available. Overall `confidence_score` is the weighted sum of category confidences, rounded to four decimals.
