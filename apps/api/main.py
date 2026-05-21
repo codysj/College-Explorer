@@ -9,6 +9,7 @@ from api.routes.cost_calculator import router as cost_calculator_router
 from api.routes.decision import router as decision_router
 from api.routes.rankings import router as rankings_router
 from api.routes.semantic_search import router as semantic_search_router
+from api.routes.sensitivity import router as sensitivity_router
 from api.routes.schools import router as schools_router
 from core.config import get_settings
 from core.errors import (
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(semantic_search_router)
     app.include_router(decision_router)
     app.include_router(cost_calculator_router)
+    app.include_router(sensitivity_router)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(PydanticValidationError, pydantic_validation_exception_handler)

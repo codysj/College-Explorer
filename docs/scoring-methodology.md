@@ -96,7 +96,7 @@ Decision report categories are intentionally distinct:
 
 Missing offer costs, missing profile net price, missing outcomes metrics, incomplete preference weights, limited ranking confidence, and fewer than two finalists create confidence flags. They lower decision confidence but do not become zero scores. Major tradeoff sentences are deterministic templates using selected school names and known metrics only.
 
-Decision reports are decision-support summaries, not admissions advice, financial advice, ROI guarantees, or predictions. Full cost/value modeling and sensitivity analysis are deferred to V2.5/V2.6.
+Decision reports are decision-support summaries, not admissions advice, financial advice, ROI guarantees, or predictions. Cost/value modeling and sensitivity analysis are handled by separate V2.5/V2.6 services so decision-report categories do not become opaque blended scores.
 
 ## Cost/Value Calculator
 
@@ -107,7 +107,7 @@ The calculator is deterministic and formula-driven:
 | Output | Deterministic basis |
 | --- | --- |
 | Estimated yearly cost | Entered yearly cost first; otherwise entered net price or tuition minus scholarships and grants/aid; otherwise profile net price or tuition minus entered scholarships and grants/aid. |
-| Estimated four-year total cost | Estimated yearly cost multiplied by `4`. V2.5 does not model inflation, year-by-year tuition changes, or full sensitivity analysis. |
+| Estimated four-year total cost | Estimated yearly cost multiplied by `4`. V2.5 does not model inflation or year-by-year tuition changes. |
 | Yearly and four-year cost differences | Difference from the selected baseline school's estimated yearly and four-year costs. |
 | Estimated debt exposure | Entered annual loan amount multiplied by `4`; if missing, observed median debt may be displayed as a data indicator with a warning. |
 | Repayment scenarios | Standard amortization for lower debt, base debt, and higher debt using the entered interest rate and term. |
@@ -117,6 +117,35 @@ The calculator is deterministic and formula-driven:
 The calculator intentionally avoids an opaque ROI score. Labels such as `stronger_value`, `reasonable_value`, `higher_cost_tradeoff`, and `uncertain` are directional summaries of visible formulas and known data. They do not alter ranking fit scores, admission realism, or decision-report best-fit categories.
 
 Missing aid data, profile net price, loan assumptions, median earnings, graduation rate, or repayment rate creates warnings and lowers calculator confidence. Unknown values remain unknown instead of becoming zero.
+
+## Sensitivity Analysis
+
+V2.6 sensitivity analysis does not change `RANKING_VERSION`. It reruns the existing deterministic ranking engine against the same candidate rows with adjusted normalized weights, then compares baseline and scenario rank positions.
+
+Supported sensitivity dimensions are:
+
+- `academic` / `academic_fit`
+- `cost` / `cost_value`
+- `career` / `career_outcomes`
+- `campus` / `campus_lifestyle`
+- `location`
+- `prestige_selectivity`
+- `admissions_realism`
+
+`prestige_selectivity` is not a separate prestige score. It is modeled as a selectivity-emphasis scenario over the existing admissions-realism scoring path by applying the scenario weight to `admissions_realism` and using a `reach` admissions strategy for that scenario. This keeps the output explainable through existing category scores and reason codes.
+
+Sensitivity outputs are deterministic:
+
+| Output | Deterministic basis |
+| --- | --- |
+| Ranking movement | Baseline rank minus scenario rank for the same school. Positive movement means the school rises in the scenario. |
+| Stable choice | A highly ranked school with little rank movement and small fit-score movement across tested scenarios. |
+| Volatile choice | A school with large rank movement or large fit-score movement when one priority changes. |
+| Category drivers | Weighted category contribution differences between baseline and scenario results, ordered by largest visible change. |
+| Confidence impacts | Changes in `confidence_score` caused by emphasizing categories with different data coverage. |
+| Tradeoff explanations | Deterministic templates based on rank deltas and category drivers. |
+
+Sensitivity analysis does not alter stored rankings, does not smooth or randomize results, and does not generate opaque confidence. Missing data continues to lower category confidence while neutral category scores avoid treating unknowns as zero.
 
 ## Confidence
 

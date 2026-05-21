@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SensitivityAnalysis } from "@/components/compare/sensitivity-analysis";
 import {
   buildLocalCostCalculator,
   defaultCostAssumption,
@@ -135,6 +136,7 @@ export function ComparisonWorkspace() {
       {loadState === "ready" && compareIds.size >= 2 ? (
         <div className="space-y-6">
           <TopSummary summary={summary} />
+          <SensitivityAnalysis schoolIds={profiles.map((profile) => profile.school_id)} />
           <CostComparison
             assumptions={costAssumptions}
             budget={familyBudget}

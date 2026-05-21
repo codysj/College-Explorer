@@ -59,7 +59,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V2.5 Cost/value calculator
   - Added `POST /cost-calculator`, deterministic yearly/four-year cost, debt exposure, repayment sensitivity scenarios, outcome-adjusted directional value, affordability indicators, confidence warnings, and frontend calculator surfaces in `/decision` and `/compare`.
   - Frontend runtime validation still needs Node/npm dependencies available in the shell.
-- [ ] V2.6 Sensitivity analysis
+- [x] V2.6 Sensitivity analysis
+  - Added `POST /sensitivity`, deterministic scenario reranking through the existing ranking engine, movement/stability/volatility outputs, confidence impacts, category drivers, Redis cache support, and compare-page slider UI.
+  - Full frontend runtime validation still needs Node/npm dependencies available in the shell.
 - [ ] V2.7 Shareable decision report
 - [ ] V2.8 Analytics and ranking evaluation
 
@@ -95,7 +97,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-21: Completed V2.3 similar-school discovery. Added variant-aware similar-school API, deterministic fallback, source exclusion, Redis cache support, explainable reasons/tradeoffs, frontend profile integration with variant controls, and backend/frontend test coverage updates.
 - 2026-05-21: Completed V2.4 acceptance decision mode. Added accepted/finalist offer models, `/decision/offers` and `/decision/report`, deterministic category-based decision summaries, confidence/uncertainty flags, a browser-local accepted-schools workspace with editable offer cards and report panel, and updated docs/tests.
 - 2026-05-21: Completed V2.5 cost/value calculator. Added deterministic cost/value API and service, calculator schemas, backend tests for cost, aid, debt sensitivity, missing data, and validation, plus editable calculator experiences in decision and compare workflows with Playwright smoke coverage updates.
+- 2026-05-21: Completed V2.6 sensitivity analysis. Added deterministic sensitivity schemas/service/route, selected-school candidate reads, scenario weight normalization, stable/volatile classification, category drivers, confidence impacts, cache keys, compare-page sliders, movement table, stability badges, backend tests, and docs updates.
 
 ## Next Recommended Task
 
-V2.6 Sensitivity analysis.
+V2.7 Shareable decision report.

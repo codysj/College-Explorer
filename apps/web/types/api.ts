@@ -235,3 +235,68 @@ export type CostCalculatorResponse = {
   results: CostCalculatorResult[];
   comparison_summary: string[];
 };
+
+export type SensitivityMovement = {
+  school_id: number;
+  name: string;
+  city: string;
+  state: string;
+  base_rank: number | null;
+  scenario_rank: number | null;
+  rank_delta: number | null;
+  fit_score: number;
+  fit_delta: number;
+  confidence_score: number;
+  confidence_delta: number;
+  category_scores: Record<string, number>;
+  category_drivers: string[];
+  movement: "up" | "down" | "stable" | "new" | "removed";
+  stability: "stable_choice" | "volatile_choice" | "watch_choice";
+  top_reasons: string[];
+  top_tradeoffs: string[];
+  explanation: string;
+};
+
+export type SensitivityScenarioResult = {
+  scenario_id: string;
+  label: string;
+  applied_weights: Record<string, number>;
+  emphasis_dimension: string | null;
+  results: SensitivityMovement[];
+  summary: string;
+};
+
+export type SensitivityChoiceSummary = {
+  school_id: number;
+  name: string;
+  base_rank: number | null;
+  average_rank: number;
+  max_rank_delta: number;
+  max_fit_delta: number;
+  explanation: string;
+};
+
+export type SensitivityResponse = {
+  ranking_version: string;
+  baseline_weights: Record<string, number>;
+  stable_choice_definition: string;
+  volatile_choice_definition: string;
+  baseline_results: SensitivityMovement[];
+  scenarios: SensitivityScenarioResult[];
+  stable_schools: SensitivityChoiceSummary[];
+  volatile_schools: SensitivityChoiceSummary[];
+  category_drivers: Array<{
+    category: string;
+    average_absolute_fit_delta: number;
+    affected_school_count: number;
+    explanation: string;
+  }>;
+  confidence_impacts: Array<{
+    school_id: number;
+    name: string;
+    max_confidence_delta: number;
+    explanation: string;
+  }>;
+  tradeoff_explanations: string[];
+  summary_messages: string[];
+};

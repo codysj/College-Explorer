@@ -1,6 +1,6 @@
 # API Contract
 
-V2.5 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, cost/value calculation, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
+V2.6 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, cost/value calculation, sensitivity analysis, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -663,6 +663,127 @@ Calculation rules:
 - Directional value labels use known four-year cost, median earnings, graduation rate, and repayment rate where available. Missing outcomes produce `uncertain`.
 - Missing aid, net price, outcomes, or debt assumptions reduce confidence and appear in `warnings`.
 
+### `POST /sensitivity`
+
+Analyzes how deterministic ranking outputs move when category weights change. This endpoint reuses the existing ranking engine and preserves `ranking_version`; it does not create a second scoring system.
+
+Request body:
+
+```json
+{
+  "preferences": {
+    "intended_major": "Computer Science",
+    "home_state": "CA",
+    "max_annual_cost": 32000,
+    "weights": {
+      "academic": 0.25,
+      "cost": 0.2,
+      "career": 0.2,
+      "campus": 0.12,
+      "location": 0.1,
+      "admissions_realism": 0.13
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "cost_focus",
+      "label": "Cost sensitivity raised",
+      "weight_adjustments": {
+        "cost_value": 0.45
+      }
+    }
+  ],
+  "candidate_school_ids": [1, 2, 3],
+  "filters": {
+    "page": 1,
+    "page_size": 10
+  }
+}
+```
+
+Rules:
+
+| Field | Rules |
+| --- | --- |
+| `preferences` | Existing deterministic ranking preference profile. Supported weights must be `0` to `1` for this endpoint. |
+| `scenarios` | Required, 1 to 8 scenarios. Each scenario has a stable `scenario_id`, user-facing `label`, and weight adjustments. |
+| `weight_adjustments` | Supports `academic`, `academic_fit`, `cost`, `cost_value`, `career`, `career_outcomes`, `campus`, `campus_lifestyle`, `location`, `prestige_selectivity`, and `admissions_realism`. Values must be `0` to `1` before normalization. |
+| `candidate_school_ids` | Optional, unique positive school IDs, up to 20. Used by the compare-page workflow to analyze selected schools only. |
+| `filters` | Existing `SearchRequest` fields used when `candidate_school_ids` is empty. |
+
+Response `200`:
+
+```json
+{
+  "ranking_version": "v1.0",
+  "baseline_weights": {
+    "academic": 0.25,
+    "cost": 0.2,
+    "career": 0.2,
+    "location": 0.1,
+    "campus": 0.12,
+    "admissions_realism": 0.13
+  },
+  "stable_choice_definition": "A stable choice remains highly ranked across many weighting scenarios, with little rank movement.",
+  "volatile_choice_definition": "A volatile choice changes rank dramatically when one preference changes.",
+  "baseline_results": [],
+  "scenarios": [
+    {
+      "scenario_id": "cost_focus",
+      "label": "Cost sensitivity raised",
+      "applied_weights": {
+        "academic": 0.17,
+        "cost": 0.38,
+        "career": 0.14,
+        "location": 0.07,
+        "campus": 0.09,
+        "admissions_realism": 0.15
+      },
+      "emphasis_dimension": "cost_value",
+      "results": [
+        {
+          "school_id": 2,
+          "name": "Bayview Technical University",
+          "city": "New Haven",
+          "state": "CT",
+          "base_rank": 2,
+          "scenario_rank": 1,
+          "rank_delta": 1,
+          "fit_score": 86.4,
+          "fit_delta": 2.5,
+          "confidence_score": 0.91,
+          "confidence_delta": -0.01,
+          "category_scores": {
+            "academic": 92.0,
+            "cost": 82.5,
+            "career": 88.0
+          },
+          "category_drivers": ["cost"],
+          "movement": "up",
+          "stability": "watch_choice",
+          "top_reasons": ["cost_within_budget"],
+          "top_tradeoffs": [],
+          "explanation": "Bayview Technical University rises 1 rank position(s), mainly from cost; classification: watch choice."
+        }
+      ],
+      "summary": "Bayview Technical University rises most when cost value changes."
+    }
+  ],
+  "stable_schools": [],
+  "volatile_schools": [],
+  "category_drivers": [],
+  "confidence_impacts": [],
+  "tradeoff_explanations": [],
+  "summary_messages": []
+}
+```
+
+Definitions:
+
+- Stable choice: remains highly ranked across many weighting scenarios, with little rank movement.
+- Volatile choice: changes rank dramatically when one preference changes.
+- `prestige_selectivity` is handled as a selectivity-emphasis scenario over the existing admissions-realism scoring path. It does not introduce a separate prestige score.
+
 ## Error Format
 
 ```json
@@ -688,7 +809,7 @@ School profile reads join `schools` to academics, costs, outcomes, and campus li
 
 Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life` with left joins in one repository query. The ranking service applies hard constraints, computes category scores, confidence, reason codes, and tradeoffs in memory for V1 scale.
 
-Decision reports read `acceptance_offers`, join candidate school rows through the decision repository, and call the ranking service for deterministic fit/category scoring. Cost calculator reads requested school cost/outcome rows through the school repository and performs deterministic calculations in the service layer. Route handlers do not write SQL directly.
+Decision reports read `acceptance_offers`, join candidate school rows through the decision repository, and call the ranking service for deterministic fit/category scoring. Cost calculator reads requested school cost/outcome rows through the school repository and performs deterministic calculations in the service layer. Sensitivity analysis reads either selected candidate IDs or filtered ranking candidates, then calls the ranking service for baseline and scenario ordering. Route handlers do not write SQL directly.
 
 Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. The semantic service applies filters and hard constraints after candidate retrieval and delegates final ordering to the ranking service.
 
@@ -705,6 +826,7 @@ Caching is transparent to clients and does not change request or response contra
 | Ranking | Resource name, full request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Semantic search | Resource name, normalized query, filters, preferences, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Similar schools | Resource name, school id, variant request, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Sensitivity analysis | Resource name, request body, normalized profile snapshot, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 
 Example key shapes:
 

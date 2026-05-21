@@ -20,6 +20,7 @@ docs/assets/gifs/
 | School profile screenshot | `/schools/1` | Placeholder | Capture profile sections, missing-data handling, and local actions. |
 | Saved schools dashboard screenshot | `/dashboard` | Placeholder | Capture grouped statuses and local persistence behavior. |
 | Compare workflow screenshot or GIF | `/compare` | Placeholder | Capture 2-5 selected schools, metric comparison, category winners, tradeoffs, and cost/value calculator. |
+| Sensitivity analysis screenshot or GIF | `/compare` | Placeholder | Capture category sliders, live rank movement, and stable/volatile choice badges. |
 | Decision cost/value screenshot or GIF | `/decision` | Placeholder | Capture accepted-school offers, calculator assumptions, debt scenarios, and uncertainty warnings. |
 
 ## GIF Checklist
@@ -29,6 +30,7 @@ docs/assets/gifs/
 - School profile save/compare interaction.
 - Compare workspace with multiple schools.
 - Cost/value calculator edits in compare or decision workflow.
+- Sensitivity analysis slider movement in compare workflow.
 - Future V2 semantic search once implemented.
 
 ## Capture Rules

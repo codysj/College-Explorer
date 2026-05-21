@@ -147,6 +147,46 @@ class SchoolRepository(BaseRepository[School]):
         rows = self.db.execute(filtered_query).mappings().all()
         return [dict(row) for row in rows]
 
+    def get_ranking_candidate_rows_by_ids(self, school_ids: list[int]) -> list[dict[str, object]]:
+        if not school_ids:
+            return []
+        query = (
+            select(
+                School.id.label("school_id"),
+                School.name,
+                School.city,
+                School.state,
+                School.region,
+                School.type,
+                School.setting,
+                School.undergraduate_enrollment.label("enrollment"),
+                School.acceptance_rate,
+                SchoolAcademics.top_majors,
+                SchoolAcademics.graduation_rate,
+                SchoolAcademics.retention_rate,
+                SchoolAcademics.student_faculty_ratio,
+                SchoolCosts.tuition_in_state,
+                SchoolCosts.tuition_out_state,
+                SchoolCosts.net_price,
+                SchoolCosts.average_aid,
+                SchoolCosts.debt_median,
+                SchoolOutcomes.median_earnings,
+                SchoolOutcomes.repayment_rate,
+                SchoolCampusLife.housing_available,
+                SchoolCampusLife.sports_division,
+                SchoolCampusLife.greek_life_rate,
+                SchoolCampusLife.culture_tags,
+            )
+            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
+            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
+            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
+            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+            .where(School.id.in_(school_ids))
+            .order_by(School.id.asc())
+        )
+        rows = self.db.execute(query).mappings().all()
+        return [dict(row) for row in rows]
+
     def get_cost_calculator_rows(self, school_ids: list[int]) -> list[dict[str, object]]:
         if not school_ids:
             return []
