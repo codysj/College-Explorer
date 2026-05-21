@@ -50,7 +50,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V2.2 pgvector semantic search
   - Added pgvector embedding storage, deterministic school search documents, local/test hash embeddings, refresh CLI, semantic endpoint, hybrid retrieval with deterministic re-ranking, Redis cache keys, and focused backend tests.
   - Full migration validation against PostgreSQL still needs local Docker/Postgres because the current shell did not have system Python on PATH; `.venv` Python test validation passed for semantic-search coverage.
-- [ ] V2.3 Similar-school discovery
+- [x] V2.3 Similar-school discovery
+  - Added `GET /schools/{id}/similar`, semantic/fallback source-school retrieval, deterministic variant constraints, similarity scoring, cache keys, backend tests, and profile-page variant cards.
+  - Frontend runtime validation still needs local Node/npm dependencies; backend validation passed in the available `.venv`.
 - [ ] V2.4 Acceptance decision mode
 - [ ] V2.5 Cost/value calculator
 - [ ] V2.6 Sensitivity analysis
@@ -86,7 +88,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-15: Completed V1.13 deployment and README polish. Added production-oriented Dockerfiles, full-stack Compose services, local/prod environment documentation, narrow CORS configuration, CI frontend typecheck and Compose validation, architecture diagram, screenshot checklist, honest performance notes, and a recruiter-facing README. Public cloud deployment remains unverified.
 - 2026-05-20: Completed V2.1 data ingestion pipeline. Added deterministic raw import, normalization, missing-value handling, derived attributes, validation, seed/refresh CSV output, source metadata columns, fixture coverage, and ingestion usage docs.
 - 2026-05-21: Completed V2.2 pgvector semantic search. Added school embedding table/migration, structured document generation, local deterministic embedding provider, refresh CLI, `POST /semantic-search`, pgvector/fallback candidate retrieval, structured hard-constraint preservation, semantic reason tags, cache keys, and tests.
+- 2026-05-21: Completed V2.3 similar-school discovery. Added variant-aware similar-school API, deterministic fallback, source exclusion, Redis cache support, explainable reasons/tradeoffs, frontend profile integration with variant controls, and backend/frontend test coverage updates.
 
 ## Next Recommended Task
 
-V2.3 Similar-school discovery.
+V2.4 Acceptance decision mode.

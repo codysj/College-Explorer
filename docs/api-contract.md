@@ -1,6 +1,6 @@
 # API Contract
 
-V2.2 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and similar-school discovery are not implemented yet.
+V2.3 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and acceptance decision mode are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -286,6 +286,70 @@ Response `200`:
 
 `retrieval_mode` is `pgvector` when stored vectors are used and `deterministic_fallback` when embeddings are missing or unavailable. `match_reasons` may include `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
 
+### `GET /schools/{id}/similar`
+
+Returns explainable similar-school alternatives for a source school. The endpoint retrieves semantic candidates when embeddings exist, falls back to deterministic lexical similarity when they do not, excludes the source school, applies structured constraints, and returns variant-aware scores and reasons.
+
+Query parameters:
+
+| Name | Type | Rules |
+| --- | --- | --- |
+| `variant` | enum | `general`, `cheaper`, `less_selective`, `smaller`, `stronger_outcomes`, or `closer_to_home`. Defaults to `general`. |
+| `state`, `region`, `type`, `setting` | string | Optional structured constraints. |
+| `home_state` | string | Optional 2-letter state used by `closer_to_home`. |
+| `min_net_price`, `max_net_price`, `min_enrollment`, `max_enrollment` | integer | Optional nonnegative constraints. |
+| `min_acceptance_rate`, `max_acceptance_rate`, `min_graduation_rate` | number | Optional `0` to `1` constraints. |
+| `page` | integer | Defaults to `1`; must be `>= 1`. |
+| `page_size` | integer | Defaults to `6`; must be `1` to `12`. |
+| `candidate_limit` | integer | Defaults to `50`; must be `1` to `200`. |
+
+Variant behavior:
+
+- `cheaper`: requires lower net price when both source and candidate net price are known.
+- `less_selective`: requires higher acceptance rate when both rates are known.
+- `smaller`: requires lower enrollment when both values are known.
+- `stronger_outcomes`: requires higher graduation rate or higher median earnings when comparable data is known.
+- `closer_to_home`: requires `state == home_state` when `home_state` is supplied.
+
+Response `200`:
+
+```json
+{
+  "source_school_id": 1,
+  "variant": "cheaper",
+  "variant_applied": "cheaper",
+  "ranking_version": "v1.0",
+  "embedding_model": "local-hash-embedding-v1",
+  "embedding_type": "school_search_document",
+  "retrieval_mode": "deterministic_fallback",
+  "results": [
+    {
+      "school_id": 2,
+      "name": "Bayview Technical University",
+      "city": "New Haven",
+      "state": "CT",
+      "type": "Public",
+      "setting": "Urban",
+      "enrollment": 11800,
+      "acceptance_rate": 0.52,
+      "net_price": 24400,
+      "graduation_rate": 0.78,
+      "median_earnings": 68000,
+      "similarity_score": 0.82,
+      "fit_score": 86.4,
+      "top_reasons": ["overlapping_majors", "variant_lower_net_price", "academic_major_match"],
+      "top_tradeoffs": [],
+      "variant_applied": "cheaper",
+      "ranking_version": "v1.0"
+    }
+  ],
+  "page": 1,
+  "page_size": 6,
+  "total_results": 1,
+  "has_next": false
+}
+```
+
 ### `GET /schools/{id}`
 
 Full school profile composed from `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life`. The endpoint uses a single repository query with left joins so missing optional profile rows or fields are represented as `null` rather than causing N+1 relationship loads.
@@ -405,6 +469,8 @@ Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcom
 
 Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. The semantic service applies filters and hard constraints after candidate retrieval and delegates final ordering to the ranking service.
 
+Similar-school discovery uses the same generated embedding documents. It compares candidates to a source school, excludes the source school, applies variant constraints, deduplicates name/city/state matches, and returns a deterministic similarity score plus ranking reasons.
+
 ## Cache Behavior
 
 Caching is transparent to clients and does not change request or response contracts. The backend checks Redis before repository/database work, stores successful responses on misses, and falls back to normal execution if Redis is unavailable.
@@ -415,6 +481,7 @@ Caching is transparent to clients and does not change request or response contra
 | School profile | Resource name, `school_id`, `CACHE_KEY_VERSION` | 3600 seconds |
 | Ranking | Resource name, full request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Semantic search | Resource name, normalized query, filters, preferences, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Similar schools | Resource name, school id, variant request, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 
 Example key shapes:
 

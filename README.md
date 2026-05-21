@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
 
-Status: V2.2 pgvector semantic search is locally implemented after the V2.1 ingestion pipeline. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, and explainable hybrid semantic search. Public cloud deployment, authenticated persistence, similar-school discovery, and full official dataset ingestion remain future work.
+Status: V2.3 similar-school discovery is locally implemented after V2.2 semantic search. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, explainable hybrid semantic search, and profile-page similar-school exploration. Public cloud deployment, authenticated persistence, acceptance decision mode, and full official dataset ingestion remain future work.
 
 ## Product Overview
 
@@ -30,6 +30,7 @@ The engineering thesis is that a consumer-facing product can stay trustworthy wh
 - Redis cache-aside for repeated search, profile, and ranking responses with versioned keys and TTLs.
 - Deterministic V2.1 ingestion pipeline for small public college-data snapshots.
 - pgvector-backed V2.2 semantic retrieval with deterministic local fallback and final ranking controlled by structured scoring.
+- V2.3 similar-school discovery with explainable variants for cheaper, smaller, less selective, stronger outcomes, and closer-to-home alternatives.
 - Browser-local saved-school and comparison state for V1 demo flows.
 - Playwright smoke coverage for onboarding, search, profiles, saved schools, and compare behavior.
 - Docker Compose support for frontend, backend, PostgreSQL, and Redis.
@@ -167,6 +168,7 @@ Implemented endpoints:
 - `GET /schools/{id}`: full profile assembled from school, academics, cost, outcome, and campus-life tables.
 - `POST /rankings`: deterministic fit ranking against a preference profile.
 - `POST /semantic-search`: natural-language school search with hybrid retrieval, hard constraints, deterministic re-ranking, and reason tags.
+- `GET /schools/{id}/similar`: explainable similar-school alternatives with deterministic variant logic.
 
 API docs are generated locally at `http://127.0.0.1:8000/docs`. The contract details live in [docs/api-contract.md](docs/api-contract.md).
 
@@ -198,6 +200,19 @@ python scripts/refresh_embeddings.py
 
 The CLI uses the built-in `local-hash-embedding-v1` provider, so tests and local development do not require paid API keys. If embeddings are missing or pgvector is unavailable, the endpoint uses a deterministic lexical fallback over the same generated school documents.
 
+## Similar Schools
+
+V2.3 adds a profile-page similar-school section powered by `GET /schools/{id}/similar`. It reuses semantic school documents and deterministic ranking signals, excludes the current school, and supports variants:
+
+- `general`
+- `cheaper`
+- `less_selective`
+- `smaller`
+- `stronger_outcomes`
+- `closer_to_home`
+
+Variant logic is bounded and deterministic. For example, `cheaper` requires a lower known net price when both schools have price data, `smaller` requires lower enrollment when known, and `less_selective` requires a higher acceptance rate when known.
+
 ## Ranking Methodology Summary
 
 Ranking is deterministic and versioned as `v1.0`. The backend computes category scores for academic fit, cost, career, location, campus, and admissions realism, then normalizes user weights and returns:
@@ -218,6 +233,7 @@ Redis is used as an optional cache-aside layer for read-heavy responses:
 | Search | 5 minutes | Tests verify second identical call avoids repository work. |
 | School profile | 60 minutes | Tests verify cache hit avoids repository work. |
 | Ranking | 5 minutes | Tests verify cached response avoids ranking candidate repository work. |
+| Similar schools | 5 minutes | Tests verify repeated similar-school calls use cache. |
 
 Cache keys include `CACHE_KEY_VERSION`; ranking keys also include `RANKING_VERSION`. Redis outages log a fallback and continue with database reads.
 
@@ -281,6 +297,7 @@ No real screenshots or GIFs are committed yet. The capture checklist is maintain
 - Onboarding
 - Search/ranked search flow
 - School profile
+- Similar schools variants on the school profile
 - Saved schools dashboard
 - Compare workflow
 
@@ -291,7 +308,7 @@ Screenshots should be added only after capturing the real running product.
 - Seed data is synthetic or fixture-sized and intended for deterministic development, not factual school reporting.
 - Saved schools and comparisons are browser-local in V1 because authentication is not implemented.
 - The frontend search UI does not yet call `POST /rankings`; deterministic ranking is available through the API.
-- Similar schools, full official dataset operations, analytics, rate limiting, and account persistence are future work.
+- Acceptance decision mode, full official dataset operations, analytics, rate limiting, and account persistence are future work.
 - Deployment configuration is documented and Dockerized, but no public hosted environment has been verified.
 - Performance claims are not production measurements.
 
@@ -318,4 +335,4 @@ V3 focuses on hardening:
 - Expanded end-to-end tests
 - Portfolio/demo polish
 
-See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.3 Similar-school discovery**.
+See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.4 Acceptance decision mode**.

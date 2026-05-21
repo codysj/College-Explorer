@@ -5,8 +5,11 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_cache_service, get_db
 from core.logging import get_logger
+from repositories.schools import SchoolRepository
+from schemas.similar_schools import SimilarSchoolsRequest, SimilarSchoolsResponse
 from schemas.schools import SchoolProfileResponse, SearchRequest, SearchResponse
 from services.cache import CacheService
+from services.similar_schools import SimilarSchoolsService
 from services.schools import SchoolService
 
 router = APIRouter(prefix="/schools", tags=["schools"])
@@ -20,6 +23,13 @@ def get_school_service(
     return SchoolService(db, cache)
 
 
+def get_similar_schools_service(
+    db: Session = Depends(get_db),
+    cache: CacheService = Depends(get_cache_service),
+) -> SimilarSchoolsService:
+    return SimilarSchoolsService(SchoolRepository(db), cache)
+
+
 @router.get(
     "/search",
     response_model=SearchResponse,
@@ -31,6 +41,23 @@ def search_schools(
     service: SchoolService = Depends(get_school_service),
 ) -> SearchResponse:
     return service.search_schools(filters)
+
+
+@router.get(
+    "/{school_id}/similar",
+    response_model=SimilarSchoolsResponse,
+    summary="Similar schools",
+    description="Returns explainable similar-school alternatives with deterministic variant logic.",
+)
+def get_similar_schools(
+    school_id: int,
+    request: Annotated[SimilarSchoolsRequest, Depends()],
+    service: SimilarSchoolsService = Depends(get_similar_schools_service),
+) -> SimilarSchoolsResponse:
+    response = service.get_similar_schools(school_id, request)
+    if response is None:
+        raise HTTPException(status_code=404, detail="School not found.")
+    return response
 
 
 @router.get(

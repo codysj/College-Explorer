@@ -98,7 +98,7 @@ Indexes from V1.2 support common filters and sorts on state, region, type, setti
 - `services/schools.py` composes the nested profile response and computes missing-data metadata.
 - `repositories/schools.py` reads the profile with one left-joined query across `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life`.
 
-Profile responses keep missing values as `null`, list missing dot-paths in `data_fields_missing`, and expose a simple completeness-based `data_confidence_score`. Ranking and similar-school placeholders remain empty until later roadmap steps.
+Profile responses keep missing values as `null`, list missing dot-paths in `data_fields_missing`, and expose a simple completeness-based `data_confidence_score`. Profile ranking placeholders remain empty; similar-school discovery is loaded through `GET /schools/{id}/similar`.
 
 `POST /rankings` follows the same layering:
 
@@ -116,6 +116,13 @@ Ranking is computed in memory for V1 scale after the repository query. Missing v
 - Structured filters and ranking hard constraints are applied after retrieval. Vector similarity narrows candidates but does not override hard constraints or final deterministic ranking.
 - Responses expose semantic match reason tags such as `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
 
+`GET /schools/{id}/similar` adds V2.3 profile-page discovery:
+
+- `services/similar_schools.py` retrieves semantically similar candidates with pgvector when embeddings exist and falls back to deterministic lexical similarity over V2.2 search documents.
+- The source school is always excluded, duplicate name/city/state candidates are removed, and structured constraints are applied before response assembly.
+- Variants are deterministic: `cheaper` biases and filters toward lower net price, `less_selective` toward higher acceptance rate, `smaller` toward lower enrollment, `stronger_outcomes` toward stronger graduation or earnings, and `closer_to_home` toward the supplied `home_state`.
+- The service reuses ranking code for fit score, top reasons, and tradeoffs, but final similarity also includes explicit source-school similarity and variant scores.
+
 ## Cache Strategy
 
 V1.12 adds a centralized cache service in `apps/api/services/cache.py`. Routes still call services, and services decide whether to return a cached response or call the repository. Redis-specific behavior is isolated behind a small backend abstraction so the API can fall back to normal database reads when Redis is unavailable.
@@ -126,6 +133,7 @@ Cached resources:
 - School profiles use keys based on `school_id`. TTL: 3600 seconds.
 - Ranking responses use keys based on the full ranking request plus the deterministic `RANKING_VERSION`. TTL: 300 seconds.
 - Semantic search responses use normalized query text, filters, preferences, embedding type/model, and `RANKING_VERSION`. TTL: 300 seconds.
+- Similar-school responses use source school id, variant request parameters, embedding type/model, and `RANKING_VERSION`. TTL: 300 seconds.
 
 All keys include `CACHE_KEY_VERSION` so a deployment or operator can invalidate the namespace without deleting individual keys. Ranking keys also include the ranking formula version, so future formula updates cannot reuse stale ranking output from an older version.
 
@@ -161,4 +169,4 @@ GitHub Actions validates frontend lint/typecheck/build, Playwright smoke tests, 
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, the V2.1 ingestion pipeline, and V2.2 semantic retrieval are implemented. Backend preference persistence, authenticated saved schools/comparisons, similar-school discovery, public cloud deployment, production observability, and load-test reporting are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, the V2.1 ingestion pipeline, V2.2 semantic retrieval, and V2.3 similar-school discovery are implemented. Backend preference persistence, authenticated saved schools/comparisons, acceptance decision mode, public cloud deployment, production observability, and load-test reporting are not implemented yet.

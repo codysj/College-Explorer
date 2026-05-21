@@ -280,6 +280,73 @@ class SchoolRepository(BaseRepository[School]):
         ).mappings().all()
         return [dict(row) for row in rows]
 
+    def get_similar_vector_candidate_rows(
+        self,
+        school_id: int,
+        embedding_type: str,
+        embedding_model: str,
+        limit: int,
+    ) -> list[dict[str, object]]:
+        statement = text(
+            """
+            WITH source_embedding AS (
+                SELECT vector
+                FROM school_embeddings
+                WHERE school_id = :school_id
+                  AND embedding_type = :embedding_type
+                  AND embedding_model = :embedding_model
+            )
+            SELECT
+                s.id AS school_id,
+                s.name,
+                s.city,
+                s.state,
+                s.region,
+                s.type,
+                s.setting,
+                s.undergraduate_enrollment AS enrollment,
+                s.acceptance_rate,
+                a.top_majors,
+                a.graduation_rate,
+                a.retention_rate,
+                a.student_faculty_ratio,
+                c.tuition_in_state,
+                c.tuition_out_state,
+                c.net_price,
+                c.average_aid,
+                c.debt_median,
+                o.median_earnings,
+                o.repayment_rate,
+                l.housing_available,
+                l.sports_division,
+                l.greek_life_rate,
+                l.culture_tags,
+                1 - (e.vector <=> source_embedding.vector) AS semantic_score
+            FROM source_embedding
+            JOIN school_embeddings e
+              ON e.embedding_type = :embedding_type
+             AND e.embedding_model = :embedding_model
+             AND e.school_id <> :school_id
+            JOIN schools s ON s.id = e.school_id
+            LEFT JOIN school_academics a ON a.school_id = s.id
+            LEFT JOIN school_costs c ON c.school_id = s.id
+            LEFT JOIN school_outcomes o ON o.school_id = s.id
+            LEFT JOIN school_campus_life l ON l.school_id = s.id
+            ORDER BY e.vector <=> source_embedding.vector, s.id ASC
+            LIMIT :limit
+            """
+        )
+        rows = self.db.execute(
+            statement,
+            {
+                "school_id": school_id,
+                "embedding_type": embedding_type,
+                "embedding_model": embedding_model,
+                "limit": limit,
+            },
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def _apply_filters(self, query: Select[tuple], filters: SearchRequest) -> Select[tuple]:
         if filters.query:
             query = query.where(School.name.ilike(f"%{filters.query}%"))

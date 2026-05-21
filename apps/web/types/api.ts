@@ -72,3 +72,46 @@ export type SchoolProfile = {
   similar_schools: Array<Record<string, unknown>>;
   ranking_version?: string | null;
 };
+
+export type SimilarSchoolVariant =
+  | "general"
+  | "cheaper"
+  | "less_selective"
+  | "smaller"
+  | "stronger_outcomes"
+  | "closer_to_home";
+
+export type SimilarSchoolCard = {
+  school_id: number;
+  name: string;
+  city: string;
+  state: string;
+  type: string;
+  setting: string;
+  enrollment: number | null;
+  acceptance_rate: number | null;
+  net_price: number | null;
+  graduation_rate: number | null;
+  median_earnings: number | null;
+  similarity_score: number;
+  fit_score: number | null;
+  top_reasons: string[];
+  top_tradeoffs: string[];
+  variant_applied: SimilarSchoolVariant;
+  ranking_version: string;
+};
+
+export type SimilarSchoolsResponse = {
+  source_school_id: number;
+  variant: SimilarSchoolVariant;
+  variant_applied: SimilarSchoolVariant;
+  ranking_version: string;
+  embedding_model: string;
+  embedding_type: string;
+  retrieval_mode: string;
+  results: SimilarSchoolCard[];
+  page: number;
+  page_size: number;
+  total_results: number;
+  has_next: boolean;
+};

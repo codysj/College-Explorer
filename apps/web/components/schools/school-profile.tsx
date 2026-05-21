@@ -13,6 +13,9 @@ import {
   Home,
   Info,
   Loader2,
+  MapPin,
+  Search,
+  Sparkles,
   TrendingUp,
   Users,
   type LucideIcon,
@@ -28,10 +31,11 @@ import { MetricRow } from "@/components/ui/metric-row";
 import { ScorePill } from "@/components/ui/score-pill";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiClientError } from "@/lib/api-client";
+import { loadPreferenceProfile } from "@/lib/preferences";
 import { useSchoolActionState } from "@/lib/school-actions";
-import { getSchoolProfile } from "@/lib/schools";
+import { getSchoolProfile, getSimilarSchools } from "@/lib/schools";
 import { cn } from "@/lib/utils";
-import type { SchoolProfile } from "@/types/api";
+import type { SchoolProfile, SimilarSchoolCard, SimilarSchoolVariant } from "@/types/api";
 
 type SchoolProfilePageProps = {
   schoolId: number;
@@ -109,7 +113,7 @@ export function SchoolProfilePage({ schoolId }: SchoolProfilePageProps) {
         </div>
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <DataQualityCard profile={profile} />
-          <SimilarSchoolsSection profile={profile} />
+          <SimilarSchoolsSection schoolId={profile.school_id} />
           <CompareTraySummary selectedCount={compareIds.size} selectionLimit={compareLimit} />
         </aside>
       </div>
@@ -330,37 +334,134 @@ function DataQualityCard({ profile }: { profile: SchoolProfile }) {
   );
 }
 
-function SimilarSchoolsSection({ profile }: { profile: SchoolProfile }) {
-  const items = profile.similar_schools;
+const similarVariants: Array<{ label: string; value: SimilarSchoolVariant }> = [
+  { label: "Similar", value: "general" },
+  { label: "Cheaper", value: "cheaper" },
+  { label: "Less selective", value: "less_selective" },
+  { label: "Smaller", value: "smaller" },
+  { label: "Outcomes", value: "stronger_outcomes" },
+  { label: "Near home", value: "closer_to_home" },
+];
+
+function SimilarSchoolsSection({ schoolId }: { schoolId: number }) {
+  const [variant, setVariant] = useState<SimilarSchoolVariant>("general");
+  const [items, setItems] = useState<SimilarSchoolCard[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const homeState = loadPreferenceProfile()?.home_state || undefined;
+    setIsLoading(true);
+    setError(null);
+
+    getSimilarSchools(schoolId, variant, homeState, controller.signal)
+      .then((payload) => setItems(payload.results))
+      .catch((reason: unknown) => {
+        if (controller.signal.aborted) return;
+        setItems([]);
+        setError(reason instanceof Error ? reason.message : "Similar schools failed to load.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [schoolId, variant]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Similar Schools</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
+          Similar Schools
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {items.length > 0 ? (
-          <div className="space-y-3">
-            {items.slice(0, 3).map((item, index) => (
-              <div key={`${String(item.school_id ?? index)}`} className="rounded-md border border-border p-3 text-sm">
-                {String(item.name ?? "Related school")}
-              </div>
+        <div className="flex flex-wrap gap-2">
+          {similarVariants.map((option) => (
+            <Button
+              key={option.value}
+              className="h-8 px-3 text-xs"
+              type="button"
+              variant={variant === option.value ? "primary" : "secondary"}
+              onClick={() => setVariant(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <div className="mt-4 space-y-3" aria-label="Loading similar schools">
+            {Array.from({ length: 3 }, (_, index) => (
+              <Skeleton key={index} className="h-36 w-full" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="mt-4 rounded-md border border-border bg-warning p-3 text-sm leading-6 text-warning-foreground">
+            {error}
+          </div>
+        ) : items.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            {items.map((item) => (
+              <SimilarSchoolCardView key={item.school_id} item={item} />
             ))}
           </div>
         ) : (
-          <div className="space-y-3">
-            {["Same region", "Comparable cost", "Similar academic profile"].map((label) => (
-              <div key={label} className="rounded-md border border-dashed border-border bg-muted p-3 text-sm font-medium text-muted-foreground">
-                {label} placeholder
-              </div>
-            ))}
-            <p className="text-xs leading-5 text-muted-foreground">
-              Semantic similar schools are planned for V2.
+          <div className="mt-4 rounded-md border border-dashed border-border bg-muted p-4">
+            <Search className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold text-foreground">No close alternatives found</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Try another variant or relax filters after more school data is loaded.
             </p>
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SimilarSchoolCardView({ item }: { item: SimilarSchoolCard }) {
+  return (
+    <div className="rounded-md border border-border p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link className="font-semibold leading-6 text-foreground hover:text-primary" href={`/schools/${item.school_id}`}>
+            {item.name}
+          </Link>
+          <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+            {item.city}, {item.state}
+          </p>
+        </div>
+        <ScorePill className="shrink-0 px-2 py-1 text-xs" label="Match" score={item.similarity_score * 100} />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <MetricMini label="Net price" value={formatCurrency(item.net_price)} />
+        <MetricMini label="Grad rate" value={formatPercent(item.graduation_rate)} />
+        <MetricMini label="Enroll" value={formatNumber(item.enrollment)} />
+        <MetricMini label="Accept" value={formatPercent(item.acceptance_rate)} />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {item.top_reasons.slice(0, 3).map((reason) => (
+          <Badge key={reason} variant="outline">
+            {formatLabel(reason)}
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MetricMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-muted p-2">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
+      <p className="mt-1 font-semibold text-foreground">{value}</p>
+    </div>
   );
 }
 
