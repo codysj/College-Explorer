@@ -19,7 +19,8 @@ docs/assets/gifs/
 | Ranked search evidence | `POST /rankings` and future ranked UI | Placeholder | Ranking API exists; frontend search does not yet call it. Do not imply ranked cards until wired. |
 | School profile screenshot | `/schools/1` | Placeholder | Capture profile sections, missing-data handling, and local actions. |
 | Saved schools dashboard screenshot | `/dashboard` | Placeholder | Capture grouped statuses and local persistence behavior. |
-| Compare workflow screenshot or GIF | `/compare` | Placeholder | Capture 2-5 selected schools, metric comparison, category winners, and tradeoffs. |
+| Compare workflow screenshot or GIF | `/compare` | Placeholder | Capture 2-5 selected schools, metric comparison, category winners, tradeoffs, and cost/value calculator. |
+| Decision cost/value screenshot or GIF | `/decision` | Placeholder | Capture accepted-school offers, calculator assumptions, debt scenarios, and uncertainty warnings. |
 
 ## GIF Checklist
 
@@ -27,8 +28,8 @@ docs/assets/gifs/
 - Search filters and compare tray selection.
 - School profile save/compare interaction.
 - Compare workspace with multiple schools.
+- Cost/value calculator edits in compare or decision workflow.
 - Future V2 semantic search once implemented.
-- Future V2 decision report once implemented.
 
 ## Capture Rules
 
@@ -44,4 +45,4 @@ docs/assets/gifs/
 - Deterministic ranking is implemented through `POST /rankings`, but the frontend search route does not yet call it.
 - Onboarding stores a typed preference profile in browser `localStorage`.
 - Saved schools and comparison selections are browser-local until authenticated persistence is added.
-- Similar-school discovery and decision reports belong to V2.
+- Similar-school discovery, decision reports, and cost/value calculations belong to V2.

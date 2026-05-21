@@ -68,11 +68,20 @@ test("renders the comparison workspace for selected schools", async ({ page }) =
       body: JSON.stringify(toProfile(school)),
     });
   });
+  await page.route("**/cost-calculator", async (route) => {
+    await route.abort();
+  });
 
   await page.goto("/compare");
 
   await expect(page.getByRole("heading", { name: "Compare schools" })).toBeVisible();
   await expect(page.getByText("Best overall fit")).toBeVisible();
+  await expect(page.getByText("Cost/value calculator")).toBeVisible();
+  await page.getByLabel("Yearly cost for school 1").fill("18000");
+  await page.getByLabel("Annual loans for school 1").fill("5500");
+  await page.getByRole("button", { name: "Calculate" }).click();
+  await expect(page.getByText("Estimated four-year cost")).toBeVisible();
+  await expect(page.getByText("$72,000")).toBeVisible();
   await expect(page.getByText("Metrics table")).toBeVisible();
   await expect(page.getByRole("cell", { name: "$20,000" })).toBeVisible();
   await expect(page.getByText("Tradeoff summary")).toBeVisible();
@@ -97,12 +106,19 @@ test("edits accepted-school offers and generates a decision summary", async ({ p
   await page.route("**/decision/report", async (route) => {
     await route.abort();
   });
+  await page.route("**/cost-calculator", async (route) => {
+    await route.abort();
+  });
 
   await page.goto("/decision");
 
   await expect(page.getByRole("heading", { name: "Accepted schools", exact: true })).toBeVisible();
+  await expect(page.getByText("Cost/value calculator")).toBeVisible();
   await expect(page.getByLabel("Estimated yearly cost").first()).toBeVisible();
   await page.getByLabel("Estimated yearly cost").first().fill("18000");
+  await page.getByLabel("Annual loans").first().fill("5500");
+  await page.getByRole("button", { name: "Calculate" }).click();
+  await expect(page.getByText("Four-year $72,000")).toBeVisible();
   await expect(page.getByLabel("Unresolved concerns/questions").first()).toBeVisible();
   await page.getByLabel("Unresolved concerns/questions").first().fill("Confirm housing package");
   await page.getByRole("button", { name: "Save offer" }).first().click();

@@ -56,7 +56,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V2.4 Acceptance decision mode
   - Added acceptance/finalist offer capture, deterministic decision reports, confidence flags for missing financial/preferences/outcomes data, backend decision endpoints, report-ready frontend workspace, and focused backend/frontend tests.
   - Full frontend runtime validation still needs Node/npm dependencies available in the shell.
-- [ ] V2.5 Cost/value calculator
+- [x] V2.5 Cost/value calculator
+  - Added `POST /cost-calculator`, deterministic yearly/four-year cost, debt exposure, repayment sensitivity scenarios, outcome-adjusted directional value, affordability indicators, confidence warnings, and frontend calculator surfaces in `/decision` and `/compare`.
+  - Frontend runtime validation still needs Node/npm dependencies available in the shell.
 - [ ] V2.6 Sensitivity analysis
 - [ ] V2.7 Shareable decision report
 - [ ] V2.8 Analytics and ranking evaluation
@@ -92,7 +94,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-21: Completed V2.2 pgvector semantic search. Added school embedding table/migration, structured document generation, local deterministic embedding provider, refresh CLI, `POST /semantic-search`, pgvector/fallback candidate retrieval, structured hard-constraint preservation, semantic reason tags, cache keys, and tests.
 - 2026-05-21: Completed V2.3 similar-school discovery. Added variant-aware similar-school API, deterministic fallback, source exclusion, Redis cache support, explainable reasons/tradeoffs, frontend profile integration with variant controls, and backend/frontend test coverage updates.
 - 2026-05-21: Completed V2.4 acceptance decision mode. Added accepted/finalist offer models, `/decision/offers` and `/decision/report`, deterministic category-based decision summaries, confidence/uncertainty flags, a browser-local accepted-schools workspace with editable offer cards and report panel, and updated docs/tests.
+- 2026-05-21: Completed V2.5 cost/value calculator. Added deterministic cost/value API and service, calculator schemas, backend tests for cost, aid, debt sensitivity, missing data, and validation, plus editable calculator experiences in decision and compare workflows with Playwright smoke coverage updates.
 
 ## Next Recommended Task
 
-V2.5 Cost/value calculator.
+V2.6 Sensitivity analysis.

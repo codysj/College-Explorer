@@ -98,6 +98,26 @@ Missing offer costs, missing profile net price, missing outcomes metrics, incomp
 
 Decision reports are decision-support summaries, not admissions advice, financial advice, ROI guarantees, or predictions. Full cost/value modeling and sensitivity analysis are deferred to V2.5/V2.6.
 
+## Cost/Value Calculator
+
+V2.5 cost/value calculation does not change `RANKING_VERSION`. It has its own `calculator_version` (`v1.0`) because financial estimates are separate from best-fit ranking.
+
+The calculator is deterministic and formula-driven:
+
+| Output | Deterministic basis |
+| --- | --- |
+| Estimated yearly cost | Entered yearly cost first; otherwise entered net price or tuition minus scholarships and grants/aid; otherwise profile net price or tuition minus entered scholarships and grants/aid. |
+| Estimated four-year total cost | Estimated yearly cost multiplied by `4`. V2.5 does not model inflation, year-by-year tuition changes, or full sensitivity analysis. |
+| Yearly and four-year cost differences | Difference from the selected baseline school's estimated yearly and four-year costs. |
+| Estimated debt exposure | Entered annual loan amount multiplied by `4`; if missing, observed median debt may be displayed as a data indicator with a warning. |
+| Repayment scenarios | Standard amortization for lower debt, base debt, and higher debt using the entered interest rate and term. |
+| Affordability indicator | Compares estimated yearly cost with the entered family yearly budget. |
+| Directional outcome-adjusted value | Uses known four-year cost, median earnings, graduation rate, and repayment rate. Missing outcomes produce `uncertain`. |
+
+The calculator intentionally avoids an opaque ROI score. Labels such as `stronger_value`, `reasonable_value`, `higher_cost_tradeoff`, and `uncertain` are directional summaries of visible formulas and known data. They do not alter ranking fit scores, admission realism, or decision-report best-fit categories.
+
+Missing aid data, profile net price, loan assumptions, median earnings, graduation rate, or repayment rate creates warnings and lowers calculator confidence. Unknown values remain unknown instead of becoming zero.
+
 ## Confidence
 
 Confidence is separate from fit. Each category tracks how much of its scoring signal was available. Overall `confidence_score` is the weighted sum of category confidences, rounded to four decimals.

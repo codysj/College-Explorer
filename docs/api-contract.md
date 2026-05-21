@@ -1,6 +1,6 @@
 # API Contract
 
-V2.4 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
+V2.5 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, cost/value calculation, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -542,6 +542,127 @@ Response `200` includes:
 - `major_tradeoffs`: deterministic comparison sentences grounded in structured data and user-entered offers.
 - `snapshot_id`: present when `save_snapshot=true`.
 
+### `POST /cost-calculator`
+
+Compares school financial assumptions and directional value. This endpoint is deterministic planning support, not financial advice.
+
+Request body:
+
+```json
+{
+  "schools": [
+    {
+      "school_id": 1,
+      "estimated_net_price": 28000,
+      "scholarships": 8000,
+      "grants_aid": 6000,
+      "annual_loan_amount": 5500,
+      "loan_interest_rate": 0.055,
+      "loan_term_years": 10
+    },
+    {
+      "school_id": 2,
+      "estimated_yearly_cost": 42500,
+      "annual_loan_amount": 12000
+    }
+  ],
+  "baseline_school_id": 1,
+  "max_annual_family_budget": 30000
+}
+```
+
+Rules:
+
+| Field | Rules |
+| --- | --- |
+| `schools` | Required, 1 to 8 unique schools. |
+| `tuition`, `estimated_net_price`, `scholarships`, `grants_aid`, `estimated_yearly_cost`, `annual_loan_amount` | Optional nonnegative annual dollar amounts. |
+| `loan_interest_rate` | Optional, defaults to `0.055`, must be `0` to `0.25`. |
+| `loan_term_years` | Optional, defaults to `10`, must be `1` to `30`. |
+| `baseline_school_id` | Optional; when supplied, it must be one of the requested schools. |
+| `max_annual_family_budget` | Optional nonnegative yearly budget used for affordability indicators. |
+
+Response `200`:
+
+```json
+{
+  "calculator_version": "v1.0",
+  "generated_at": "2026-05-21T12:00:00Z",
+  "disclaimer": "Cost/value calculator outputs are estimates for planning only, not financial advice. Actual aid, costs, borrowing terms, repayment, and outcomes may vary.",
+  "baseline_school_id": 1,
+  "results": [
+    {
+      "school_id": 2,
+      "name": "USC Demo College",
+      "city": "Los Angeles",
+      "state": "CA",
+      "observed_cost_data": {
+        "tuition_in_state": null,
+        "tuition_out_state": 68000,
+        "net_price": 48500,
+        "average_aid": 22000,
+        "debt_median": 26000
+      },
+      "observed_outcome_data": {
+        "median_earnings": 72000,
+        "graduation_rate": 0.86,
+        "repayment_rate": 0.82
+      },
+      "assumptions": {
+        "school_id": 2,
+        "tuition": null,
+        "estimated_net_price": null,
+        "scholarships": null,
+        "grants_aid": null,
+        "estimated_yearly_cost": 42500,
+        "annual_loan_amount": 12000,
+        "loan_interest_rate": 0.055,
+        "loan_term_years": 10
+      },
+      "estimated_yearly_cost": 42500,
+      "estimated_four_year_total_cost": 170000,
+      "yearly_cost_difference": 20500,
+      "four_year_cost_difference": 82000,
+      "estimated_debt_exposure": 48000,
+      "repayment_scenarios": [
+        {
+          "scenario": "base",
+          "principal": 48000,
+          "interest_rate": 0.055,
+          "term_years": 10,
+          "estimated_monthly_payment": 521,
+          "estimated_total_repaid": 62520,
+          "assumption": "Total borrowed matches the current assumption or observed median debt indicator."
+        }
+      ],
+      "directional_outcome_adjusted_value": "reasonable_value",
+      "affordability": {
+        "status": "above_budget",
+        "message": "Estimated yearly cost is above the entered family budget."
+      },
+      "confidence": "high",
+      "warnings": [],
+      "formulas": [
+        "estimated_yearly_cost = max(0, estimated_yearly_cost)",
+        "estimated_four_year_total_cost = estimated_yearly_cost * 4"
+      ]
+    }
+  ],
+  "comparison_summary": [
+    "USC Demo College may cost about $82,000 more over four years than Berkeley Demo University under current assumptions."
+  ]
+}
+```
+
+Calculation rules:
+
+- Yearly cost uses entered `estimated_yearly_cost` first, then entered net price or tuition minus scholarships and grants/aid, then profile net price or tuition when available.
+- Four-year total is yearly cost multiplied by `4`; no inflation or year-by-year sensitivity is applied in V2.5.
+- Debt exposure uses entered annual loans multiplied by `4`; if loans are missing, observed median debt may be shown as a data indicator with a warning.
+- Repayment scenarios use standard amortization for lower debt, base debt, and higher debt. They are simple sensitivities, not personalized repayment advice.
+- Directional value labels use known four-year cost, median earnings, graduation rate, and repayment rate where available. Missing outcomes produce `uncertain`.
+- Missing aid, net price, outcomes, or debt assumptions reduce confidence and appear in `warnings`.
+
 ## Error Format
 
 ```json
@@ -567,7 +688,7 @@ School profile reads join `schools` to academics, costs, outcomes, and campus li
 
 Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life` with left joins in one repository query. The ranking service applies hard constraints, computes category scores, confidence, reason codes, and tradeoffs in memory for V1 scale.
 
-Decision reports read `acceptance_offers`, join candidate school rows through the decision repository, and call the ranking service for deterministic fit/category scoring. Route handlers do not write SQL directly.
+Decision reports read `acceptance_offers`, join candidate school rows through the decision repository, and call the ranking service for deterministic fit/category scoring. Cost calculator reads requested school cost/outcome rows through the school repository and performs deterministic calculations in the service layer. Route handlers do not write SQL directly.
 
 Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. The semantic service applies filters and hard constraints after candidate retrieval and delegates final ordering to the ranking service.
 

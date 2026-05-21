@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
 
-Status: V2.4 acceptance decision mode is locally implemented after V2.3 similar-school discovery. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, explainable hybrid semantic search, profile-page similar-school exploration, and accepted-school decision summaries. Public cloud deployment, authenticated persistence, the full cost/value calculator, and full official dataset ingestion remain future work.
+Status: V2.5 cost/value calculator is locally implemented after V2.4 acceptance decision mode. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, explainable hybrid semantic search, profile-page similar-school exploration, accepted-school decision summaries, and transparent cost/value estimates. Public cloud deployment, authenticated persistence, full sensitivity analysis, and full official dataset ingestion remain future work.
 
 ## Product Overview
 
@@ -32,6 +32,7 @@ The engineering thesis is that a consumer-facing product can stay trustworthy wh
 - pgvector-backed V2.2 semantic retrieval with deterministic local fallback and final ranking controlled by structured scoring.
 - V2.3 similar-school discovery with explainable variants for cheaper, smaller, less selective, stronger outcomes, and closer-to-home alternatives.
 - V2.4 accepted-school decision workspace with offer cards, notes, finalist comparison, deterministic summary categories, and uncertainty flags.
+- V2.5 cost/value calculator with editable tuition, aid, scholarship, yearly cost, loan assumptions, four-year cost differences, basic repayment scenarios, directional value labels, affordability warnings, and estimate disclaimers.
 - Browser-local saved-school and comparison state for V1 demo flows.
 - Playwright smoke coverage for onboarding, search, profiles, saved schools, and compare behavior.
 - Docker Compose support for frontend, backend, PostgreSQL, and Redis.
@@ -172,6 +173,7 @@ Implemented endpoints:
 - `GET /schools/{id}/similar`: explainable similar-school alternatives with deterministic variant logic.
 - `POST /decision/offers` and `GET /decision/offers`: create/update and list accepted/finalist offer details.
 - `POST /decision/report`: generate a structured, explainable decision summary for accepted/finalist schools.
+- `POST /cost-calculator`: compare school cost assumptions, estimated four-year totals, debt exposure, repayment scenarios, affordability, and directional value.
 
 API docs are generated locally at `http://127.0.0.1:8000/docs`. The contract details live in [docs/api-contract.md](docs/api-contract.md).
 
@@ -216,13 +218,15 @@ V2.3 adds a profile-page similar-school section powered by `GET /schools/{id}/si
 
 Variant logic is bounded and deterministic. For example, `cheaper` requires a lower known net price when both schools have price data, `smaller` requires lower enrollment when known, and `less_selective` requires a higher acceptance rate when known.
 
-## Acceptance Decisions
+## Acceptance Decisions And Cost Value
 
 V2.4 adds an accepted-schools workspace at `/decision`. Students can mark saved schools as accepted or finalist, enter aid offers, scholarships, estimated yearly cost, visit notes, unresolved questions, and parent/student priority notes, then generate a report-ready decision summary.
 
 The backend exposes `/decision/offers` for offer persistence and `/decision/report` for deterministic summaries. The report distinguishes best overall fit, best value, strongest career upside, lowest risk, and biggest unresolved factor. Missing offer costs, incomplete preferences, and missing outcomes metrics reduce decision confidence instead of being treated as zero.
 
-The workflow is a planning assistant, not admissions or financial advice. Full cost/value modeling and sensitivity analysis remain V2.5/V2.6 work.
+V2.5 adds a cost/value calculator to `/decision` and `/compare`, backed by `POST /cost-calculator`. It estimates yearly and four-year cost from entered offers or known profile costs, compares each school against a baseline, shows debt exposure and basic lower/base/higher repayment scenarios, and uses known earnings, graduation, and repayment fields only for directional value labels. Missing aid, debt, or outcomes data lowers confidence and creates warnings instead of becoming zero.
+
+The workflow is a planning assistant, not admissions or financial advice. Full sensitivity analysis remains V2.6 work.
 
 ## Ranking Methodology Summary
 
@@ -311,6 +315,7 @@ No real screenshots or GIFs are committed yet. The capture checklist is maintain
 - Similar schools variants on the school profile
 - Saved schools dashboard
 - Compare workflow
+- Cost/value calculator in compare and accepted-school decision workflows
 
 Screenshots should be added only after capturing the real running product.
 
@@ -320,7 +325,7 @@ Screenshots should be added only after capturing the real running product.
 - Saved schools and comparisons are browser-local in V1 because authentication is not implemented.
 - The accepted-schools UI keeps browser-local offer state for recruiter-demo continuity; backend decision endpoints are available for the future authenticated persistence path.
 - The frontend search UI does not yet call `POST /rankings`; deterministic ranking is available through the API.
-- Full cost/value calculations, sensitivity analysis, full official dataset operations, analytics, rate limiting, and account persistence are future work.
+- Full sensitivity analysis, full official dataset operations, analytics, rate limiting, and account persistence are future work.
 - Deployment configuration is documented and Dockerized, but no public hosted environment has been verified.
 - Performance claims are not production measurements.
 
@@ -347,4 +352,4 @@ V3 focuses on hardening:
 - Expanded end-to-end tests
 - Portfolio/demo polish
 
-See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.5 Cost/value calculator**.
+See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.6 Sensitivity analysis**.

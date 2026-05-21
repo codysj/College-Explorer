@@ -4,8 +4,8 @@ This document captures the current V1 architecture for the College Exploration P
 
 ## Target Shape
 
-- `apps/web`: Next.js frontend for onboarding, search, school profiles, comparison, and accepted-school decision workflows.
-- `apps/api`: FastAPI backend for typed REST endpoints, validation, search, ranking, comparison, and data access.
+- `apps/web`: Next.js frontend for onboarding, search, school profiles, comparison, cost/value estimates, and accepted-school decision workflows.
+- `apps/api`: FastAPI backend for typed REST endpoints, validation, search, ranking, comparison, cost/value calculation, and data access.
 - PostgreSQL: canonical structured college data and user-owned decision state. The V1.2 schema exists under `apps/api/alembic`.
 - pgvector: V2.2 semantic school retrieval over generated structured school search documents.
 - Redis: cache-aside layer for repeated read-heavy search, profile, and ranking responses.
@@ -131,6 +131,14 @@ Ranking is computed in memory for V1 scale after the repository query. Missing v
 - Decision confidence flags call out missing offer costs, incomplete preference weights, missing outcomes metrics, limited school data, and too few finalists. Unknown values lower confidence rather than becoming zero-valued ranking inputs.
 - The current no-auth local workflow uses `user_id=1` as a demo workspace boundary. V3 account persistence should replace this with authenticated user ownership.
 
+`POST /cost-calculator` adds V2.5 cost/value comparison:
+
+- `schemas/cost_calculator.py` validates one to eight school assumptions for tuition, net price, scholarships, grants/aid, yearly cost, and optional loan assumptions.
+- `services/cost_calculator.py` owns deterministic calculations for yearly cost, four-year total cost, baseline cost differences, estimated debt exposure, lower/base/higher repayment scenarios, affordability indicators, directional value labels, formulas, and warnings.
+- `repositories/schools.py` reads the observed cost and outcome fields needed by the calculator from school, cost, academic, and outcome tables. Route handlers do not write SQL.
+- Missing aid, net price, debt, or outcomes data creates warnings and lowers confidence. Unknown values are never converted to zero for comparison or value labels.
+- The calculator is separate from ranking and decision fit. It can say a school looks stronger financially under current assumptions without changing best-fit ranking outputs.
+
 ## Cache Strategy
 
 V1.12 adds a centralized cache service in `apps/api/services/cache.py`. Routes still call services, and services decide whether to return a cached response or call the repository. Redis-specific behavior is isolated behind a small backend abstraction so the API can fall back to normal database reads when Redis is unavailable.
@@ -156,7 +164,7 @@ The V1 frontend lives in `apps/web`:
 - `components/onboarding/`: Multi-step local preference quiz for academic, cost, career, location, campus, admissions, and category-weight inputs.
 - `components/search/`: URL-synced school search experience, result cards, filter panel, pagination, and save/compare actions.
 - `components/dashboard/`: Browser-local saved schools dashboard grouped by decision status.
-- `components/compare/`: Sticky compare tray and comparison workspace for 2 to 5 locally selected schools.
+- `components/compare/`: Sticky compare tray and comparison workspace for 2 to 5 locally selected schools, including editable V2.5 cost/value assumptions.
 - `components/decision/`: Accepted-schools workspace with editable offer cards, notes, finalist comparison, and report-ready summary panel.
 - `lib/api-client.ts`: Safe fetch wrapper for backend calls, JSON error handling, and typed response usage.
 - `lib/preferences.ts`: Local preference profile schema, completeness calculation, localStorage persistence, and search-parameter handoff.
@@ -164,6 +172,7 @@ The V1 frontend lives in `apps/web`:
 - `lib/school-actions.ts`: Typed browser-local saved-school and compare state, including legacy ID migration, duplicate prevention, status updates, and a 5-school compare limit.
 - `lib/comparison.ts`: Deterministic comparison summary and category winner helpers. It does not call an LLM or invent missing school facts.
 - `lib/decision.ts`: Browser-local decision offer persistence, optional backend sync/report calls, and deterministic local fallback summaries for demo continuity.
+- `lib/cost-calculator.ts`: Cost/value calculator API client plus deterministic local fallback for compare and decision workflows when the API is unavailable.
 - `lib/env.ts`: Environment-based API base URL resolution using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`.
 - `types/api.ts`: Frontend TypeScript contracts for currently consumed API shapes.
 
@@ -171,7 +180,7 @@ The frontend talks to the backend over HTTP only. It does not query PostgreSQL a
 
 V1.11 saved-school and comparison state is browser-local because no authenticated user session exists. Saved schools are stored under `college-exploration.saved-schools.v1` with statuses `interested`, `applying`, `accepted`, `finalist`, and `removed`. Compare selections are stored under `college-exploration.compare-schools.v1`, deduplicated, capped at 5 schools, and shared by the sticky tray across pages. `/dashboard` reads the local saved-state snapshot; `/compare` reads local compare IDs and fetches full school profiles over `GET /schools/{id}` before rendering deterministic comparisons.
 
-V2.4 decision offer state is stored locally under `college-exploration.decision-offers.v1` for the frontend demo flow and can sync to the backend `/decision/offers` endpoint when the API is running. `/decision` filters saved schools to accepted/finalist status, captures offer costs and notes, and renders a report-ready summary. If `/decision/report` is unavailable, the UI uses a deterministic local fallback that still marks missing backend fit/outcome/financial data as uncertainty.
+V2.4 decision offer state is stored locally under `college-exploration.decision-offers.v1` for the frontend demo flow and can sync to the backend `/decision/offers` endpoint when the API is running. `/decision` filters saved schools to accepted/finalist status, captures offer costs and notes, and renders a report-ready summary. If `/decision/report` is unavailable, the UI uses a deterministic local fallback that still marks missing backend fit/outcome/financial data as uncertainty. V2.5 calculator panels in `/decision` and `/compare` call `/cost-calculator` when available and otherwise use the same transparent local formulas for recruiter-demo continuity.
 
 ## Deployment Shape
 
@@ -181,4 +190,4 @@ GitHub Actions validates frontend lint/typecheck/build, Playwright smoke tests, 
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, the V2.1 ingestion pipeline, V2.2 semantic retrieval, V2.3 similar-school discovery, and V2.4 acceptance decision mode are implemented. Backend preference persistence, authenticated saved schools/comparisons, the full cost/value calculator, sensitivity analysis, public cloud deployment, production observability, and load-test reporting are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, the V2.1 ingestion pipeline, V2.2 semantic retrieval, V2.3 similar-school discovery, V2.4 acceptance decision mode, and V2.5 cost/value calculator are implemented. Backend preference persistence, authenticated saved schools/comparisons, full sensitivity analysis, public cloud deployment, production observability, and load-test reporting are not implemented yet.

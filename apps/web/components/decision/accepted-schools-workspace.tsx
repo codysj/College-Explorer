@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ClipboardList, FileText, Save, ShieldCheck, Sparkles, Trophy } from "lucide-react";
+import { AlertCircle, Calculator, ClipboardList, FileText, Save, ShieldCheck, Sparkles, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,6 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import {
+  buildLocalCostCalculator,
+  defaultCostAssumption,
+  requestCostCalculator,
+  type CostCalculatorDraft,
+} from "@/lib/cost-calculator";
 import {
   buildLocalDecisionReport,
   defaultOfferForSchool,
@@ -20,7 +26,7 @@ import {
   type DecisionOfferDraft,
 } from "@/lib/decision";
 import { getVisibleSavedSchools, useSchoolActionState, type SavedSchoolEntry } from "@/lib/school-actions";
-import type { DecisionReportResponse } from "@/types/api";
+import type { CostCalculatorResponse, DecisionReportResponse } from "@/types/api";
 
 export function AcceptedSchoolsWorkspace() {
   const { savedSchools, updateSavedStatus } = useSchoolActionState();
@@ -28,6 +34,9 @@ export function AcceptedSchoolsWorkspace() {
   const candidates = useMemo(() => getDecisionCandidates(getVisibleSavedSchools(savedSchools)), [savedSchools]);
   const [offers, setOffers] = useState<DecisionOfferDraft[]>([]);
   const [report, setReport] = useState<DecisionReportResponse | null>(null);
+  const [costAssumptions, setCostAssumptions] = useState<CostCalculatorDraft[]>([]);
+  const [costReport, setCostReport] = useState<CostCalculatorResponse | null>(null);
+  const [familyBudget, setFamilyBudget] = useState<number | null>(null);
   const [saveState, setSaveState] = useState<string>("Local");
 
   useEffect(() => {
@@ -43,6 +52,25 @@ export function AcceptedSchoolsWorkspace() {
     const candidateById = new Map(candidates.map((school) => [school.school_id, school]));
     setReport(buildLocalDecisionReport(candidates.filter((school) => candidateById.has(school.school_id)), offers));
   }, [candidates, offers]);
+
+  useEffect(() => {
+    setCostAssumptions((current) => {
+      const currentBySchool = new Map(current.map((item) => [item.school_id, item]));
+      const offerBySchool = new Map(offers.map((offer) => [offer.school_id, offer]));
+      return candidates.map((school) => ({
+        ...defaultCostAssumption(school, offerBySchool.get(school.school_id)),
+        ...currentBySchool.get(school.school_id),
+      }));
+    });
+  }, [candidates, offers]);
+
+  useEffect(() => {
+    if (candidates.length === 0) {
+      setCostReport(null);
+      return;
+    }
+    setCostReport(buildLocalCostCalculator(candidates, costAssumptions, costAssumptions[0]?.school_id, familyBudget));
+  }, [candidates, costAssumptions, familyBudget]);
 
   const updateOffer = (school: SavedSchoolEntry, patch: Partial<DecisionOfferDraft>) => {
     setOffers((current) => {
@@ -73,6 +101,18 @@ export function AcceptedSchoolsWorkspace() {
     } catch {
       setReport(buildLocalDecisionReport(candidates, offers));
       setSaveState("Local report");
+    }
+  };
+
+  const calculateCosts = async () => {
+    setSaveState("Calculating");
+    try {
+      const payload = await requestCostCalculator(costAssumptions, costAssumptions[0]?.school_id, familyBudget);
+      setCostReport(payload);
+      setSaveState("API calculator");
+    } catch {
+      setCostReport(buildLocalCostCalculator(candidates, costAssumptions, costAssumptions[0]?.school_id, familyBudget));
+      setSaveState("Local calculator");
     }
   };
 
@@ -113,6 +153,18 @@ export function AcceptedSchoolsWorkspace() {
       {candidates.length > 0 ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
           <section className="space-y-4">
+            <CostValueCalculator
+              assumptions={costAssumptions}
+              budget={familyBudget}
+              costReport={costReport}
+              onBudgetChange={setFamilyBudget}
+              onCalculate={calculateCosts}
+              onUpdate={(schoolId, patch) => {
+                setCostAssumptions((current) =>
+                  current.map((item) => item.school_id === schoolId ? { ...item, ...patch } : item),
+                );
+              }}
+            />
             {candidates.map((school) => {
               const offer = offers.find((item) => item.school_id === school.school_id) ?? defaultOfferForSchool(school);
               return (
@@ -130,6 +182,100 @@ export function AcceptedSchoolsWorkspace() {
         </div>
       ) : null}
     </main>
+  );
+}
+
+function CostValueCalculator({
+  assumptions,
+  budget,
+  costReport,
+  onBudgetChange,
+  onCalculate,
+  onUpdate,
+}: {
+  assumptions: CostCalculatorDraft[];
+  budget: number | null;
+  costReport: CostCalculatorResponse | null;
+  onBudgetChange: (value: number | null) => void;
+  onCalculate: () => void;
+  onUpdate: (schoolId: number, patch: Partial<CostCalculatorDraft>) => void;
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            <Calculator className="h-5 w-5 text-primary" aria-hidden="true" />
+            Cost/value calculator
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Enter offer assumptions, debt plans, and budget to compare estimated four-year cost, debt exposure, and directional value.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <MoneyInput label="Family yearly budget" value={budget} onChange={onBudgetChange} />
+          <Button type="button" onClick={onCalculate}>
+            <Calculator className="h-4 w-4" aria-hidden="true" />
+            Calculate
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {assumptions.map((item) => {
+          const result = costReport?.results.find((school) => school.school_id === item.school_id);
+          return (
+            <div key={item.school_id} className="rounded-md border border-border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-foreground">{result?.name ?? `School ${item.school_id}`}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Confidence: {result?.confidence ?? "pending"}</p>
+                </div>
+                <Badge variant={result?.affordability.status === "within_budget" ? "default" : "muted"}>
+                  {result?.affordability.status.replace("_", " ") ?? "estimate"}
+                </Badge>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <MoneyInput label="Tuition" value={item.tuition ?? null} onChange={(value) => onUpdate(item.school_id, { tuition: value })} />
+                <MoneyInput label="Net price" value={item.estimated_net_price ?? null} onChange={(value) => onUpdate(item.school_id, { estimated_net_price: value })} />
+                <MoneyInput label="Scholarships" value={item.scholarships ?? null} onChange={(value) => onUpdate(item.school_id, { scholarships: value })} />
+                <MoneyInput label="Grants/aid" value={item.grants_aid ?? null} onChange={(value) => onUpdate(item.school_id, { grants_aid: value })} />
+                <MoneyInput label="Yearly cost" value={item.estimated_yearly_cost ?? null} onChange={(value) => onUpdate(item.school_id, { estimated_yearly_cost: value })} />
+                <MoneyInput label="Annual loans" value={item.annual_loan_amount ?? null} onChange={(value) => onUpdate(item.school_id, { annual_loan_amount: value })} />
+              </div>
+              <div className="mt-4 grid gap-2 text-sm text-muted-foreground sm:grid-cols-3">
+                <span>Yearly {formatCurrency(result?.estimated_yearly_cost ?? null)}</span>
+                <span>Four-year {formatCurrency(result?.estimated_four_year_total_cost ?? null)}</span>
+                <span>Debt {formatCurrency(result?.estimated_debt_exposure ?? null)}</span>
+              </div>
+              {result?.repayment_scenarios.length ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {result.repayment_scenarios.map((scenario) => (
+                    <p key={scenario.scenario} className="rounded-md bg-muted p-2 text-xs leading-5 text-muted-foreground">
+                      {scenario.scenario.replace("_", " ")}: {formatCurrency(scenario.estimated_monthly_payment)}/mo
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              {result?.warnings.length ? (
+                <p className="mt-3 rounded-md bg-muted p-3 text-xs leading-5 text-muted-foreground">
+                  {result.warnings.join(", ")}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {costReport ? (
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {costReport.comparison_summary.map((item) => (
+            <p key={item} className="rounded-md bg-muted p-3 text-sm leading-6 text-muted-foreground">{item}</p>
+          ))}
+          <p className="rounded-md bg-muted p-3 text-sm leading-6 text-muted-foreground">{costReport.disclaimer}</p>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

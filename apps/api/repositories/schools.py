@@ -147,6 +147,33 @@ class SchoolRepository(BaseRepository[School]):
         rows = self.db.execute(filtered_query).mappings().all()
         return [dict(row) for row in rows]
 
+    def get_cost_calculator_rows(self, school_ids: list[int]) -> list[dict[str, object]]:
+        if not school_ids:
+            return []
+        query = (
+            select(
+                School.id.label("school_id"),
+                School.name,
+                School.city,
+                School.state,
+                SchoolCosts.tuition_in_state,
+                SchoolCosts.tuition_out_state,
+                SchoolCosts.net_price,
+                SchoolCosts.average_aid,
+                SchoolCosts.debt_median,
+                SchoolAcademics.graduation_rate,
+                SchoolOutcomes.median_earnings,
+                SchoolOutcomes.repayment_rate,
+            )
+            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
+            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
+            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
+            .where(School.id.in_(school_ids))
+            .order_by(School.id.asc())
+        )
+        rows = self.db.execute(query).mappings().all()
+        return [dict(row) for row in rows]
+
     def get_semantic_document_rows(self) -> list[dict[str, object]]:
         query = (
             select(

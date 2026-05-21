@@ -172,3 +172,66 @@ export type DecisionReportResponse = {
   major_tradeoffs: string[];
   snapshot_id: number | null;
 };
+
+export type CostCalculatorAssumption = {
+  school_id: number;
+  tuition?: number | null;
+  estimated_net_price?: number | null;
+  scholarships?: number | null;
+  grants_aid?: number | null;
+  estimated_yearly_cost?: number | null;
+  annual_loan_amount?: number | null;
+  loan_interest_rate?: number;
+  loan_term_years?: number;
+};
+
+export type CostCalculatorResult = {
+  school_id: number;
+  name: string;
+  city: string;
+  state: string;
+  observed_cost_data: {
+    tuition_in_state: number | null;
+    tuition_out_state: number | null;
+    net_price: number | null;
+    average_aid: number | null;
+    debt_median: number | null;
+  };
+  observed_outcome_data: {
+    median_earnings: number | null;
+    graduation_rate: number | null;
+    repayment_rate: number | null;
+  };
+  assumptions: CostCalculatorAssumption;
+  estimated_yearly_cost: number | null;
+  estimated_four_year_total_cost: number | null;
+  yearly_cost_difference: number | null;
+  four_year_cost_difference: number | null;
+  estimated_debt_exposure: number | null;
+  repayment_scenarios: Array<{
+    scenario: "base" | "lower_debt" | "higher_debt";
+    principal: number;
+    interest_rate: number;
+    term_years: number;
+    estimated_monthly_payment: number;
+    estimated_total_repaid: number;
+    assumption: string;
+  }>;
+  directional_outcome_adjusted_value: "stronger_value" | "reasonable_value" | "higher_cost_tradeoff" | "uncertain";
+  affordability: {
+    status: "within_budget" | "near_budget" | "above_budget" | "unknown";
+    message: string;
+  };
+  confidence: "low" | "medium" | "high";
+  warnings: string[];
+  formulas: string[];
+};
+
+export type CostCalculatorResponse = {
+  calculator_version: string;
+  generated_at: string;
+  disclaimer: string;
+  baseline_school_id: number | null;
+  results: CostCalculatorResult[];
+  comparison_summary: string[];
+};

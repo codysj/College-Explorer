@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowLeft, CheckCircle2, GitCompare, Trophy, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Calculator, CheckCircle2, GitCompare, Trophy, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,16 +8,25 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  buildLocalCostCalculator,
+  defaultCostAssumption,
+  requestCostCalculator,
+  type CostCalculatorDraft,
+} from "@/lib/cost-calculator";
 import { buildComparisonSummary } from "@/lib/comparison";
 import { useSchoolActionState } from "@/lib/school-actions";
 import { getSchoolProfiles } from "@/lib/schools";
-import type { SchoolProfile } from "@/types/api";
+import type { CostCalculatorResponse, SchoolProfile } from "@/types/api";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
 export function ComparisonWorkspace() {
   const { comparedSchools, compareIds, removeCompareSchool } = useSchoolActionState();
   const [profiles, setProfiles] = useState<SchoolProfile[]>([]);
+  const [costAssumptions, setCostAssumptions] = useState<CostCalculatorDraft[]>([]);
+  const [costReport, setCostReport] = useState<CostCalculatorResponse | null>(null);
+  const [familyBudget, setFamilyBudget] = useState<number | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const selectedIds = useMemo(() => comparedSchools.map((school) => school.school_id), [comparedSchools]);
@@ -48,6 +57,29 @@ export function ComparisonWorkspace() {
   }, [selectedIds]);
 
   const summary = useMemo(() => buildComparisonSummary(profiles), [profiles]);
+
+  useEffect(() => {
+    setCostAssumptions((current) => {
+      const currentBySchool = new Map(current.map((item) => [item.school_id, item]));
+      return profiles.map((profile) => ({ ...defaultCostAssumption(profile), ...currentBySchool.get(profile.school_id) }));
+    });
+  }, [profiles]);
+
+  useEffect(() => {
+    if (profiles.length < 2) {
+      setCostReport(null);
+      return;
+    }
+    setCostReport(buildLocalCostCalculator(profiles, costAssumptions, costAssumptions[0]?.school_id, familyBudget));
+  }, [profiles, costAssumptions, familyBudget]);
+
+  const calculateCosts = async () => {
+    try {
+      setCostReport(await requestCostCalculator(costAssumptions, costAssumptions[0]?.school_id, familyBudget));
+    } catch {
+      setCostReport(buildLocalCostCalculator(profiles, costAssumptions, costAssumptions[0]?.school_id, familyBudget));
+    }
+  };
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-5 pb-36 pt-8 sm:px-8">
@@ -103,12 +135,125 @@ export function ComparisonWorkspace() {
       {loadState === "ready" && compareIds.size >= 2 ? (
         <div className="space-y-6">
           <TopSummary summary={summary} />
+          <CostComparison
+            assumptions={costAssumptions}
+            budget={familyBudget}
+            costReport={costReport}
+            onBudgetChange={setFamilyBudget}
+            onCalculate={calculateCosts}
+            onUpdate={(schoolId, patch) => {
+              setCostAssumptions((current) =>
+                current.map((item) => item.school_id === schoolId ? { ...item, ...patch } : item),
+              );
+            }}
+          />
           <MetricsTable profiles={profiles} onRemove={removeCompareSchool} />
           <CategoryWinners summary={summary} />
           <TradeoffSummary tradeoffs={summary.tradeoffs} />
         </div>
       ) : null}
     </main>
+  );
+}
+
+function CostComparison({
+  assumptions,
+  budget,
+  costReport,
+  onBudgetChange,
+  onCalculate,
+  onUpdate,
+}: {
+  assumptions: CostCalculatorDraft[];
+  budget: number | null;
+  costReport: CostCalculatorResponse | null;
+  onBudgetChange: (value: number | null) => void;
+  onCalculate: () => void;
+  onUpdate: (schoolId: number, patch: Partial<CostCalculatorDraft>) => void;
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-normal text-foreground">
+            <Calculator className="h-5 w-5 text-primary" aria-hidden="true" />
+            Cost/value calculator
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            Edit aid, scholarship, and loan assumptions to compare four-year cost and debt sensitivity.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <MoneyInput label="Family yearly budget" value={budget} onChange={onBudgetChange} />
+          <button
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
+            type="button"
+            onClick={onCalculate}
+          >
+            <Calculator className="h-4 w-4" aria-hidden="true" />
+            Calculate
+          </button>
+        </div>
+      </div>
+      <div className="mt-5 overflow-x-auto">
+        <table className="min-w-[920px] w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/60">
+              <th className="w-44 px-4 py-3 font-semibold text-foreground">Assumption</th>
+              {assumptions.map((item) => {
+                const result = costReport?.results.find((school) => school.school_id === item.school_id);
+                return <th key={item.school_id} className="min-w-56 px-4 py-3 font-semibold text-foreground">{result?.name ?? `School ${item.school_id}`}</th>;
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ["Scholarships", "scholarships"],
+              ["Grants/aid", "grants_aid"],
+              ["Yearly cost", "estimated_yearly_cost"],
+              ["Annual loans", "annual_loan_amount"],
+            ].map(([label, key]) => (
+              <tr key={key} className="border-b border-border">
+                <th className="px-4 py-3 font-semibold text-foreground">{label}</th>
+                {assumptions.map((item) => (
+                  <td key={`${item.school_id}-${key}`} className="px-4 py-3">
+                    <MoneyInput
+                      label={`${label} for school ${item.school_id}`}
+                      compact
+                      value={(item[key as keyof CostCalculatorDraft] as number | null | undefined) ?? null}
+                      onChange={(value) => onUpdate(item.school_id, { [key]: value } as Partial<CostCalculatorDraft>)}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {[
+              ["Estimated four-year cost", (schoolId: number) => formatCurrency(costReport?.results.find((item) => item.school_id === schoolId)?.estimated_four_year_total_cost ?? null)],
+              ["Four-year difference", (schoolId: number) => formatSignedCurrency(costReport?.results.find((item) => item.school_id === schoolId)?.four_year_cost_difference ?? null)],
+              ["Debt exposure", (schoolId: number) => formatCurrency(costReport?.results.find((item) => item.school_id === schoolId)?.estimated_debt_exposure ?? null)],
+              ["Value direction", (schoolId: number) => costReport?.results.find((item) => item.school_id === schoolId)?.directional_outcome_adjusted_value.replaceAll("_", " ") ?? "Unknown"],
+            ].map(([label, formatter]) => (
+              <tr key={label as string} className="border-b border-border last:border-b-0">
+                <th className="px-4 py-3 font-semibold text-foreground">{label as string}</th>
+                {assumptions.map((item) => (
+                  <td key={`${item.school_id}-${label}`} className="px-4 py-3 text-muted-foreground">
+                    {(formatter as (schoolId: number) => string)(item.school_id)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {costReport ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {costReport.comparison_summary.map((item) => (
+            <p key={item} className="rounded-md bg-muted p-3 text-sm leading-6 text-muted-foreground">{item}</p>
+          ))}
+          <p className="rounded-md bg-muted p-3 text-sm leading-6 text-muted-foreground">{costReport.disclaimer}</p>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -272,6 +417,13 @@ function formatCurrency(value: number | null) {
       }).format(value);
 }
 
+function formatSignedCurrency(value: number | null) {
+  if (value === null) return "Unknown";
+  const formatted = formatCurrency(Math.abs(value));
+  if (value === 0) return "$0";
+  return value > 0 ? `+${formatted}` : `-${formatted}`;
+}
+
 function formatNumber(value: number | null) {
   return value === null ? "Unknown" : new Intl.NumberFormat("en-US").format(value);
 }
@@ -282,4 +434,31 @@ function formatPercent(value: number | null) {
 
 function formatScore(value: number | null | undefined) {
   return value === null || value === undefined ? "Unavailable" : String(Math.round(value));
+}
+
+function MoneyInput({
+  compact = false,
+  label,
+  onChange,
+  value,
+}: {
+  compact?: boolean;
+  label: string;
+  onChange: (value: number | null) => void;
+  value: number | null;
+}) {
+  return (
+    <label className="block">
+      <span className={compact ? "sr-only" : "text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground"}>{label}</span>
+      <input
+        aria-label={label}
+        className={`${compact ? "" : "mt-1"} h-10 w-full rounded-md border border-border bg-white px-3 text-sm outline-none transition focus:border-primary`}
+        inputMode="numeric"
+        min={0}
+        type="number"
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)}
+      />
+    </label>
+  );
 }
