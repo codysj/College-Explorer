@@ -4,8 +4,8 @@ This document captures the current V1 architecture for the College Exploration P
 
 ## Target Shape
 
-- `apps/web`: Next.js frontend for onboarding, search, school profiles, comparison, cost/value estimates, sensitivity analysis, and accepted-school decision workflows.
-- `apps/api`: FastAPI backend for typed REST endpoints, validation, search, ranking, comparison, cost/value calculation, sensitivity analysis, and data access.
+- `apps/web`: Next.js frontend for onboarding, search, school profiles, comparison, cost/value estimates, sensitivity analysis, accepted-school decision workflows, printable decision reports, and internal analytics.
+- `apps/api`: FastAPI backend for typed REST endpoints, validation, search, ranking, comparison, cost/value calculation, sensitivity analysis, decision report generation, analytics, and data access.
 - PostgreSQL: canonical structured college data and user-owned decision state. The V1.2 schema exists under `apps/api/alembic`.
 - pgvector: V2.2 semantic school retrieval over generated structured school search documents.
 - Redis: cache-aside layer for repeated read-heavy search, profile, and ranking responses.
@@ -123,12 +123,13 @@ Ranking is computed in memory for V1 scale after the repository query. Missing v
 - Variants are deterministic: `cheaper` biases and filters toward lower net price, `less_selective` toward higher acceptance rate, `smaller` toward lower enrollment, `stronger_outcomes` toward stronger graduation or earnings, and `closer_to_home` toward the supplied `home_state`.
 - The service reuses ranking code for fit score, top reasons, and tradeoffs, but final similarity also includes explicit source-school similarity and variant scores.
 
-`POST /decision/offers`, `GET /decision/offers`, and `POST /decision/report` add V2.4 acceptance decision mode:
+`POST /decision/offers`, `GET /decision/offers`, and `POST /decision/report` add V2.4 acceptance decision mode and the V2.7 shareable decision report:
 
 - `models/decision.py` and the `20260521_0004` migration add `acceptance_offers` and `decision_summary_snapshots`.
 - `repositories/decision.py` owns accepted/finalist offer upserts, saved-school status alignment, report candidate reads, and snapshot writes.
-- `services/decision.py` reuses `RankingService.score_school` to keep fit, value, career, and risk summaries deterministic and grounded in structured inputs.
+- `services/decision.py` reuses `RankingService.score_school`, cost/value calculator result builders, and deterministic sensitivity reranking helpers to keep fit, value, career, risk, cost, and stability summaries grounded in structured inputs.
 - Decision confidence flags call out missing offer costs, incomplete preference weights, missing outcomes metrics, limited school data, and too few finalists. Unknown values lower confidence rather than becoming zero-valued ranking inputs.
+- V2.7 report responses include recommendation cards, finalist ranking rows, category score rows, cost/value rows, sensitivity highlights, major tradeoffs, unresolved questions, a methodology note, and lightweight share paths. Snapshot persistence still uses `decision_summary_snapshots` so future hosted export/share flows can start from a stable report payload.
 - The current no-auth local workflow uses `user_id=1` as a demo workspace boundary. V3 account persistence should replace this with authenticated user ownership.
 
 `POST /cost-calculator` adds V2.5 cost/value comparison:
@@ -147,6 +148,15 @@ Ranking is computed in memory for V1 scale after the repository query. Missing v
 - Category drivers, confidence impacts, and tradeoff explanations are derived from existing category scores, confidence scores, reason codes, and rank deltas.
 - `prestige_selectivity` is represented as a selectivity-emphasis scenario over `admissions_realism`; it does not add an opaque prestige model.
 - Sensitivity responses use Redis cache-aside with keys that include the request, normalized preference/profile snapshot, `CACHE_KEY_VERSION`, and `RANKING_VERSION`.
+
+`POST /analytics/events` and `GET /analytics/summary` add V2.8 analytics and ranking evaluation:
+
+- `models/event.py` stores typed product events in the existing `events` table. Events are sanitized before persistence so raw search text, notes, emails, aid offers, scholarships, and other sensitive user-entered details are not stored.
+- `schemas/analytics.py` defines the supported event names and internal analytics response contracts.
+- `repositories/analytics.py` owns event persistence and event reads. Aggregation is intentionally service-side for the current fixture-scale V2 scope.
+- `services/analytics.py` builds deterministic metrics for most-used filters, most-viewed schools, most-saved schools, compare frequency, onboarding completion rate, save rate by rank position, report-generation frequency, ranking-version usage, save rate by fit-score bucket, compare rate by ranking position, reason-code frequency, confidence distribution, and category-weight summaries.
+- API routes auto-log privacy-safe events for structured search, semantic search, school profile views, rankings, sensitivity adjustments, and decision reports. Frontend local-only actions log save, compare, onboarding completion, and local fallback report events.
+- V2.8 metrics are descriptive product telemetry. They are not causal claims, admissions advice, financial advice, or production observability.
 
 ## Cache Strategy
 
@@ -175,13 +185,15 @@ The V1 frontend lives in `apps/web`:
 - `components/search/`: URL-synced school search experience, result cards, filter panel, pagination, and save/compare actions.
 - `components/dashboard/`: Browser-local saved schools dashboard grouped by decision status.
 - `components/compare/`: Sticky compare tray and comparison workspace for 2 to 5 locally selected schools, including editable V2.5 cost/value assumptions and V2.6 sensitivity analysis sliders.
-- `components/decision/`: Accepted-schools workspace with editable offer cards, notes, finalist comparison, and report-ready summary panel.
+- `components/decision/`: Accepted-schools workspace with editable offer cards, notes, finalist comparison, report-ready summary panel, and printable decision report page.
+- `components/analytics/`: Internal analytics dashboard with metric cards, bar charts, ranking evaluation distributions, and privacy/limitations notes.
 - `lib/api-client.ts`: Safe fetch wrapper for backend calls, JSON error handling, and typed response usage.
 - `lib/preferences.ts`: Local preference profile schema, completeness calculation, localStorage persistence, and search-parameter handoff.
 - `lib/search.ts`: Frontend search filter parsing, API query serialization, and sort mapping.
 - `lib/school-actions.ts`: Typed browser-local saved-school and compare state, including legacy ID migration, duplicate prevention, status updates, and a 5-school compare limit.
 - `lib/comparison.ts`: Deterministic comparison summary and category winner helpers. It does not call an LLM or invent missing school facts.
-- `lib/decision.ts`: Browser-local decision offer persistence, optional backend sync/report calls, and deterministic local fallback summaries for demo continuity.
+- `lib/decision.ts`: Browser-local decision offer and latest-report persistence, optional backend sync/report calls, and deterministic local fallback summaries for demo continuity.
+- `lib/analytics.ts`: Privacy-safe frontend event client and analytics summary fetcher.
 - `lib/cost-calculator.ts`: Cost/value calculator API client plus deterministic local fallback for compare and decision workflows when the API is unavailable.
 - `lib/sensitivity.ts`: Sensitivity-analysis API client and local preference-profile adapter. The frontend does not compute rankings; it sends selected school IDs and scenario weights to `/sensitivity`.
 - `lib/env.ts`: Environment-based API base URL resolution using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`.
@@ -191,7 +203,9 @@ The frontend talks to the backend over HTTP only. It does not query PostgreSQL a
 
 V1.11 saved-school and comparison state is browser-local because no authenticated user session exists. Saved schools are stored under `college-exploration.saved-schools.v1` with statuses `interested`, `applying`, `accepted`, `finalist`, and `removed`. Compare selections are stored under `college-exploration.compare-schools.v1`, deduplicated, capped at 5 schools, and shared by the sticky tray across pages. `/dashboard` reads the local saved-state snapshot; `/compare` reads local compare IDs and fetches full school profiles over `GET /schools/{id}` before rendering deterministic comparisons.
 
-V2.4 decision offer state is stored locally under `college-exploration.decision-offers.v1` for the frontend demo flow and can sync to the backend `/decision/offers` endpoint when the API is running. `/decision` filters saved schools to accepted/finalist status, captures offer costs and notes, and renders a report-ready summary. If `/decision/report` is unavailable, the UI uses a deterministic local fallback that still marks missing backend fit/outcome/financial data as uncertainty. V2.5 calculator panels in `/decision` and `/compare` call `/cost-calculator` when available and otherwise use the same transparent local formulas for recruiter-demo continuity. V2.6 sensitivity analysis in `/compare` calls `/sensitivity` with browser-local onboarding preferences when available and default weights otherwise; it shows API errors rather than inventing ranking movement locally.
+V2.4 decision offer state is stored locally under `college-exploration.decision-offers.v1` for the frontend demo flow and can sync to the backend `/decision/offers` endpoint when the API is running. `/decision` filters saved schools to accepted/finalist status, captures offer costs and notes, and renders a report-ready summary. If `/decision/report` is unavailable, the UI uses a deterministic local fallback that still marks missing backend fit/outcome/financial data as uncertainty. V2.7 stores the latest generated report under `college-exploration.decision-report.v1` and renders it at `/decision/report` as a clean printable/shareable briefing. V2.5 calculator panels in `/decision` and `/compare` call `/cost-calculator` when available and otherwise use the same transparent local formulas for recruiter-demo continuity. V2.6 sensitivity analysis in `/compare` calls `/sensitivity` with browser-local onboarding preferences when available and default weights otherwise; it shows API errors rather than inventing ranking movement locally.
+
+V2.8 adds `/analytics` as an internal demo surface. It reads `GET /analytics/summary`, renders lightweight cards and bar charts, and keeps caveats visible. This is not a production admin console; authentication, authorization, long-term retention controls, alerting, and warehouse export belong to V3.
 
 ## Deployment Shape
 
@@ -201,4 +215,4 @@ GitHub Actions validates frontend lint/typecheck/build, Playwright smoke tests, 
 
 ## Not Implemented Yet
 
-Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, the V2.1 ingestion pipeline, V2.2 semantic retrieval, V2.3 similar-school discovery, V2.4 acceptance decision mode, V2.5 cost/value calculator, and V2.6 sensitivity analysis are implemented. Backend preference persistence, authenticated saved schools/comparisons, shareable decision reports, public cloud deployment, production observability, and load-test reporting are not implemented yet.
+Health, readiness, structured school search, school profile endpoints, deterministic ranking, Redis cache-aside, frontend foundation, onboarding, search UI, school profiles, browser-local saved schools, browser-local comparisons, Docker packaging, deployment documentation, CI validation, the V2.1 ingestion pipeline, V2.2 semantic retrieval, V2.3 similar-school discovery, V2.4 acceptance decision mode, V2.5 cost/value calculator, V2.6 sensitivity analysis, V2.7 shareable decision reports, and V2.8 analytics/ranking evaluation are implemented. Backend preference persistence, authenticated saved schools/comparisons, production-grade report sharing, public cloud deployment, production observability, and load-test reporting are not implemented yet.

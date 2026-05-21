@@ -82,7 +82,7 @@ V2.3 does not change `RANKING_VERSION` because the core ranking formula is uncha
 
 ## Acceptance Decision Reports
 
-V2.4 decision reports do not change `RANKING_VERSION`. They reuse the existing ranking service for fit score, category scores, reason codes, tradeoffs, and confidence. The decision report version is separate (`v1.0`) because report assembly can evolve without changing school ranking formulas.
+V2.4 decision reports and V2.7 shareable decision reports do not change `RANKING_VERSION`. They reuse the existing ranking service for fit score, category scores, reason codes, tradeoffs, and confidence. The decision report version is separate (`v2.7`) because report assembly can evolve without changing school ranking formulas.
 
 Decision report categories are intentionally distinct:
 
@@ -93,6 +93,16 @@ Decision report categories are intentionally distinct:
 | Strongest career upside | Highest deterministic `career` category score. |
 | Lowest risk | Lowest bounded risk proxy using known cost, ranking confidence, and unresolved concern count. |
 | Biggest unresolved factor | School with the most user-entered unresolved concerns/questions. |
+
+V2.7 adds report sections without adding opaque scoring:
+
+| Output | Deterministic basis |
+| --- | --- |
+| Finalist ranking table | Existing ranking order, fit score, confidence, estimated cost, career score, and top deterministic tradeoff. |
+| Category score table | Existing ranking category scores for academic, cost, career, location, campus, and admissions realism. |
+| Cost/value comparison | Existing cost/value formulas applied to report finalists and offer assumptions. |
+| Sensitivity highlights | Existing ranking engine rerun over the same finalists with cost, career, and academic emphasis scenarios. |
+| Unresolved questions | User-entered unresolved concerns, falling back to explicit confidence gaps. |
 
 Missing offer costs, missing profile net price, missing outcomes metrics, incomplete preference weights, limited ranking confidence, and fewer than two finalists create confidence flags. They lower decision confidence but do not become zero scores. Major tradeoff sentences are deterministic templates using selected school names and known metrics only.
 
@@ -146,6 +156,31 @@ Sensitivity outputs are deterministic:
 | Tradeoff explanations | Deterministic templates based on rank deltas and category drivers. |
 
 Sensitivity analysis does not alter stored rankings, does not smooth or randomize results, and does not generate opaque confidence. Missing data continues to lower category confidence while neutral category scores avoid treating unknowns as zero.
+
+## Ranking Evaluation
+
+V2.8 analytics and ranking evaluation do not change `RANKING_VERSION`. Evaluation reads privacy-safe product events and summarizes observed behavior around deterministic ranking outputs.
+
+Evaluation outputs are descriptive:
+
+| Output | Deterministic basis |
+| --- | --- |
+| Save rate by fit-score bucket | `school_saved` events divided by observed ranked-school exposures in the same fit bucket. |
+| Compare rate by ranking position | `school_compared` events divided by observed ranked-school exposures in the same rank-position bucket. |
+| Top reason-code frequency | Counts of deterministic `top_reasons` emitted in ranking events. |
+| Confidence distribution | Buckets from ranking `confidence_score` values: high, medium, low, or unknown. |
+| Ranking-version distribution | Counts of event metadata grouped by `ranking_version`. |
+| Category-weight save summaries | The strongest normalized category weight observed on saved-school events. |
+
+These metrics are not causal proof. A high save rate for high-fit schools can suggest alignment between ranking and user behavior, but it can also reflect self-selection, small samples, demo data, or users only saving schools they already liked. V2.8 keeps the caveats visible in the API and frontend dashboard.
+
+Known evaluation limitations:
+
+- Incomplete public data can depress confidence and shift schools into lower or neutral score buckets.
+- Prestige/selectivity preferences can appear as engagement bias when users manually choose well-known schools.
+- Local browser workflows are not authenticated user histories, so repeated demos can overrepresent a small set of schools.
+- Public-data limitations and missing outcomes fields mean value/career conclusions are directional.
+- Weighting sensitivity can change rankings without indicating that one weighting scheme is objectively better.
 
 ## Confidence
 

@@ -8,6 +8,7 @@ from sqlalchemy.sql import func
 from db.base import Base
 
 JsonScalar: TypeAlias = str | int | float | bool | None
+JsonValue: TypeAlias = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
 
 
 class Event(Base):
@@ -18,5 +19,5 @@ class Event(Base):
     event_name: Mapped[str] = mapped_column(String(80), nullable=False)
     entity_type: Mapped[str | None] = mapped_column(String(40))
     entity_id: Mapped[int | None] = mapped_column(BigInteger)
-    metadata_: Mapped[dict[str, JsonScalar]] = mapped_column("metadata", JSON, default=dict)
+    metadata_: Mapped[dict[str, JsonValue]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -149,6 +149,54 @@ export type DecisionSchoolSummary = {
   confidence_flags: string[];
 };
 
+export type DecisionFinalistRankingRow = {
+  rank: number;
+  school_id: number;
+  school_name: string;
+  fit_score: number;
+  confidence_score: number;
+  estimated_yearly_cost: number | null;
+  four_year_cost: number | null;
+  career_score: number | null;
+  major_tradeoff: string;
+};
+
+export type DecisionCategoryScoreRow = {
+  school_id: number;
+  school_name: string;
+  academic: number | null;
+  cost: number | null;
+  career: number | null;
+  location: number | null;
+  campus: number | null;
+  admissions_realism: number | null;
+};
+
+export type DecisionCostValueRow = {
+  school_id: number;
+  school_name: string;
+  estimated_yearly_cost: number | null;
+  estimated_four_year_total_cost: number | null;
+  affordability_status: string;
+  directional_value: string;
+  confidence: string;
+  warnings: string[];
+};
+
+export type DecisionConcernRow = {
+  school_id: number;
+  school_name: string;
+  unresolved_concern_count: number;
+  questions: string[];
+};
+
+export type DecisionSensitivityHighlight = {
+  label: string;
+  school_id: number | null;
+  school_name: string | null;
+  summary: string;
+};
+
 export type DecisionRecommendation = {
   label: string;
   school_id: number | null;
@@ -159,11 +207,20 @@ export type DecisionRecommendation = {
 export type DecisionReportResponse = {
   report_version: string;
   ranking_version: string;
+  report_title: string;
   generated_at: string;
   disclaimer: string;
+  methodology_note: string;
+  printable_report_path: string;
+  share_url_path: string;
   decision_confidence: "low" | "medium" | "high";
   confidence_flags: string[];
   schools: DecisionSchoolSummary[];
+  finalist_ranking_table: DecisionFinalistRankingRow[];
+  category_score_table: DecisionCategoryScoreRow[];
+  cost_value_comparison: DecisionCostValueRow[];
+  sensitivity_highlights: DecisionSensitivityHighlight[];
+  unresolved_questions: DecisionConcernRow[];
   best_overall_fit: DecisionRecommendation;
   best_value: DecisionRecommendation;
   strongest_career_upside: DecisionRecommendation;
@@ -299,4 +356,61 @@ export type SensitivityResponse = {
   }>;
   tradeoff_explanations: string[];
   summary_messages: string[];
+};
+
+export type AnalyticsCountRow = {
+  key: string;
+  count: number;
+};
+
+export type AnalyticsMetricCard = {
+  label: string;
+  value: number | string;
+  detail: string;
+};
+
+export type AnalyticsRateRow = {
+  bucket: string;
+  numerator: number;
+  denominator: number;
+  rate: number;
+};
+
+export type AnalyticsDistributionRow = {
+  bucket: string;
+  count: number;
+};
+
+export type AnalyticsSchoolMetric = {
+  school_id: number;
+  school_name: string;
+  count: number;
+};
+
+export type RankingEvaluationSummary = {
+  save_rate_by_fit_bucket: AnalyticsRateRow[];
+  compare_rate_by_rank_position: AnalyticsRateRow[];
+  top_reason_code_frequency: AnalyticsCountRow[];
+  confidence_distribution: AnalyticsDistributionRow[];
+  ranking_version_distribution: AnalyticsCountRow[];
+  category_weight_save_correlations: AnalyticsCountRow[];
+  interpretation_notes: string[];
+};
+
+export type AnalyticsSummaryResponse = {
+  generated_at: string;
+  lookback_days: number;
+  event_counts: AnalyticsCountRow[];
+  metric_cards: AnalyticsMetricCard[];
+  most_used_filters: AnalyticsCountRow[];
+  most_viewed_schools: AnalyticsSchoolMetric[];
+  most_saved_schools: AnalyticsSchoolMetric[];
+  compare_frequency: AnalyticsCountRow[];
+  onboarding_completion_rate: AnalyticsRateRow;
+  save_rate_by_rank_position: AnalyticsRateRow[];
+  report_generation_frequency: AnalyticsCountRow[];
+  ranking_version_usage: AnalyticsCountRow[];
+  ranking_evaluation: RankingEvaluationSummary;
+  privacy_note: string;
+  limitations: string[];
 };

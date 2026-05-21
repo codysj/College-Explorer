@@ -52,3 +52,23 @@ a {
   color: hsl(var(--primary-foreground));
   background: hsl(var(--primary));
 }
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .decision-report {
+    max-width: none;
+    padding: 0;
+  }
+
+  .decision-report article {
+    border: 0;
+    box-shadow: none;
+  }
+}

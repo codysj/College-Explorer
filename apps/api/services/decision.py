@@ -4,6 +4,10 @@ from datetime import UTC, datetime
 
 from repositories.decision import DecisionRepository
 from schemas.decision import (
+    DecisionCategoryScoreRow,
+    DecisionConcernRow,
+    DecisionCostValueRow,
+    DecisionFinalistRankingRow,
     DecisionOffer,
     DecisionOfferCreate,
     DecisionOffersResponse,
@@ -11,13 +15,21 @@ from schemas.decision import (
     DecisionReportRequest,
     DecisionReportResponse,
     DecisionSchoolSummary,
+    DecisionSensitivityHighlight,
 )
+from schemas.cost_calculator import CostCalculatorAssumption
+from services.cost_calculator import build_result
 from services.ranking_service import RANKING_VERSION, RankingService, to_int
+from services.sensitivity import scenario_preferences, scenario_weights
 
-DECISION_REPORT_VERSION = "v1.0"
+DECISION_REPORT_VERSION = "v2.7"
 DISCLAIMER = (
-    "Decision summaries are deterministic planning support based on available data and your inputs. "
-    "They are not admissions, financial, legal, or guaranteed outcome advice."
+    "This report is decision-support only. It is not admissions advice, financial advice, or a guarantee of outcomes. "
+    "Estimates are based on available public data, local seed data, and user-entered offer assumptions."
+)
+METHODOLOGY_NOTE = (
+    "Rankings, category scores, cost/value labels, sensitivity highlights, confidence, reasons, and tradeoffs are produced by deterministic code. "
+    "Missing data is treated as unknown and lowers confidence instead of being converted to zero."
 )
 
 
@@ -36,6 +48,8 @@ class DecisionService:
 
     def build_report(self, request: DecisionReportRequest) -> DecisionReportResponse:
         offer_rows = self.repository.get_offer_rows(request.user_id, request.school_ids)
+        if len(offer_rows) > 8:
+            raise ValueError("Decision reports support up to 8 accepted or finalist schools.")
         school_ids = [int(row["school_id"]) for row in offer_rows]
         school_rows = self.repository.get_decision_candidate_rows(school_ids)
         offers_by_school = {int(row["school_id"]): row for row in offer_rows}
@@ -50,16 +64,29 @@ class DecisionService:
             if school_id in ranked_by_school
         ]
         summaries.sort(key=lambda item: (-item.fit_score, -item.confidence_score, item.school_id))
+        if not summaries:
+            raise ValueError("At least one accepted or finalist offer is required to generate a decision report.")
 
         confidence_flags = build_report_confidence_flags(summaries, request)
+        cost_rows = build_cost_value_rows(school_rows, offers_by_school, request)
+        sensitivity_highlights = build_sensitivity_highlights(school_rows, request, self.ranking_service)
         response = DecisionReportResponse(
             report_version=DECISION_REPORT_VERSION,
             ranking_version=RANKING_VERSION,
+            report_title="College Decision Briefing",
             generated_at=datetime.now(UTC),
             disclaimer=DISCLAIMER,
+            methodology_note=METHODOLOGY_NOTE,
+            printable_report_path="/decision/report",
+            share_url_path="/decision/report",
             decision_confidence=decision_confidence(confidence_flags, summaries),
             confidence_flags=confidence_flags,
             schools=summaries,
+            finalist_ranking_table=finalist_ranking_table(summaries, cost_rows),
+            category_score_table=category_score_table(summaries),
+            cost_value_comparison=cost_rows,
+            sensitivity_highlights=sensitivity_highlights,
+            unresolved_questions=unresolved_questions(summaries, offers_by_school),
             best_overall_fit=recommendation(
                 "Best overall fit",
                 max_by(summaries, lambda item: item.fit_score),
@@ -123,6 +150,180 @@ def build_school_summary(ranked, offer: dict[str, object]) -> DecisionSchoolSumm
         top_tradeoffs=ranked.top_tradeoffs,
         confidence_flags=flags,
     )
+
+
+def build_cost_value_rows(
+    school_rows: list[dict[str, object]],
+    offers_by_school: dict[int, dict[str, object]],
+    request: DecisionReportRequest,
+) -> list[DecisionCostValueRow]:
+    baseline_school_id = min(
+        offers_by_school,
+        key=lambda school_id: (
+            to_int(offers_by_school[school_id].get("estimated_yearly_cost")) is None,
+            to_int(offers_by_school[school_id].get("estimated_yearly_cost")) or 999_999,
+            school_id,
+        ),
+    )
+    baseline_row = next((row for row in school_rows if int(row["school_id"]) == baseline_school_id), {})
+    baseline_offer = offers_by_school[baseline_school_id]
+    baseline_cost = build_result(
+        row=baseline_row,
+        assumption=cost_assumption(baseline_school_id, baseline_offer),
+        baseline_cost=None,
+        max_budget=request.max_annual_family_budget or request.preferences.max_annual_cost,
+    ).estimated_yearly_cost
+
+    rows: list[DecisionCostValueRow] = []
+    for row in school_rows:
+        school_id = int(row["school_id"])
+        offer = offers_by_school.get(school_id, {})
+        result = build_result(
+            row=row,
+            assumption=cost_assumption(school_id, offer),
+            baseline_cost=baseline_cost,
+            max_budget=request.max_annual_family_budget or request.preferences.max_annual_cost,
+        )
+        rows.append(
+            DecisionCostValueRow(
+                school_id=result.school_id,
+                school_name=result.name,
+                estimated_yearly_cost=result.estimated_yearly_cost,
+                estimated_four_year_total_cost=result.estimated_four_year_total_cost,
+                affordability_status=result.affordability.status,
+                directional_value=result.directional_outcome_adjusted_value,
+                confidence=result.confidence,
+                warnings=result.warnings,
+            )
+        )
+    return sorted(rows, key=lambda item: (item.estimated_four_year_total_cost is None, item.estimated_four_year_total_cost or 0, item.school_id))
+
+
+def cost_assumption(school_id: int, offer: dict[str, object]) -> CostCalculatorAssumption:
+    return CostCalculatorAssumption(
+        school_id=school_id,
+        estimated_yearly_cost=to_int(offer.get("estimated_yearly_cost")),
+        scholarships=to_int(offer.get("scholarships")),
+        grants_aid=to_int(offer.get("aid_offer")),
+    )
+
+
+def build_sensitivity_highlights(
+    school_rows: list[dict[str, object]],
+    request: DecisionReportRequest,
+    ranking_service: RankingService,
+) -> list[DecisionSensitivityHighlight]:
+    if len(school_rows) < 2:
+        return [
+            DecisionSensitivityHighlight(
+                label="Sensitivity",
+                summary="Add at least two finalists to compare how priority changes affect the recommendation.",
+            )
+        ]
+    baseline = ranking_service.rank_rows(school_rows, request.preferences)
+    baseline_positions = {int(item.row["school_id"]): index + 1 for index, item in enumerate(baseline)}
+    highlights: list[DecisionSensitivityHighlight] = []
+    scenarios = [
+        ("Cost stress test", {"cost_value": 0.5}),
+        ("Career upside stress test", {"career_outcomes": 0.5}),
+        ("Academic fit stress test", {"academic_fit": 0.5}),
+    ]
+    base_weights = ranking_service_module_weights(request)
+    for label, adjustments in scenarios:
+        scenario = SimpleScenario(label, adjustments)
+        weights, _ = scenario_weights(base_weights, scenario)
+        ranked = ranking_service.rank_rows(school_rows, scenario_preferences(request.preferences, weights, scenario))
+        if not ranked:
+            continue
+        leader = ranked[0]
+        school_id = int(leader.row["school_id"])
+        delta = baseline_positions.get(school_id, 1) - 1
+        if delta > 0:
+            summary = f"{leader.row['name']} becomes the top choice when {label.lower()} weights are emphasized."
+        elif baseline and int(baseline[0].row["school_id"]) == school_id:
+            summary = f"{leader.row['name']} remains the top choice under the {label.lower()}."
+        else:
+            summary = f"{leader.row['name']} is the strongest option in the {label.lower()}."
+        highlights.append(
+            DecisionSensitivityHighlight(
+                label=label,
+                school_id=school_id,
+                school_name=str(leader.row["name"]),
+                summary=summary,
+            )
+        )
+    return highlights
+
+
+class SimpleScenario:
+    def __init__(self, label: str, weight_adjustments: dict[str, float]) -> None:
+        self.scenario_id = label.lower().replace(" ", "_")
+        self.label = label
+        self.weight_adjustments = weight_adjustments
+
+
+def ranking_service_module_weights(request: DecisionReportRequest) -> dict[str, float]:
+    from services.ranking_service import normalize_weights
+
+    return normalize_weights(request.preferences.weights)
+
+
+def finalist_ranking_table(
+    summaries: list[DecisionSchoolSummary],
+    cost_rows: list[DecisionCostValueRow],
+) -> list[DecisionFinalistRankingRow]:
+    cost_by_school = {row.school_id: row for row in cost_rows}
+    return [
+        DecisionFinalistRankingRow(
+            rank=index + 1,
+            school_id=school.school_id,
+            school_name=school.name,
+            fit_score=school.fit_score,
+            confidence_score=school.confidence_score,
+            estimated_yearly_cost=school.estimated_yearly_cost if school.estimated_yearly_cost is not None else school.net_price,
+            four_year_cost=cost_by_school.get(school.school_id).estimated_four_year_total_cost if cost_by_school.get(school.school_id) else None,
+            career_score=school.category_scores.get("career"),
+            major_tradeoff=(school.top_tradeoffs[0] if school.top_tradeoffs else "No major deterministic tradeoff flagged."),
+        )
+        for index, school in enumerate(summaries)
+    ]
+
+
+def category_score_table(summaries: list[DecisionSchoolSummary]) -> list[DecisionCategoryScoreRow]:
+    return [
+        DecisionCategoryScoreRow(
+            school_id=school.school_id,
+            school_name=school.name,
+            academic=school.category_scores.get("academic"),
+            cost=school.category_scores.get("cost"),
+            career=school.category_scores.get("career"),
+            location=school.category_scores.get("location"),
+            campus=school.category_scores.get("campus"),
+            admissions_realism=school.category_scores.get("admissions_realism"),
+        )
+        for school in summaries
+    ]
+
+
+def unresolved_questions(
+    summaries: list[DecisionSchoolSummary],
+    offers_by_school: dict[int, dict[str, object]],
+) -> list[DecisionConcernRow]:
+    rows: list[DecisionConcernRow] = []
+    for summary in summaries:
+        offer = offers_by_school.get(summary.school_id, {})
+        questions = [str(item) for item in (offer.get("unresolved_concerns") or []) if str(item).strip()]
+        if not questions and summary.confidence_flags:
+            questions = [flag.replace("_", " ") for flag in summary.confidence_flags[:3]]
+        rows.append(
+            DecisionConcernRow(
+                school_id=summary.school_id,
+                school_name=summary.name,
+                unresolved_concern_count=len(questions),
+                questions=questions,
+            )
+        )
+    return sorted(rows, key=lambda item: (-item.unresolved_concern_count, item.school_id))
 
 
 def build_report_confidence_flags(summaries: list[DecisionSchoolSummary], request: DecisionReportRequest) -> list[str]:

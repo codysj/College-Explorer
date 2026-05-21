@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from api.deps import get_cache_service, get_db
+from api.routes.analytics import get_analytics_service
 from repositories.decision import DecisionRepository
 from repositories.schools import SchoolRepository
+from schemas.analytics import AnalyticsEventCreate
 from schemas.decision import (
     DecisionOffer,
     DecisionOfferCreate,
@@ -12,6 +14,7 @@ from schemas.decision import (
     DecisionReportResponse,
 )
 from services.cache import CacheService
+from services.analytics import AnalyticsService
 from services.decision import DecisionService
 from services.ranking_service import RankingService
 
@@ -60,5 +63,24 @@ def list_decision_offers(
 def build_decision_report(
     request: DecisionReportRequest,
     service: DecisionService = Depends(get_decision_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ) -> DecisionReportResponse:
-    return service.build_report(request)
+    try:
+        response = service.build_report(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    analytics.try_log_event(
+        AnalyticsEventCreate(
+            user_id=request.user_id,
+            event_name="decision_report_generated",
+            entity_type="decision_report",
+            entity_id=response.snapshot_id,
+            metadata={
+                "ranking_version": response.ranking_version,
+                "report_version": response.report_version,
+                "school_count": len(response.schools),
+                "decision_confidence": response.decision_confidence,
+            },
+        )
+    )
+    return response

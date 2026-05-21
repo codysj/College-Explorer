@@ -5,6 +5,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 from api.routes.health import router as health_router
+from api.routes.analytics import router as analytics_router
 from api.routes.cost_calculator import router as cost_calculator_router
 from api.routes.decision import router as decision_router
 from api.routes.rankings import router as rankings_router
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(decision_router)
     app.include_router(cost_calculator_router)
     app.include_router(sensitivity_router)
+    app.include_router(analytics_router)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(PydanticValidationError, pydantic_validation_exception_handler)

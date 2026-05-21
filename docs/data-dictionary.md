@@ -108,17 +108,21 @@ Constraint: one offer row per user and school. Status is constrained to `accepte
 
 ### `decision_summary_snapshots`
 
-Report-ready JSON snapshots produced by `POST /decision/report`. Snapshots preserve a deterministic summary at generation time so later export/share workflows can be added without recomputing from changed inputs.
+Report-ready JSON snapshots produced by `POST /decision/report`. V2.7 snapshots include recommendation cards, finalist ranking rows, category scores, cost/value comparison, sensitivity highlights, unresolved questions, confidence flags, methodology notes, and disclaimer text. Snapshots preserve a deterministic summary at generation time so later export/share workflows can be added without recomputing from changed inputs.
 
 Key fields: `id`, `user_id`, `summary_version`, `school_ids`, `summary`, `created_at`.
 
 ### `events`
 
-Basic placeholder analytics/event table.
+Privacy-safe analytics/event table for V2.8 product telemetry and ranking evaluation.
 
 Key fields: `id`, `user_id`, `event_name`, `entity_type`, `entity_id`, `metadata`, `created_at`.
 
 Indexes: `user_id`, `event_name`, `created_at`.
+
+Supported V2.8 event names include `search_performed`, `semantic_search_performed`, `school_profile_viewed`, `school_saved`, `school_compared`, `onboarding_completed`, `ranking_generated`, `sensitivity_adjusted`, and `decision_report_generated`.
+
+The `metadata` JSON is sanitized before storage. It may contain structured fields such as enabled filter keys, result counts, rank position, fit score, confidence score, reason codes, normalized category weights, report version, and ranking version. It must not store raw search text, user notes, emails, aid offers, scholarships, estimated yearly costs, loan amounts, or other sensitive free-form student details.
 
 ## V2.1 Ingestion Fields
 
@@ -138,5 +142,5 @@ Validation warnings call out unavailable ranking inputs so missing data lowers c
 
 - V1.2 school records are synthetic fixtures with plausible ranges.
 - V2.1 includes small public-data-style fixtures for pipeline tests, not full official datasets.
-- User, preference, saved-school, comparison, decision, and event tables are structural placeholders until full authenticated account persistence and privacy controls are implemented.
+- User, preference, saved-school, comparison, and decision tables are structural placeholders until full authenticated account persistence and privacy controls are implemented. Event analytics are implemented for V2.8 local/demo evaluation, but production retention, consent, access control, and deletion workflows belong to V3.
 - Full official College Scorecard/IPEDS snapshot operations, similar-school discovery, and data freshness UI belong to later tasks.

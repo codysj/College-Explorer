@@ -84,6 +84,7 @@ class DecisionReportRequest(BaseModel):
     user_id: int = Field(default=1, ge=1)
     school_ids: list[int] | None = Field(default=None, min_length=1, max_length=8)
     preferences: Preference = Field(default_factory=Preference)
+    max_annual_family_budget: int | None = Field(default=None, ge=0, le=250_000)
     save_snapshot: bool = True
 
 
@@ -103,6 +104,54 @@ class DecisionSchoolSummary(BaseModel):
     confidence_flags: list[str]
 
 
+class DecisionFinalistRankingRow(BaseModel):
+    rank: int
+    school_id: int
+    school_name: str
+    fit_score: float
+    confidence_score: float
+    estimated_yearly_cost: int | None
+    four_year_cost: int | None
+    career_score: float | None
+    major_tradeoff: str
+
+
+class DecisionCategoryScoreRow(BaseModel):
+    school_id: int
+    school_name: str
+    academic: float | None = None
+    cost: float | None = None
+    career: float | None = None
+    location: float | None = None
+    campus: float | None = None
+    admissions_realism: float | None = None
+
+
+class DecisionCostValueRow(BaseModel):
+    school_id: int
+    school_name: str
+    estimated_yearly_cost: int | None
+    estimated_four_year_total_cost: int | None
+    affordability_status: str
+    directional_value: str
+    confidence: str
+    warnings: list[str]
+
+
+class DecisionConcernRow(BaseModel):
+    school_id: int
+    school_name: str
+    unresolved_concern_count: int
+    questions: list[str]
+
+
+class DecisionSensitivityHighlight(BaseModel):
+    label: str
+    school_id: int | None = None
+    school_name: str | None = None
+    summary: str
+
+
 class DecisionRecommendation(BaseModel):
     label: str
     school_id: int | None
@@ -113,11 +162,20 @@ class DecisionRecommendation(BaseModel):
 class DecisionReportResponse(BaseModel):
     report_version: str
     ranking_version: str
+    report_title: str
     generated_at: datetime
     disclaimer: str
+    methodology_note: str
+    printable_report_path: str
+    share_url_path: str
     decision_confidence: Literal["low", "medium", "high"]
     confidence_flags: list[str]
     schools: list[DecisionSchoolSummary]
+    finalist_ranking_table: list[DecisionFinalistRankingRow]
+    category_score_table: list[DecisionCategoryScoreRow]
+    cost_value_comparison: list[DecisionCostValueRow]
+    sensitivity_highlights: list[DecisionSensitivityHighlight]
+    unresolved_questions: list[DecisionConcernRow]
     best_overall_fit: DecisionRecommendation
     best_value: DecisionRecommendation
     strongest_career_upside: DecisionRecommendation

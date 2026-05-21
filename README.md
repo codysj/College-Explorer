@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
 
-Status: V2.6 sensitivity analysis is locally implemented after V2.5 cost/value calculator. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, explainable hybrid semantic search, profile-page similar-school exploration, accepted-school decision summaries, transparent cost/value estimates, and ranking sensitivity analysis. Public cloud deployment, authenticated persistence, shareable decision reports, and full official dataset ingestion remain future work.
+Status: V2.8 analytics and ranking evaluation are locally implemented after V2.7 shareable decision reports. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, explainable hybrid semantic search, profile-page similar-school exploration, accepted-school decision summaries, transparent cost/value estimates, ranking sensitivity analysis, printable decision briefing reports, and privacy-safe internal analytics. Public cloud deployment, authenticated persistence, production-grade sharing, and full official dataset ingestion remain future work.
 
 ## Product Overview
 
@@ -34,6 +34,8 @@ The engineering thesis is that a consumer-facing product can stay trustworthy wh
 - V2.4 accepted-school decision workspace with offer cards, notes, finalist comparison, deterministic summary categories, and uncertainty flags.
 - V2.5 cost/value calculator with editable tuition, aid, scholarship, yearly cost, loan assumptions, four-year cost differences, basic repayment scenarios, directional value labels, affordability warnings, and estimate disclaimers.
 - V2.6 sensitivity analysis with category-weight sliders, deterministic scenario reranking, rank movement indicators, stable/volatile choice badges, confidence impacts, and explainable category drivers.
+- V2.7 shareable decision report with best-fit/value/career/risk recommendations, finalist ranking table, category scores, cost/value comparison, sensitivity highlights, unresolved questions, methodology note, local share route, and print-ready layout.
+- V2.8 analytics and ranking evaluation with typed privacy-safe events, internal `/analytics` dashboard, ranking-version usage, reason-code frequency, confidence distribution, save-rate buckets, compare-rate buckets, and documented bias/limitations.
 - Browser-local saved-school and comparison state for V1 demo flows.
 - Playwright smoke coverage for onboarding, search, profiles, saved schools, and compare behavior.
 - Docker Compose support for frontend, backend, PostgreSQL, and Redis.
@@ -173,9 +175,10 @@ Implemented endpoints:
 - `POST /semantic-search`: natural-language school search with hybrid retrieval, hard constraints, deterministic re-ranking, and reason tags.
 - `GET /schools/{id}/similar`: explainable similar-school alternatives with deterministic variant logic.
 - `POST /decision/offers` and `GET /decision/offers`: create/update and list accepted/finalist offer details.
-- `POST /decision/report`: generate a structured, explainable decision summary for accepted/finalist schools.
+- `POST /decision/report`: generate a structured, explainable decision report for accepted/finalist schools.
 - `POST /cost-calculator`: compare school cost assumptions, estimated four-year totals, debt exposure, repayment scenarios, affordability, and directional value.
 - `POST /sensitivity`: rerank schools under weight scenarios and return movement, stable/volatile classifications, category drivers, confidence impacts, and tradeoff explanations.
+- `POST /analytics/events` and `GET /analytics/summary`: privacy-safe product telemetry and internal ranking evaluation summaries.
 
 API docs are generated locally at `http://127.0.0.1:8000/docs`. The contract details live in [docs/api-contract.md](docs/api-contract.md).
 
@@ -230,7 +233,19 @@ V2.5 adds a cost/value calculator to `/decision` and `/compare`, backed by `POST
 
 V2.6 adds sensitivity analysis to `/compare`, backed by `POST /sensitivity`. Students can adjust academic fit, cost/value, career outcomes, campus/lifestyle, location, prestige/selectivity, and admissions realism weights. The backend reruns the same deterministic ranking engine for each scenario and returns rank deltas, stable choices, volatile choices, category drivers, confidence impacts, and tradeoff explanations. Prestige/selectivity is modeled as a selectivity-emphasis scenario over the existing admissions-realism scoring path, not as a separate opaque score.
 
-The workflow is a planning assistant, not admissions or financial advice. Shareable decision reports remain V2.7 work.
+V2.7 expands `POST /decision/report` and adds `/decision/report` in the frontend. The report is a parent/counselor-friendly briefing document with recommendation cards, finalist ranking, category scores, cost/value rows, sensitivity highlights, unresolved questions, confidence flags, and methodology/disclaimer language. The current shareability layer is intentionally lightweight: the latest report is stored in browser local storage and presented through a clean printable route for screenshots, demos, and future PDF export.
+
+The workflow is a planning assistant, not admissions or financial advice.
+
+## Analytics And Ranking Evaluation
+
+V2.8 adds typed analytics events and an internal `/analytics` page. The backend tracks structured, privacy-safe events for search, semantic search, school profile views, saves, compares, onboarding completion, ranking generation, sensitivity adjustments, and decision report generation. Events include version-aware ranking metadata where relevant, such as `ranking_version`, fit-score bucket inputs, confidence, rank position, reason codes, and category-weight summaries.
+
+The internal analytics summary reports most-used filters, most-viewed/saved schools, compare frequency, onboarding completion rate, report generation frequency, ranking-version usage, save rate by fit-score bucket, compare rate by ranking position, top reason-code frequency, confidence distribution, and category weights associated with saved schools.
+
+These metrics are descriptive, not causal. The implementation intentionally avoids logging sensitive notes, raw search text, aid amounts, scholarships, offer costs, emails, or free-form preference narratives.
+
+See [docs/privacy-limitations.md](docs/privacy-limitations.md) for privacy-safe logging rules and evaluation caveats.
 
 ## Ranking Methodology Summary
 
@@ -322,6 +337,8 @@ No real screenshots or GIFs are committed yet. The capture checklist is maintain
 - Compare workflow
 - Cost/value calculator in compare and accepted-school decision workflows
 - Sensitivity analysis sliders, movement table, and stable/volatile badges in compare workflow
+- Shareable decision report with printable briefing layout
+- Internal analytics and ranking evaluation dashboard
 
 Screenshots should be added only after capturing the real running product.
 
@@ -329,9 +346,9 @@ Screenshots should be added only after capturing the real running product.
 
 - Seed data is synthetic or fixture-sized and intended for deterministic development, not factual school reporting.
 - Saved schools and comparisons are browser-local in V1 because authentication is not implemented.
-- The accepted-schools UI keeps browser-local offer state for recruiter-demo continuity; backend decision endpoints are available for the future authenticated persistence path.
+- The accepted-schools UI keeps browser-local offer and latest-report state for recruiter-demo continuity; backend decision endpoints are available for the future authenticated persistence path.
 - The frontend search UI does not yet call `POST /rankings`; deterministic ranking is available through the API.
-- Full official dataset operations, analytics, shareable reports, rate limiting, and account persistence are future work.
+- Full official dataset operations, production-grade observability, production-grade report sharing, rate limiting, and account persistence are future work.
 - Deployment configuration is documented and Dockerized, but no public hosted environment has been verified.
 - Performance claims are not production measurements.
 
@@ -358,4 +375,4 @@ V3 focuses on hardening:
 - Expanded end-to-end tests
 - Portfolio/demo polish
 
-See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.7 Shareable decision report**.
+See [tasks.md](tasks.md) for the working implementation tracker. The recommended next phase is **V3 Production Hardening and Portfolio Polish**.

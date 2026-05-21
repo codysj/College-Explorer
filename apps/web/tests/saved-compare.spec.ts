@@ -135,6 +135,13 @@ test("edits accepted-school offers and generates a decision summary", async ({ p
   await expect(page.getByText("Best value")).toBeVisible();
   await expect(page.getByText("Lowest risk")).toBeVisible();
   await expect(page.getByText("Major tradeoffs")).toBeVisible();
+  await page.getByRole("link", { name: "Open report" }).click();
+  await expect(page.getByRole("heading", { name: "College Decision Briefing" })).toBeVisible();
+  await expect(page.getByText("Finalist Ranking")).toBeVisible();
+  await expect(page.getByText("Cost And Value")).toBeVisible();
+  await expect(page.getByText("Sensitivity Highlights")).toBeVisible();
+  await expect(page.getByText("Questions Still Worth Investigating")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Print" })).toBeVisible();
 });
 
 async function routeSearch(page: Page) {

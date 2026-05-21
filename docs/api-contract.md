@@ -1,6 +1,6 @@
 # API Contract
 
-V2.6 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, cost/value calculation, sensitivity analysis, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
+V2.8 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, cost/value calculation, sensitivity analysis, shareable decision reports, analytics/ranking evaluation, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison/report workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -527,20 +527,34 @@ Request body:
       "campus": 0.25
     }
   },
+  "max_annual_family_budget": 30000,
   "save_snapshot": true
 }
 ```
 
 Response `200` includes:
 
+- `report_title`, `printable_report_path`, and `share_url_path` for the lightweight frontend report view.
 - `best_overall_fit`: highest deterministic fit score.
 - `best_value`: lowest known offer-level yearly cost, falling back to profile net price when offer cost is missing.
 - `strongest_career_upside`: highest deterministic career category score.
 - `lowest_risk`: bounded risk proxy using known cost, confidence, and unresolved concern count.
 - `biggest_unresolved_factor`: school with the most unresolved questions.
+- `finalist_ranking_table`: rank, fit, confidence, estimated cost, career score, and top deterministic tradeoff for each finalist.
+- `category_score_table`: academic, cost, career, location, campus, and admissions-realism scores by finalist.
+- `cost_value_comparison`: estimated yearly/four-year cost, affordability status, directional value label, confidence, and warnings using the same deterministic cost/value rules.
+- `sensitivity_highlights`: deterministic cost, career, and academic stress-test highlights using reranked finalist rows.
+- `unresolved_questions`: user-entered unresolved concerns, falling back to explicit confidence gaps when no questions were entered.
 - `decision_confidence` and `confidence_flags`: explicit uncertainty indicators for missing financial data, incomplete preferences, missing outcomes, limited school data, or too few finalists.
 - `major_tradeoffs`: deterministic comparison sentences grounded in structured data and user-entered offers.
+- `methodology_note` and `disclaimer`: decision-support language that clarifies outputs are deterministic planning support, not admissions or financial advice.
 - `snapshot_id`: present when `save_snapshot=true`.
+
+Validation behavior:
+
+- `school_ids` must contain 1 to 8 positive ids when supplied.
+- The report uses accepted/finalist offers for the supplied `user_id`; if no accepted/finalist offers are available, the endpoint returns `422`.
+- Missing cost, outcomes, preference, or ranking data lowers confidence and creates flags rather than being treated as zero.
 
 ### `POST /cost-calculator`
 
@@ -784,6 +798,65 @@ Definitions:
 - Volatile choice: changes rank dramatically when one preference changes.
 - `prestige_selectivity` is handled as a selectivity-emphasis scenario over the existing admissions-realism scoring path. It does not introduce a separate prestige score.
 
+### `POST /analytics/events`
+
+Logs one privacy-safe product analytics event. This endpoint is for lightweight V2.8 product telemetry and ranking evaluation. It does not accept arbitrary event names.
+
+Supported `event_name` values:
+
+- `search_performed`
+- `semantic_search_performed`
+- `school_profile_viewed`
+- `school_saved`
+- `school_compared`
+- `onboarding_completed`
+- `ranking_generated`
+- `sensitivity_adjusted`
+- `decision_report_generated`
+
+Request body:
+
+```json
+{
+  "user_id": 1,
+  "event_name": "school_saved",
+  "entity_type": "school",
+  "entity_id": 2,
+  "metadata": {
+    "source": "search",
+    "rank_position": 3,
+    "fit_score": 86.4,
+    "confidence_score": 0.88,
+    "ranking_version": "v1.0",
+    "top_reasons": ["academic_major_match"]
+  }
+}
+```
+
+Privacy rules:
+
+- Raw search text, notes, emails, aid offers, scholarships, estimated yearly costs, loan amounts, and free-form preference narratives are dropped by the sanitizer.
+- Filter metadata is stored as enabled filter keys, not raw user query text.
+- Preference analytics may store normalized category weights, not major text, home state, or family budget.
+
+Response `200` returns the stored sanitized event.
+
+### `GET /analytics/summary`
+
+Returns internal analytics and ranking evaluation metrics for a configurable lookback window.
+
+Query parameters:
+
+| Name | Type | Rules |
+| --- | --- | --- |
+| `lookback_days` | integer | Optional, defaults to `90`, must be `1` to `365`. |
+
+Response `200` includes event counts, metric cards, most-used filters, most-viewed/saved schools, compare frequency, onboarding completion rate, save rate by rank position, report generation frequency, ranking-version usage, ranking evaluation metrics, privacy notes, and limitations.
+
+`ranking_evaluation` includes save rate by fit-score bucket, compare rate by ranking position, top reason-code frequency, confidence distribution, ranking-version distribution, category-weight summaries for saved schools, and interpretation notes.
+
+Metrics are descriptive. They should not be presented as causal proof that a ranking caused a save, comparison, or final decision.
+
 ## Error Format
 
 ```json
@@ -809,7 +882,9 @@ School profile reads join `schools` to academics, costs, outcomes, and campus li
 
 Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life` with left joins in one repository query. The ranking service applies hard constraints, computes category scores, confidence, reason codes, and tradeoffs in memory for V1 scale.
 
-Decision reports read `acceptance_offers`, join candidate school rows through the decision repository, and call the ranking service for deterministic fit/category scoring. Cost calculator reads requested school cost/outcome rows through the school repository and performs deterministic calculations in the service layer. Sensitivity analysis reads either selected candidate IDs or filtered ranking candidates, then calls the ranking service for baseline and scenario ordering. Route handlers do not write SQL directly.
+Decision reports read `acceptance_offers`, join candidate school rows through the decision repository, call the ranking service for deterministic fit/category scoring, reuse cost/value result builders for report cost rows, and rerank the same finalist rows for report-level sensitivity highlights. Cost calculator reads requested school cost/outcome rows through the school repository and performs deterministic calculations in the service layer. Sensitivity analysis reads either selected candidate IDs or filtered ranking candidates, then calls the ranking service for baseline and scenario ordering. Route handlers do not write SQL directly.
+
+Analytics event writes go through the analytics repository. Analytics aggregation reads recent events and computes V2.8 metrics in the analytics service. Route handlers do not write SQL directly.
 
 Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. The semantic service applies filters and hard constraints after candidate retrieval and delegates final ordering to the ranking service.
 

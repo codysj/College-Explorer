@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Calculator, ClipboardList, FileText, Save, ShieldCheck, Sparkles, Trophy } from "lucide-react";
+import { AlertCircle, Calculator, ClipboardList, ExternalLink, FileText, Save, ShieldCheck, Sparkles, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import {
   buildLocalCostCalculator,
   defaultCostAssumption,
@@ -23,6 +24,7 @@ import {
   requestDecisionReport,
   syncDecisionOffer,
   writeDecisionOffers,
+  writeDecisionReport,
   type DecisionOfferDraft,
 } from "@/lib/decision";
 import { getVisibleSavedSchools, useSchoolActionState, type SavedSchoolEntry } from "@/lib/school-actions";
@@ -49,8 +51,14 @@ export function AcceptedSchoolsWorkspace() {
 
   useEffect(() => {
     writeDecisionOffers(offers);
+    if (candidates.length === 0) {
+      setReport(null);
+      return;
+    }
     const candidateById = new Map(candidates.map((school) => [school.school_id, school]));
-    setReport(buildLocalDecisionReport(candidates.filter((school) => candidateById.has(school.school_id)), offers));
+    const nextReport = buildLocalDecisionReport(candidates.filter((school) => candidateById.has(school.school_id)), offers);
+    setReport(nextReport);
+    writeDecisionReport(nextReport);
   }, [candidates, offers]);
 
   useEffect(() => {
@@ -97,9 +105,23 @@ export function AcceptedSchoolsWorkspace() {
     try {
       const payload = await requestDecisionReport(offers);
       setReport(payload);
+      writeDecisionReport(payload);
       setSaveState("API report");
     } catch {
-      setReport(buildLocalDecisionReport(candidates, offers));
+      const fallback = buildLocalDecisionReport(candidates, offers);
+      setReport(fallback);
+      writeDecisionReport(fallback);
+      trackAnalyticsEvent({
+        event_name: "decision_report_generated",
+        entity_type: "decision_report",
+        metadata: {
+          source: "local_fallback",
+          ranking_version: fallback.ranking_version,
+          report_version: fallback.report_version,
+          school_count: fallback.schools.length,
+          decision_confidence: fallback.decision_confidence,
+        },
+      });
       setSaveState("Local report");
     }
   };
@@ -138,6 +160,12 @@ export function AcceptedSchoolsWorkspace() {
           <Button type="button" onClick={generateReport}>
             <FileText className="h-4 w-4" aria-hidden="true" />
             Generate summary
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href="/decision/report">
+              <ExternalLink className="h-4 w-4" aria-hidden="true" />
+              Open report
+            </Link>
           </Button>
         </div>
       </header>

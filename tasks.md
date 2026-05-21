@@ -62,8 +62,12 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V2.6 Sensitivity analysis
   - Added `POST /sensitivity`, deterministic scenario reranking through the existing ranking engine, movement/stability/volatility outputs, confidence impacts, category drivers, Redis cache support, and compare-page slider UI.
   - Full frontend runtime validation still needs Node/npm dependencies available in the shell.
-- [ ] V2.7 Shareable decision report
-- [ ] V2.8 Analytics and ranking evaluation
+- [x] V2.7 Shareable decision report
+  - Expanded `POST /decision/report` into a structured briefing with top recommendation, finalist ranking table, category scores, cost/value comparison, deterministic sensitivity highlights, major tradeoffs, unresolved questions, confidence flags, methodology/disclaimer language, snapshot support, and printable/shareable frontend route.
+  - Production-grade authenticated sharing, hosted URLs, and PDF generation remain V3 scope.
+- [x] V2.8 Analytics and ranking evaluation
+  - Added typed privacy-safe analytics events, `/analytics/events`, `/analytics/summary`, backend instrumentation for search/profile/ranking/semantic/sensitivity/report flows, frontend save/compare/onboarding/report fallback event logging, internal `/analytics` dashboard, ranking evaluation aggregations, and bias/privacy documentation.
+  - Production observability, authenticated user-scoped analytics, alerting, and warehouse-style BI remain V3 scope.
 
 ## V3: Production Hardening and Portfolio Polish
 
@@ -98,7 +102,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-21: Completed V2.4 acceptance decision mode. Added accepted/finalist offer models, `/decision/offers` and `/decision/report`, deterministic category-based decision summaries, confidence/uncertainty flags, a browser-local accepted-schools workspace with editable offer cards and report panel, and updated docs/tests.
 - 2026-05-21: Completed V2.5 cost/value calculator. Added deterministic cost/value API and service, calculator schemas, backend tests for cost, aid, debt sensitivity, missing data, and validation, plus editable calculator experiences in decision and compare workflows with Playwright smoke coverage updates.
 - 2026-05-21: Completed V2.6 sensitivity analysis. Added deterministic sensitivity schemas/service/route, selected-school candidate reads, scenario weight normalization, stable/volatile classification, category drivers, confidence impacts, cache keys, compare-page sliders, movement table, stability badges, backend tests, and docs updates.
+- 2026-05-21: Completed V2.7 shareable decision report. Expanded the decision report contract, reused deterministic ranking/cost/sensitivity logic, added cost/value and sensitivity report sections, persisted report snapshots, added browser-local latest-report storage, built `/decision/report` printable briefing view, extended Playwright coverage, and updated docs.
+- 2026-05-21: Completed V2.8 analytics and ranking evaluation. Added privacy-safe event schemas, analytics repository/service/routes, endpoint and frontend instrumentation, internal analytics dashboard, ranking evaluation metrics for fit buckets/rank positions/reason codes/confidence/version usage, tests, and documentation of limitations.
 
 ## Next Recommended Task
 
-V2.7 Shareable decision report.
+V3 Production Hardening and Portfolio Polish.

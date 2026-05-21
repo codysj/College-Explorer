@@ -6,6 +6,7 @@ import type { SavedSchoolEntry } from "@/lib/school-actions";
 import type { DecisionOffer, DecisionReportResponse } from "@/types/api";
 
 export const DECISION_OFFERS_STORAGE_KEY = "college-exploration.decision-offers.v1";
+export const DECISION_REPORT_STORAGE_KEY = "college-exploration.decision-report.v1";
 
 export type DecisionOfferDraft = Omit<DecisionOffer, "id" | "user_id" | "school_name" | "city" | "state">;
 
@@ -42,6 +43,28 @@ export function writeDecisionOffers(offers: DecisionOfferDraft[]) {
   window.localStorage.setItem(DECISION_OFFERS_STORAGE_KEY, JSON.stringify(offers));
 }
 
+export function readDecisionReport() {
+  if (typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(DECISION_REPORT_STORAGE_KEY) ?? "null") as DecisionReportResponse | null;
+    return parsed
+      && Array.isArray(parsed.schools)
+      && Array.isArray(parsed.finalist_ranking_table)
+      && Array.isArray(parsed.cost_value_comparison)
+      && Array.isArray(parsed.sensitivity_highlights)
+      && Array.isArray(parsed.unresolved_questions)
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeDecisionReport(report: DecisionReportResponse | null) {
+  if (typeof window === "undefined" || !report) return;
+  window.localStorage.setItem(DECISION_REPORT_STORAGE_KEY, JSON.stringify(report));
+}
+
 export function mergeOffersWithCandidates(candidates: SavedSchoolEntry[], offers: DecisionOfferDraft[]) {
   const bySchool = new Map(offers.map((offer) => [offer.school_id, offer]));
   return candidates.map((school) => ({
@@ -67,6 +90,7 @@ export async function requestDecisionReport(offers: DecisionOfferDraft[]) {
       user_id: 1,
       school_ids: offers.map((offer) => offer.school_id),
       preferences,
+      max_annual_family_budget: profile?.max_annual_cost ?? null,
       save_snapshot: false,
     },
   });
@@ -119,15 +143,69 @@ export function buildLocalDecisionReport(
   const bestCareer = maxBy(summaries, (school) => school.category_scores.career);
   const lowestRisk = minBy(summaries, (school) => (school.estimated_yearly_cost ?? school.net_price ?? 999999) + school.unresolved_concern_count * 10000);
   const mostUnresolved = maxBy(summaries, (school) => school.unresolved_concern_count);
+  const costValueComparison = summaries.map((school) => {
+    const yearlyCost = school.estimated_yearly_cost ?? school.net_price;
+    return {
+      school_id: school.school_id,
+      school_name: school.name,
+      estimated_yearly_cost: yearlyCost,
+      estimated_four_year_total_cost: yearlyCost === null ? null : yearlyCost * 4,
+      affordability_status: "unknown",
+      directional_value: school.median_earnings === null ? "uncertain" : "reasonable_value",
+      confidence: school.confidence_flags.length ? "medium" : "high",
+      warnings: school.confidence_flags,
+    };
+  });
 
   return {
     report_version: "local-v1",
     ranking_version: "local",
+    report_title: "College Decision Briefing",
     generated_at: new Date().toISOString(),
-    disclaimer: "Decision summaries are planning support based on available data and your inputs. They are not admissions or financial advice.",
+    disclaimer: "This report is decision-support only. It is not admissions advice, financial advice, or a guarantee of outcomes. Estimates are based on available public data and user-entered offer assumptions.",
+    methodology_note: "Rankings, scores, cost/value labels, confidence, and tradeoffs are deterministic. Missing data is treated as unknown and lowers confidence instead of becoming zero.",
+    printable_report_path: "/decision/report",
+    share_url_path: "/decision/report",
     decision_confidence: flags.length >= 2 || summaries.length < 2 ? "low" : flags.length === 1 ? "medium" : "high",
     confidence_flags: flags,
     schools: summaries,
+    finalist_ranking_table: summaries.map((school, index) => ({
+      rank: index + 1,
+      school_id: school.school_id,
+      school_name: school.name,
+      fit_score: school.fit_score,
+      confidence_score: school.confidence_score,
+      estimated_yearly_cost: school.estimated_yearly_cost ?? school.net_price,
+      four_year_cost: (school.estimated_yearly_cost ?? school.net_price) === null ? null : (school.estimated_yearly_cost ?? school.net_price ?? 0) * 4,
+      career_score: school.category_scores.career ?? null,
+      major_tradeoff: school.top_tradeoffs[0] ?? "No major deterministic tradeoff flagged.",
+    })),
+    category_score_table: summaries.map((school) => ({
+      school_id: school.school_id,
+      school_name: school.name,
+      academic: school.category_scores.academic ?? null,
+      cost: school.category_scores.cost ?? null,
+      career: school.category_scores.career ?? null,
+      location: school.category_scores.location ?? null,
+      campus: school.category_scores.campus ?? null,
+      admissions_realism: school.category_scores.admissions_realism ?? null,
+    })),
+    cost_value_comparison: costValueComparison,
+    sensitivity_highlights: [
+      bestFit ? { label: "Overall stability", school_id: bestFit.school_id, school_name: bestFit.name, summary: `${bestFit.name} leads under the currently available local fit signals.` } : null,
+      bestValue ? { label: "Cost stress test", school_id: bestValue.school_id, school_name: bestValue.name, summary: `${bestValue.name} is the strongest option when lower known cost is emphasized.` } : null,
+      bestCareer ? { label: "Career upside stress test", school_id: bestCareer.school_id, school_name: bestCareer.name, summary: `${bestCareer.name} has the strongest available career signal.` } : null,
+    ].filter((item): item is DecisionReportResponse["sensitivity_highlights"][number] => Boolean(item)),
+    unresolved_questions: summaries.map((school) => {
+      const questions = offerBySchool.get(school.school_id)?.unresolved_concerns ?? [];
+      const fallbackQuestions = school.confidence_flags.map((flag) => flag.replaceAll("_", " "));
+      return {
+        school_id: school.school_id,
+        school_name: school.name,
+        unresolved_concern_count: questions.length || fallbackQuestions.length,
+        questions: questions.length ? questions : fallbackQuestions,
+      };
+    }).sort((left, right) => right.unresolved_concern_count - left.unresolved_concern_count || left.school_id - right.school_id),
     best_overall_fit: recommendation("Best overall fit", bestFit, "Highest available fit score in this finalist set."),
     best_value: recommendation("Best value", bestValue, "Lowest known yearly cost using entered offers before profile net price."),
     strongest_career_upside: recommendation("Strongest career upside", bestCareer, "Highest known career outcome signal."),

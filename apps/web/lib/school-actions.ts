@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import type { SchoolProfile, SchoolSearchCard } from "@/types/api";
 
 const savedKey = "college-exploration.saved-schools.v1";
@@ -115,6 +116,18 @@ export function useSchoolActionState(): SchoolActionState {
   const saveSchool = useCallback(
     (school: SchoolActionInput, status: SavedSchoolStatus = "interested") => {
       persistSaved((current) => upsertSavedSchool(current, school, status));
+      const snapshot = toSchoolSnapshot(school);
+      trackAnalyticsEvent({
+        event_name: "school_saved",
+        entity_type: "school",
+        entity_id: snapshot.school_id,
+        metadata: {
+          school_name: snapshot.name,
+          saved_status: status,
+          fit_score: snapshot.fit_score,
+          category_scores: snapshot.category_scores,
+        },
+      });
     },
     [persistSaved],
   );
@@ -166,6 +179,17 @@ export function useSchoolActionState(): SchoolActionState {
           added_at: new Date().toISOString(),
         },
       ]);
+      const snapshot = toSchoolSnapshot(school);
+      trackAnalyticsEvent({
+        event_name: "school_compared",
+        entity_type: "school",
+        entity_id: schoolId,
+        metadata: {
+          school_name: snapshot.name,
+          fit_score: snapshot.fit_score,
+          category_scores: snapshot.category_scores,
+        },
+      });
       return true;
     },
     [comparedSchools, persistCompared],

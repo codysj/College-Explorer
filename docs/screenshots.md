@@ -22,6 +22,8 @@ docs/assets/gifs/
 | Compare workflow screenshot or GIF | `/compare` | Placeholder | Capture 2-5 selected schools, metric comparison, category winners, tradeoffs, and cost/value calculator. |
 | Sensitivity analysis screenshot or GIF | `/compare` | Placeholder | Capture category sliders, live rank movement, and stable/volatile choice badges. |
 | Decision cost/value screenshot or GIF | `/decision` | Placeholder | Capture accepted-school offers, calculator assumptions, debt scenarios, and uncertainty warnings. |
+| Shareable decision report screenshot or GIF | `/decision/report` | Placeholder | Capture recommendation cards, finalist ranking, cost/value section, sensitivity highlights, unresolved questions, and print-ready layout. |
+| Analytics/ranking evaluation screenshot or GIF | `/analytics` | Placeholder | Capture metric cards, save-rate buckets, reason-code frequency, confidence distribution, and privacy limitations. |
 
 ## GIF Checklist
 

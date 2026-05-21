@@ -149,6 +149,13 @@ def test_decision_report_is_deterministic_and_distinguishes_categories() -> None
     assert first.lowest_risk.school_id == 2
     assert first.major_tradeoffs
     assert first.disclaimer
+    assert first.report_version == "v2.7"
+    assert first.finalist_ranking_table[0].rank == 1
+    assert first.category_score_table
+    assert first.cost_value_comparison
+    assert first.sensitivity_highlights
+    assert first.unresolved_questions
+    assert "deterministic" in first.methodology_note.lower()
 
 
 def test_missing_data_reduces_decision_confidence() -> None:
@@ -160,6 +167,19 @@ def test_missing_data_reduces_decision_confidence() -> None:
 
     assert report.decision_confidence in {"low", "medium"}
     assert "missing_financial_data" in report.confidence_flags
+
+
+def test_report_rejects_missing_finalists() -> None:
+    repository = FakeDecisionRepository()
+    repository.offers = []
+    service = DecisionService(repository, RankingService(FakeSchoolRepository()))
+
+    try:
+        service.build_report(DecisionReportRequest(user_id=1, preferences=Preference()))
+    except ValueError as exc:
+        assert "accepted or finalist offer" in str(exc)
+    else:
+        raise AssertionError("Expected missing finalists to be rejected.")
 
 
 def test_invalid_financial_inputs_return_validation_error(client: TestClient) -> None:
@@ -193,3 +213,5 @@ def test_decision_endpoints_return_report(client: TestClient) -> None:
     assert len(offers.json()["offers"]) == 2
     assert report.status_code == 200
     assert report.json()["best_value"]["school_id"] == 2
+    assert report.json()["printable_report_path"] == "/decision/report"
+    assert report.json()["cost_value_comparison"]
