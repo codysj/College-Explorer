@@ -1,6 +1,6 @@
 "use client";
 
-import { BookmarkCheck, ExternalLink, GitCompare, X } from "lucide-react";
+import { BookmarkCheck, ExternalLink, GitCompare, ListChecks, X } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +53,12 @@ export function SavedSchoolsDashboard() {
           <p className="mt-1 text-xs text-muted-foreground">
             Stored in this browser until account persistence is added.
           </p>
+          <Button asChild className="mt-3 w-full" variant="secondary">
+            <Link href="/decision">
+              <ListChecks className="h-4 w-4" aria-hidden="true" />
+              Accepted workspace
+            </Link>
+          </Button>
         </div>
       </header>
 

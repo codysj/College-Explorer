@@ -2,7 +2,7 @@
 
 College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
 
-Status: V2.3 similar-school discovery is locally implemented after V2.2 semantic search. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, explainable hybrid semantic search, and profile-page similar-school exploration. Public cloud deployment, authenticated persistence, acceptance decision mode, and full official dataset ingestion remain future work.
+Status: V2.4 acceptance decision mode is locally implemented after V2.3 similar-school discovery. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, explainable hybrid semantic search, profile-page similar-school exploration, and accepted-school decision summaries. Public cloud deployment, authenticated persistence, the full cost/value calculator, and full official dataset ingestion remain future work.
 
 ## Product Overview
 
@@ -11,7 +11,7 @@ The platform is built around a practical student workflow:
 - Capture preferences for academics, cost, career goals, location, campus life, and admissions realism.
 - Search schools with structured filters and typed API contracts.
 - Rank candidate schools through deterministic, explainable scoring.
-- Save schools locally, compare finalists side by side, and surface missing data honestly.
+- Save schools locally, compare finalists side by side, enter acceptance offer details, and surface missing data honestly.
 
 The product is not admissions advice, financial advice, or a guarantee of outcomes. It is an exploration and decision-support tool that makes tradeoffs visible.
 
@@ -31,6 +31,7 @@ The engineering thesis is that a consumer-facing product can stay trustworthy wh
 - Deterministic V2.1 ingestion pipeline for small public college-data snapshots.
 - pgvector-backed V2.2 semantic retrieval with deterministic local fallback and final ranking controlled by structured scoring.
 - V2.3 similar-school discovery with explainable variants for cheaper, smaller, less selective, stronger outcomes, and closer-to-home alternatives.
+- V2.4 accepted-school decision workspace with offer cards, notes, finalist comparison, deterministic summary categories, and uncertainty flags.
 - Browser-local saved-school and comparison state for V1 demo flows.
 - Playwright smoke coverage for onboarding, search, profiles, saved schools, and compare behavior.
 - Docker Compose support for frontend, backend, PostgreSQL, and Redis.
@@ -169,6 +170,8 @@ Implemented endpoints:
 - `POST /rankings`: deterministic fit ranking against a preference profile.
 - `POST /semantic-search`: natural-language school search with hybrid retrieval, hard constraints, deterministic re-ranking, and reason tags.
 - `GET /schools/{id}/similar`: explainable similar-school alternatives with deterministic variant logic.
+- `POST /decision/offers` and `GET /decision/offers`: create/update and list accepted/finalist offer details.
+- `POST /decision/report`: generate a structured, explainable decision summary for accepted/finalist schools.
 
 API docs are generated locally at `http://127.0.0.1:8000/docs`. The contract details live in [docs/api-contract.md](docs/api-contract.md).
 
@@ -212,6 +215,14 @@ V2.3 adds a profile-page similar-school section powered by `GET /schools/{id}/si
 - `closer_to_home`
 
 Variant logic is bounded and deterministic. For example, `cheaper` requires a lower known net price when both schools have price data, `smaller` requires lower enrollment when known, and `less_selective` requires a higher acceptance rate when known.
+
+## Acceptance Decisions
+
+V2.4 adds an accepted-schools workspace at `/decision`. Students can mark saved schools as accepted or finalist, enter aid offers, scholarships, estimated yearly cost, visit notes, unresolved questions, and parent/student priority notes, then generate a report-ready decision summary.
+
+The backend exposes `/decision/offers` for offer persistence and `/decision/report` for deterministic summaries. The report distinguishes best overall fit, best value, strongest career upside, lowest risk, and biggest unresolved factor. Missing offer costs, incomplete preferences, and missing outcomes metrics reduce decision confidence instead of being treated as zero.
+
+The workflow is a planning assistant, not admissions or financial advice. Full cost/value modeling and sensitivity analysis remain V2.5/V2.6 work.
 
 ## Ranking Methodology Summary
 
@@ -307,8 +318,9 @@ Screenshots should be added only after capturing the real running product.
 
 - Seed data is synthetic or fixture-sized and intended for deterministic development, not factual school reporting.
 - Saved schools and comparisons are browser-local in V1 because authentication is not implemented.
+- The accepted-schools UI keeps browser-local offer state for recruiter-demo continuity; backend decision endpoints are available for the future authenticated persistence path.
 - The frontend search UI does not yet call `POST /rankings`; deterministic ranking is available through the API.
-- Acceptance decision mode, full official dataset operations, analytics, rate limiting, and account persistence are future work.
+- Full cost/value calculations, sensitivity analysis, full official dataset operations, analytics, rate limiting, and account persistence are future work.
 - Deployment configuration is documented and Dockerized, but no public hosted environment has been verified.
 - Performance claims are not production measurements.
 
@@ -335,4 +347,4 @@ V3 focuses on hardening:
 - Expanded end-to-end tests
 - Portfolio/demo polish
 
-See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.4 Acceptance decision mode**.
+See [tasks.md](tasks.md) for the working implementation tracker. The recommended next step is **V2.5 Cost/value calculator**.

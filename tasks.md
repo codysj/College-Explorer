@@ -53,7 +53,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - [x] V2.3 Similar-school discovery
   - Added `GET /schools/{id}/similar`, semantic/fallback source-school retrieval, deterministic variant constraints, similarity scoring, cache keys, backend tests, and profile-page variant cards.
   - Frontend runtime validation still needs local Node/npm dependencies; backend validation passed in the available `.venv`.
-- [ ] V2.4 Acceptance decision mode
+- [x] V2.4 Acceptance decision mode
+  - Added acceptance/finalist offer capture, deterministic decision reports, confidence flags for missing financial/preferences/outcomes data, backend decision endpoints, report-ready frontend workspace, and focused backend/frontend tests.
+  - Full frontend runtime validation still needs Node/npm dependencies available in the shell.
 - [ ] V2.5 Cost/value calculator
 - [ ] V2.6 Sensitivity analysis
 - [ ] V2.7 Shareable decision report
@@ -89,7 +91,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-20: Completed V2.1 data ingestion pipeline. Added deterministic raw import, normalization, missing-value handling, derived attributes, validation, seed/refresh CSV output, source metadata columns, fixture coverage, and ingestion usage docs.
 - 2026-05-21: Completed V2.2 pgvector semantic search. Added school embedding table/migration, structured document generation, local deterministic embedding provider, refresh CLI, `POST /semantic-search`, pgvector/fallback candidate retrieval, structured hard-constraint preservation, semantic reason tags, cache keys, and tests.
 - 2026-05-21: Completed V2.3 similar-school discovery. Added variant-aware similar-school API, deterministic fallback, source exclusion, Redis cache support, explainable reasons/tradeoffs, frontend profile integration with variant controls, and backend/frontend test coverage updates.
+- 2026-05-21: Completed V2.4 acceptance decision mode. Added accepted/finalist offer models, `/decision/offers` and `/decision/report`, deterministic category-based decision summaries, confidence/uncertainty flags, a browser-local accepted-schools workspace with editable offer cards and report panel, and updated docs/tests.
 
 ## Next Recommended Task
 
-V2.4 Acceptance decision mode.
+V2.5 Cost/value calculator.

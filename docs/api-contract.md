@@ -1,6 +1,6 @@
 # API Contract
 
-V2.3 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and acceptance decision mode are not implemented yet.
+V2.4 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -442,6 +442,106 @@ Missing data behavior:
 - `data_fields_missing` makes unknown values explicit for clients.
 - `data_confidence_score` measures data completeness only; it is not a ranking score, admissions signal, ROI estimate, or recommendation confidence.
 
+### `POST /decision/offers`
+
+Creates or updates one accepted/finalist offer. Until authentication exists, requests use explicit `user_id`, defaulting to local demo user `1`.
+
+Request body:
+
+```json
+{
+  "user_id": 1,
+  "school_id": 2,
+  "status": "finalist",
+  "aid_offer": 12000,
+  "scholarships": 8000,
+  "estimated_yearly_cost": 24000,
+  "visit_notes": "Strong department visit; commute felt manageable.",
+  "unresolved_concerns": ["Confirm housing cost", "Compare internship access"],
+  "parent_priority_notes": "Keep debt below the family budget.",
+  "student_priority_notes": "Prefer urban campus and strong CS hiring."
+}
+```
+
+Rules:
+
+- `status` must be `accepted` or `finalist`.
+- Financial inputs must be nonnegative annual whole-dollar amounts.
+- The endpoint also aligns the saved-school status for the same user/school.
+
+Response `200` returns the stored offer plus school display fields.
+
+### `GET /decision/offers`
+
+Lists accepted/finalist offers for a user.
+
+Query parameters:
+
+| Name | Type | Rules |
+| --- | --- | --- |
+| `user_id` | integer | Optional, defaults to `1`, must be `>= 1`. |
+
+Response `200`:
+
+```json
+{
+  "offers": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "school_id": 2,
+      "school_name": "Bayview Technical University",
+      "city": "New Haven",
+      "state": "CT",
+      "status": "finalist",
+      "aid_offer": 12000,
+      "scholarships": 8000,
+      "estimated_yearly_cost": 24000,
+      "visit_notes": "Strong department visit.",
+      "unresolved_concerns": ["Confirm housing cost"],
+      "parent_priority_notes": "Keep debt below budget.",
+      "student_priority_notes": "Prioritize internships."
+    }
+  ]
+}
+```
+
+### `POST /decision/report`
+
+Generates a deterministic accepted-school decision report from existing offers and ranking preferences. The report is a planning artifact, not admissions or financial advice.
+
+Request body:
+
+```json
+{
+  "user_id": 1,
+  "school_ids": [1, 2, 3],
+  "preferences": {
+    "intended_major": "Computer Science",
+    "home_state": "CA",
+    "max_annual_cost": 32000,
+    "weights": {
+      "academic": 0.25,
+      "cost": 0.25,
+      "career": 0.25,
+      "campus": 0.25
+    }
+  },
+  "save_snapshot": true
+}
+```
+
+Response `200` includes:
+
+- `best_overall_fit`: highest deterministic fit score.
+- `best_value`: lowest known offer-level yearly cost, falling back to profile net price when offer cost is missing.
+- `strongest_career_upside`: highest deterministic career category score.
+- `lowest_risk`: bounded risk proxy using known cost, confidence, and unresolved concern count.
+- `biggest_unresolved_factor`: school with the most unresolved questions.
+- `decision_confidence` and `confidence_flags`: explicit uncertainty indicators for missing financial data, incomplete preferences, missing outcomes, limited school data, or too few finalists.
+- `major_tradeoffs`: deterministic comparison sentences grounded in structured data and user-entered offers.
+- `snapshot_id`: present when `save_snapshot=true`.
+
 ## Error Format
 
 ```json
@@ -466,6 +566,8 @@ Structured search joins `schools` to `school_costs` and `school_academics` with 
 School profile reads join `schools` to academics, costs, outcomes, and campus life with left joins in one repository query. The service layer composes the nested profile response, computes missing-field metadata, and leaves ranking and similar-school placeholders empty.
 
 Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life` with left joins in one repository query. The ranking service applies hard constraints, computes category scores, confidence, reason codes, and tradeoffs in memory for V1 scale.
+
+Decision reports read `acceptance_offers`, join candidate school rows through the decision repository, and call the ranking service for deterministic fit/category scoring. Route handlers do not write SQL directly.
 
 Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. The semantic service applies filters and hard constraints after candidate retrieval and delegates final ordering to the ranking service.
 
@@ -503,6 +605,8 @@ Ranking keys include `RANKING_VERSION` so cached rankings cannot cross determini
 | `GET` | `/saved-schools` | Fetch saved schools. | Planned after auth |
 | `POST` | `/comparisons` | Create a comparison session. | Planned after auth |
 | `GET` | `/comparisons/{id}` | Read comparison output. | Planned after auth |
+
+V2.4 decision endpoints are implemented before authentication with explicit `user_id` for local/demo use. Account-backed ownership and privacy controls remain V3 work.
 
 The V1.11 frontend does not call these planned saved-school or comparison endpoints because there is no authenticated user/session boundary. It persists state locally in browser `localStorage` instead:
 

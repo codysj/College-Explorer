@@ -78,6 +78,41 @@ test("renders the comparison workspace for selected schools", async ({ page }) =
   await expect(page.getByText("Tradeoff summary")).toBeVisible();
 });
 
+test("edits accepted-school offers and generates a decision summary", async ({ page }) => {
+  await page.addInitScript((savedSchools) => {
+    window.localStorage.setItem("college-exploration.saved-schools.v1", JSON.stringify(savedSchools));
+  }, schools.slice(0, 2).map((school, index) => ({
+    ...school,
+    status: index === 0 ? "finalist" : "accepted",
+    saved_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  })));
+
+  await page.route("**/decision/offers", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ id: 1, user_id: 1, school_name: "Test College 1", city: "Northbridge", state: "MA", ...(await route.request().postDataJSON()) }),
+    });
+  });
+  await page.route("**/decision/report", async (route) => {
+    await route.abort();
+  });
+
+  await page.goto("/decision");
+
+  await expect(page.getByRole("heading", { name: "Accepted schools" })).toBeVisible();
+  await page.getByLabel("Estimated yearly cost").first().fill("18000");
+  await page.getByLabel("Unresolved concerns/questions").first().fill("Confirm housing package");
+  await page.getByRole("button", { name: "Save offer" }).first().click();
+  await page.getByRole("button", { name: "Generate summary" }).click();
+
+  await expect(page.getByText("Decision summary")).toBeVisible();
+  await expect(page.getByText("Best overall fit")).toBeVisible();
+  await expect(page.getByText("Best value")).toBeVisible();
+  await expect(page.getByText("Lowest risk")).toBeVisible();
+  await expect(page.getByText("Major tradeoffs")).toBeVisible();
+});
+
 async function routeSearch(page: Page) {
   await page.route("**/schools/search**", async (route) => {
     await route.fulfill({

@@ -115,3 +115,60 @@ export type SimilarSchoolsResponse = {
   total_results: number;
   has_next: boolean;
 };
+
+export type DecisionOffer = {
+  id?: number;
+  user_id: number;
+  school_id: number;
+  school_name?: string;
+  city?: string;
+  state?: string;
+  status: "accepted" | "finalist";
+  aid_offer: number | null;
+  scholarships: number | null;
+  estimated_yearly_cost: number | null;
+  visit_notes: string | null;
+  unresolved_concerns: string[];
+  parent_priority_notes: string | null;
+  student_priority_notes: string | null;
+};
+
+export type DecisionSchoolSummary = {
+  school_id: number;
+  name: string;
+  status: "accepted" | "finalist";
+  fit_score: number;
+  confidence_score: number;
+  category_scores: Record<string, number>;
+  estimated_yearly_cost: number | null;
+  net_price: number | null;
+  median_earnings: number | null;
+  unresolved_concern_count: number;
+  top_reasons: string[];
+  top_tradeoffs: string[];
+  confidence_flags: string[];
+};
+
+export type DecisionRecommendation = {
+  label: string;
+  school_id: number | null;
+  school_name: string | null;
+  rationale: string;
+};
+
+export type DecisionReportResponse = {
+  report_version: string;
+  ranking_version: string;
+  generated_at: string;
+  disclaimer: string;
+  decision_confidence: "low" | "medium" | "high";
+  confidence_flags: string[];
+  schools: DecisionSchoolSummary[];
+  best_overall_fit: DecisionRecommendation;
+  best_value: DecisionRecommendation;
+  strongest_career_upside: DecisionRecommendation;
+  lowest_risk: DecisionRecommendation;
+  biggest_unresolved_factor: DecisionRecommendation;
+  major_tradeoffs: string[];
+  snapshot_id: number | null;
+};

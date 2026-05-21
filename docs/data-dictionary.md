@@ -98,6 +98,20 @@ Key fields: `comparison_id`, `school_id`, `position`, `created_at`.
 
 Constraint: `position` must be from `1` to `5`.
 
+### `acceptance_offers`
+
+User-owned accepted/finalist decision workspace entries. These capture offer-level inputs and notes without replacing canonical school cost/outcome facts.
+
+Key fields: `id`, `user_id`, `school_id`, `status`, `aid_offer`, `scholarships`, `estimated_yearly_cost`, `visit_notes`, `unresolved_concerns`, `parent_priority_notes`, `student_priority_notes`, `created_at`, `updated_at`.
+
+Constraint: one offer row per user and school. Status is constrained to `accepted` or `finalist`. Financial fields are nonnegative whole-dollar annual amounts when present.
+
+### `decision_summary_snapshots`
+
+Report-ready JSON snapshots produced by `POST /decision/report`. Snapshots preserve a deterministic summary at generation time so later export/share workflows can be added without recomputing from changed inputs.
+
+Key fields: `id`, `user_id`, `summary_version`, `school_ids`, `summary`, `created_at`.
+
 ### `events`
 
 Basic placeholder analytics/event table.
@@ -124,5 +138,5 @@ Validation warnings call out unavailable ranking inputs so missing data lowers c
 
 - V1.2 school records are synthetic fixtures with plausible ranges.
 - V2.1 includes small public-data-style fixtures for pipeline tests, not full official datasets.
-- User, preference, saved-school, comparison, and event tables are structural placeholders for future V1 features.
+- User, preference, saved-school, comparison, decision, and event tables are structural placeholders until full authenticated account persistence and privacy controls are implemented.
 - Full official College Scorecard/IPEDS snapshot operations, similar-school discovery, and data freshness UI belong to later tasks.
