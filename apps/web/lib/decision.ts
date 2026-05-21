@@ -3,7 +3,13 @@
 import { apiFetch } from "@/lib/api-client";
 import { loadPreferenceProfile, toApiPreferenceProfile } from "@/lib/preferences";
 import type { SavedSchoolEntry } from "@/lib/school-actions";
-import type { DecisionOffer, DecisionReportResponse } from "@/types/api";
+import type {
+  DecisionCostValueRow,
+  DecisionOffer,
+  DecisionReportResponse,
+  DecisionSensitivityHighlight,
+  RankingCategoryScores,
+} from "@/types/api";
 
 export const DECISION_OFFERS_STORAGE_KEY = "college-exploration.decision-offers.v1";
 export const DECISION_REPORT_STORAGE_KEY = "college-exploration.decision-report.v1";
@@ -104,11 +110,13 @@ export function buildLocalDecisionReport(
   const summaries = schools.map((school) => {
     const offer = offerBySchool.get(school.school_id) ?? defaultOfferForSchool(school);
     const fitScore = school.fit_score ?? profileCompletenessScore(school);
-    const categoryScores = {
+    const categoryScores: RankingCategoryScores = {
       academic: school.graduation_rate === null ? 50 : Math.round(school.graduation_rate * 100),
       cost: costScore(offer.estimated_yearly_cost ?? school.net_price),
       career: careerScore(school.median_earnings),
+      location: 50,
       campus: school.setting === "Urban" ? 72 : 65,
+      admissions_realism: school.acceptance_rate === null ? 50 : Math.round(school.acceptance_rate * 100),
     };
     const confidenceFlags = [
       offer.estimated_yearly_cost === null ? "missing_financial_offer" : null,
@@ -143,7 +151,7 @@ export function buildLocalDecisionReport(
   const bestCareer = maxBy(summaries, (school) => school.category_scores.career);
   const lowestRisk = minBy(summaries, (school) => (school.estimated_yearly_cost ?? school.net_price ?? 999999) + school.unresolved_concern_count * 10000);
   const mostUnresolved = maxBy(summaries, (school) => school.unresolved_concern_count);
-  const costValueComparison = summaries.map((school) => {
+  const costValueComparison: DecisionCostValueRow[] = summaries.map((school) => {
     const yearlyCost = school.estimated_yearly_cost ?? school.net_price;
     return {
       school_id: school.school_id,
@@ -156,6 +164,31 @@ export function buildLocalDecisionReport(
       warnings: school.confidence_flags,
     };
   });
+  const sensitivityHighlights: DecisionSensitivityHighlight[] = [];
+  if (bestFit) {
+    sensitivityHighlights.push({
+      label: "Overall stability",
+      school_id: bestFit.school_id,
+      school_name: bestFit.name,
+      summary: `${bestFit.name} leads under the currently available local fit signals.`,
+    });
+  }
+  if (bestValue) {
+    sensitivityHighlights.push({
+      label: "Cost stress test",
+      school_id: bestValue.school_id,
+      school_name: bestValue.name,
+      summary: `${bestValue.name} is the strongest option when lower known cost is emphasized.`,
+    });
+  }
+  if (bestCareer) {
+    sensitivityHighlights.push({
+      label: "Career upside stress test",
+      school_id: bestCareer.school_id,
+      school_name: bestCareer.name,
+      summary: `${bestCareer.name} has the strongest available career signal.`,
+    });
+  }
 
   return {
     report_version: "local-v1",
@@ -191,11 +224,7 @@ export function buildLocalDecisionReport(
       admissions_realism: school.category_scores.admissions_realism ?? null,
     })),
     cost_value_comparison: costValueComparison,
-    sensitivity_highlights: [
-      bestFit ? { label: "Overall stability", school_id: bestFit.school_id, school_name: bestFit.name, summary: `${bestFit.name} leads under the currently available local fit signals.` } : null,
-      bestValue ? { label: "Cost stress test", school_id: bestValue.school_id, school_name: bestValue.name, summary: `${bestValue.name} is the strongest option when lower known cost is emphasized.` } : null,
-      bestCareer ? { label: "Career upside stress test", school_id: bestCareer.school_id, school_name: bestCareer.name, summary: `${bestCareer.name} has the strongest available career signal.` } : null,
-    ].filter((item): item is DecisionReportResponse["sensitivity_highlights"][number] => Boolean(item)),
+    sensitivity_highlights: sensitivityHighlights,
     unresolved_questions: summaries.map((school) => {
       const questions = offerBySchool.get(school.school_id)?.unresolved_concerns ?? [];
       const fallbackQuestions = school.confidence_flags.map((flag) => flag.replaceAll("_", " "));

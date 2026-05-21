@@ -1,3 +1,13 @@
+export type RankingCategoryKey =
+  | "academic"
+  | "cost"
+  | "career"
+  | "location"
+  | "campus"
+  | "admissions_realism";
+
+export type RankingCategoryScores = Partial<Record<RankingCategoryKey, number>>;
+
 export type SchoolSearchCard = {
   school_id: number;
   name: string;
@@ -13,7 +23,7 @@ export type SchoolSearchCard = {
   confidence_score: number | null;
   top_reasons: string[];
   top_tradeoffs: string[];
-  category_scores?: Record<string, number>;
+  category_scores?: RankingCategoryScores;
   ranking_version?: string | null;
 };
 
@@ -66,7 +76,7 @@ export type SchoolProfile = {
   data_fields_missing: string[];
   data_confidence_score: number;
   fit_score: number | null;
-  category_scores: Record<string, number>;
+  category_scores: RankingCategoryScores;
   top_reasons: string[];
   top_tradeoffs: string[];
   similar_schools: Array<Record<string, unknown>>;
@@ -139,7 +149,7 @@ export type DecisionSchoolSummary = {
   status: "accepted" | "finalist";
   fit_score: number;
   confidence_score: number;
-  category_scores: Record<string, number>;
+  category_scores: RankingCategoryScores;
   estimated_yearly_cost: number | null;
   net_price: number | null;
   median_earnings: number | null;
@@ -305,7 +315,7 @@ export type SensitivityMovement = {
   fit_delta: number;
   confidence_score: number;
   confidence_delta: number;
-  category_scores: Record<string, number>;
+  category_scores: RankingCategoryScores;
   category_drivers: string[];
   movement: "up" | "down" | "stable" | "new" | "removed";
   stability: "stable_choice" | "volatile_choice" | "watch_choice";
@@ -317,7 +327,7 @@ export type SensitivityMovement = {
 export type SensitivityScenarioResult = {
   scenario_id: string;
   label: string;
-  applied_weights: Record<string, number>;
+  applied_weights: RankingCategoryScores;
   emphasis_dimension: string | null;
   results: SensitivityMovement[];
   summary: string;
@@ -335,7 +345,7 @@ export type SensitivityChoiceSummary = {
 
 export type SensitivityResponse = {
   ranking_version: string;
-  baseline_weights: Record<string, number>;
+  baseline_weights: RankingCategoryScores;
   stable_choice_definition: string;
   volatile_choice_definition: string;
   baseline_results: SensitivityMovement[];
