@@ -124,7 +124,7 @@ test("edits accepted-school offers and generates a decision summary", async ({ p
   await page.getByLabel("Estimated yearly cost").first().fill("18000");
   await page.getByLabel("Annual loans").first().fill("5500");
   await page.getByRole("button", { name: "Calculate" }).click();
-  await expect(page.getByText("Four-year $72,000")).toBeVisible();
+  await expect(page.getByLabel("Four-year total for Test College 1")).toContainText("$72,000");
   await expect(page.getByLabel("Unresolved concerns/questions").first()).toBeVisible();
   await page.getByLabel("Unresolved concerns/questions").first().fill("Confirm housing package");
   await page.getByRole("button", { name: "Save offer" }).first().click();

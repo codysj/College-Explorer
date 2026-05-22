@@ -87,6 +87,18 @@ export function AcceptedSchoolsWorkspace() {
         : [...current, { ...defaultOfferForSchool(school), ...patch }];
       return next;
     });
+    const costPatch: Partial<CostCalculatorDraft> = {};
+    if ("aid_offer" in patch) costPatch.grants_aid = patch.aid_offer ?? null;
+    if ("scholarships" in patch) costPatch.scholarships = patch.scholarships ?? null;
+    if ("estimated_yearly_cost" in patch) costPatch.estimated_yearly_cost = patch.estimated_yearly_cost ?? null;
+    if (Object.keys(costPatch).length > 0) {
+      setCostAssumptions((current) => {
+        const nextAssumption = { ...defaultCostAssumption(school), ...costPatch };
+        return current.some((item) => item.school_id === school.school_id)
+          ? current.map((item) => item.school_id === school.school_id ? { ...item, ...costPatch } : item)
+          : [...current, nextAssumption];
+      });
+    }
     if (patch.status) updateSavedStatus(school.school_id, patch.status);
   };
 
@@ -252,11 +264,15 @@ function CostValueCalculator({
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         {assumptions.map((item) => {
           const result = costReport?.results.find((school) => school.school_id === item.school_id);
+          const schoolName = result?.name ?? `School ${item.school_id}`;
+          const yearlyCost = formatCurrency(result?.estimated_yearly_cost ?? null);
+          const fourYearCost = formatCurrency(result?.estimated_four_year_total_cost ?? null);
+          const debtExposure = formatCurrency(result?.estimated_debt_exposure ?? null);
           return (
             <div key={item.school_id} className="rounded-md border border-border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-foreground">{result?.name ?? `School ${item.school_id}`}</p>
+                  <p className="font-semibold text-foreground">{schoolName}</p>
                   <p className="mt-1 text-xs text-muted-foreground">Confidence: {result?.confidence ?? "pending"}</p>
                 </div>
                 <Badge variant={result?.affordability.status === "within_budget" ? "default" : "muted"}>
@@ -272,9 +288,9 @@ function CostValueCalculator({
                 <MoneyInput label="Annual loans" value={item.annual_loan_amount ?? null} onChange={(value) => onUpdate(item.school_id, { annual_loan_amount: value })} />
               </div>
               <div className="mt-4 grid gap-2 text-sm text-muted-foreground sm:grid-cols-3">
-                <span>Yearly {formatCurrency(result?.estimated_yearly_cost ?? null)}</span>
-                <span>Four-year {formatCurrency(result?.estimated_four_year_total_cost ?? null)}</span>
-                <span>Debt {formatCurrency(result?.estimated_debt_exposure ?? null)}</span>
+                <output aria-label={`Yearly cost for ${schoolName}`}>Yearly {yearlyCost}</output>
+                <output aria-label={`Four-year total for ${schoolName}`}>Four-year {fourYearCost}</output>
+                <output aria-label={`Debt exposure for ${schoolName}`}>Debt {debtExposure}</output>
               </div>
               {result?.repayment_scenarios.length ? (
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
