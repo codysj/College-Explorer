@@ -82,7 +82,7 @@ test("renders the comparison workspace for selected schools", async ({ page }) =
   await page.getByLabel("Cost/value weight").fill("0.55");
   await expect(page.getByText("Test College 1 remains stable")).toBeVisible();
   await expect(page.getByText("stable choice").first()).toBeVisible();
-  await expect(page.getByText("Cost/value calculator")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cost/value calculator", exact: true })).toBeVisible();
   await page.getByLabel("Yearly cost for school 1").fill("18000");
   await page.getByLabel("Annual loans for school 1").fill("5500");
   await page.getByRole("button", { name: "Calculate" }).click();
@@ -119,7 +119,7 @@ test("edits accepted-school offers and generates a decision summary", async ({ p
   await page.goto("/decision");
 
   await expect(page.getByRole("heading", { name: "Accepted schools", exact: true })).toBeVisible();
-  await expect(page.getByText("Cost/value calculator")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cost/value calculator", exact: true })).toBeVisible();
   await expect(page.getByLabel("Estimated yearly cost").first()).toBeVisible();
   await page.getByLabel("Estimated yearly cost").first().fill("18000");
   await page.getByLabel("Annual loans").first().fill("5500");
