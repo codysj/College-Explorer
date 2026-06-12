@@ -1,55 +1,108 @@
-# College Exploration Platform
+<div align="center">
 
-College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
+# 🎓 College Exploration Platform
 
-Status: V2.8 analytics and ranking evaluation are locally implemented after V2.7 shareable decision reports. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, deployment documentation, deterministic public-college-snapshot ingestion, explainable hybrid semantic search, profile-page similar-school exploration, accepted-school decision summaries, transparent cost/value estimates, ranking sensitivity analysis, printable decision briefing reports, and privacy-safe internal analytics. Public cloud deployment, authenticated persistence, production-grade sharing, and full official dataset ingestion remain future work.
+**A full-stack college decision-support product — discover, rank, save, and compare schools with transparent data and deterministic, explainable scoring.**
 
-## Product Overview
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.34-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The platform is built around a practical student workflow:
+<img src="docs/media/landing.png" alt="College Exploration Platform landing page" width="100%" />
 
-- Capture preferences for academics, cost, career goals, location, campus life, and admissions realism.
-- Search schools with structured filters and typed API contracts.
-- Rank candidate schools through deterministic, explainable scoring.
-- Save schools locally, compare finalists side by side, enter acceptance offer details, and surface missing data honestly.
+</div>
 
-The product is not admissions advice, financial advice, or a guarantee of outcomes. It is an exploration and decision-support tool that makes tradeoffs visible.
+---
 
-## Product Thesis
+College choice is a high-stakes, data-rich decision that most tools treat as either a broad directory or a black-box recommendation feed. This project treats it as an **engineered decision workflow**: structured school facts enter a typed backend, deterministic ranking logic scores fit against a student's stated preferences, and the frontend turns that into a shortlist, comparison workspace, and shareable decision briefing.
 
-Most college search tools are either broad directories or black-box recommendation surfaces. This project treats college choice as a data-backed decision workflow: structured school facts enter the backend, deterministic ranking logic scores fit against student preferences, and the frontend turns that into a shortlist and comparison workspace.
+The guiding engineering thesis is that a consumer product can stay **trustworthy** when ranking logic, cache behavior, API contracts, and data limitations are all explicit. Rankings are deterministic and versioned, missing data is never silently treated as zero, and language models never invent school facts or alter scores.
 
-The engineering thesis is that a consumer-facing product can stay trustworthy when ranking, cache behavior, API contracts, and data limitations are explicit.
+> [!NOTE]
+> This is a decision-support and exploration tool — **not** admissions advice, financial advice, or a guarantee of outcomes. Its job is to make tradeoffs visible.
 
-## Key Features
+## 📋 Table of Contents
 
-- Next.js App Router frontend with landing, onboarding, search, school profile, dashboard, and comparison routes.
-- FastAPI backend with health, readiness, structured search, school profile, and deterministic ranking endpoints.
-- PostgreSQL schema for schools, academics, costs, outcomes, campus life, users, saved schools, comparisons, and events.
-- Synthetic deterministic seed dataset for local development and tests.
-- Redis cache-aside for repeated search, profile, and ranking responses with versioned keys and TTLs.
-- Deterministic V2.1 ingestion pipeline for small public college-data snapshots.
-- pgvector-backed V2.2 semantic retrieval with deterministic local fallback and final ranking controlled by structured scoring.
-- V2.3 similar-school discovery with explainable variants for cheaper, smaller, less selective, stronger outcomes, and closer-to-home alternatives.
-- V2.4 accepted-school decision workspace with offer cards, notes, finalist comparison, deterministic summary categories, and uncertainty flags.
-- V2.5 cost/value calculator with editable tuition, aid, scholarship, yearly cost, loan assumptions, four-year cost differences, basic repayment scenarios, directional value labels, affordability warnings, and estimate disclaimers.
-- V2.6 sensitivity analysis with category-weight sliders, deterministic scenario reranking, rank movement indicators, stable/volatile choice badges, confidence impacts, and explainable category drivers.
-- V2.7 shareable decision report with best-fit/value/career/risk recommendations, finalist ranking table, category scores, cost/value comparison, sensitivity highlights, unresolved questions, methodology note, local share route, and print-ready layout.
-- V2.8 analytics and ranking evaluation with typed privacy-safe events, internal `/analytics` dashboard, ranking-version usage, reason-code frequency, confidence distribution, save-rate buckets, compare-rate buckets, and documented bias/limitations.
-- Browser-local saved-school and comparison state for V1 demo flows.
-- Playwright smoke coverage for onboarding, search, profiles, saved schools, and compare behavior.
-- Docker Compose support for frontend, backend, PostgreSQL, and Redis.
+- [Highlights](#-highlights)
+- [Demo](#-demo)
+- [Screenshots](#-screenshots)
+- [Architecture](#-architecture)
+- [Tech Stack](#-tech-stack)
+- [Getting Started](#-getting-started)
+- [Testing](#-testing)
+- [Feature Deep-Dive](#-feature-deep-dive)
+- [API Overview](#-api-overview)
+- [How Ranking Works](#-how-ranking-works)
+- [Caching](#-caching)
+- [Performance & Honesty](#-performance--honesty)
+- [Roadmap](#-roadmap)
+- [Known Limitations](#-known-limitations)
+- [License](#-license)
 
-## Architecture Overview
+## ✨ Highlights
+
+- 🧭 **Guided onboarding** captures a typed preference profile across academics, cost, career, location, campus, and admissions realism.
+- 🔍 **Structured search** over a typed school dataset with filters, sorting, and pagination — backed by indexed SQL and a Redis cache-aside layer.
+- 🧮 **Deterministic, versioned ranking** that produces a fit score, confidence score, per-category scores, and explainable reason/tradeoff codes.
+- 🧠 **Hybrid semantic search** combining pgvector retrieval with hard constraints and a deterministic re-ranker (with a local fallback — no paid API keys required).
+- 🔁 **Explainable "similar schools"** — cheaper, smaller, less selective, stronger outcomes, or closer to home, with bounded deterministic variant logic.
+- 🎓 **Acceptance decision workspace** for entering aid offers and generating a side-by-side decision summary.
+- 💰 **Cost / value calculator** with four-year totals, debt exposure, repayment scenarios, and affordability warnings.
+- 🎚️ **Sensitivity analysis** — adjust category weights and watch rankings re-rank live, with stable vs. volatile choice badges.
+- 📄 **Shareable, print-ready decision briefing** for students, parents, and counselors.
+- 📊 **Privacy-safe internal analytics** dashboard for ranking evaluation and product telemetry.
+- 🧱 **Honest by design** — missing data lowers confidence instead of becoming zero, and LLM output never creates facts or changes scores.
+
+## 🎬 Demo
+
+**Onboarding → search handoff** — a student builds a local preference profile, then lands in search with those preferences pre-applied.
+
+<div align="center">
+  <img src="docs/media/onboarding-flow.gif" alt="Onboarding flow demo" width="90%" />
+</div>
+
+**Live sensitivity analysis** — dragging a category weight re-runs the deterministic ranker and updates rank movement, drivers, and stability badges in real time.
+
+<div align="center">
+  <img src="docs/media/sensitivity.gif" alt="Sensitivity analysis demo" width="95%" />
+</div>
+
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/search.png" alt="Structured search" /><p align="center"><em>Structured search with filters &amp; result cards</em></p></td>
+    <td width="50%"><img src="docs/media/school-profile.png" alt="School profile" /><p align="center"><em>School profile with similar-school discovery</em></p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/dashboard.png" alt="Saved schools dashboard" /><p align="center"><em>Saved-schools dashboard grouped by status</em></p></td>
+    <td width="50%"><img src="docs/media/compare-cost-value.png" alt="Compare workspace" /><p align="center"><em>Compare workspace: metrics, cost/value &amp; sensitivity</em></p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/decision.png" alt="Decision workspace" /><p align="center"><em>Accepted-school decision workspace</em></p></td>
+    <td width="50%"><img src="docs/media/decision-report.png" alt="Decision report" /><p align="center"><em>Print-ready decision briefing report</em></p></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/media/analytics.png" alt="Analytics dashboard" /><p align="center"><em>Internal analytics &amp; ranking-evaluation dashboard</em></p></td>
+  </tr>
+</table>
+
+## 🏗 Architecture
 
 ```mermaid
 flowchart LR
-    user["Student / recruiter demo browser"]
+    user["Student / demo browser"]
     web["Next.js frontend<br/>apps/web"]
     api["FastAPI backend<br/>apps/api"]
     pg["PostgreSQL<br/>structured school data"]
     redis["Redis<br/>cache-aside"]
-    pgvector["pgvector<br/>V2 semantic retrieval"]
+    pgvector["pgvector<br/>semantic retrieval"]
     gha["GitHub Actions<br/>lint, typecheck, build, tests"]
     vercel["Vercel or equivalent<br/>frontend host"]
     aws["AWS App Runner / ECS Fargate<br/>API container"]
@@ -70,42 +123,42 @@ flowchart LR
     redis -. "production target" .-> elasticache
 ```
 
-Request flow is `frontend -> FastAPI routes -> services -> repositories -> PostgreSQL`, with Redis isolated behind a cache service. Ranking logic lives in the backend service layer and does not depend on LLM output.
+The request path is `frontend → FastAPI routes → services → repositories → PostgreSQL`, with Redis isolated behind a dedicated cache service and ranking logic living entirely in the backend service layer. SQL stays in the repository layer (never in route handlers), all responses are typed end to end (Pydantic on the backend, generated types on the frontend), and ranking never depends on LLM output.
 
-See [docs/architecture.md](docs/architecture.md) for the deeper architecture notes.
+See [docs/architecture.md](docs/architecture.md) for the deeper notes.
 
-## Tech Stack
+## 🧱 Tech Stack
 
 | Layer | Tooling |
 | --- | --- |
-| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, Playwright |
-| Backend | FastAPI, Pydantic, SQLAlchemy, Alembic, pytest |
-| Data | PostgreSQL 16 with pgvector, deterministic CSV seed data, public snapshot ingestion CLI |
-| Cache | Redis 7 cache-aside |
-| DevOps | Docker Compose, GitHub Actions, Vercel/AWS deployment notes |
-| V2 recommendation | deterministic ingestion, pgvector semantic retrieval, similar-school discovery |
+| **Frontend** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, shadcn/ui, Playwright |
+| **Backend** | FastAPI, Pydantic, SQLAlchemy, Alembic, pytest |
+| **Data** | PostgreSQL 16 with pgvector, deterministic CSV seed data, public-snapshot ingestion CLI |
+| **Cache** | Redis 7 (cache-aside with versioned keys + TTLs) |
+| **DevOps** | Docker Compose, GitHub Actions CI, Vercel / AWS deployment notes |
+| **Recommendation** | Deterministic ingestion, pgvector semantic retrieval, explainable similar-school discovery |
 
-## Local Development Setup
+## 🚀 Getting Started
 
-Prerequisites:
+### Prerequisites
 
 - Python `>=3.12,<3.13`
 - Node.js 22
-- Docker Desktop or compatible Docker runtime
+- Docker Desktop (or a compatible Docker runtime)
 
-Create local environment variables:
+### 1. Configure environment
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Start PostgreSQL and Redis:
+### 2. Start infrastructure
 
 ```powershell
 docker compose up -d postgres redis
 ```
 
-Set up the backend:
+### 3. Backend
 
 ```powershell
 py -3.12 -m venv .venv
@@ -118,7 +171,7 @@ python scripts/seed_database.py --reset
 uvicorn main:app --reload
 ```
 
-Set up the frontend in a second terminal:
+### 4. Frontend (second terminal)
 
 ```powershell
 cd apps/web
@@ -126,169 +179,54 @@ npm install
 npm run dev
 ```
 
-Useful local URLs:
+### Useful URLs
 
-- Frontend: `http://localhost:3000`
-- API health: `http://127.0.0.1:8000/health`
-- API readiness: `http://127.0.0.1:8000/ready`
-- OpenAPI docs: `http://127.0.0.1:8000/docs`
+| Service | URL |
+| --- | --- |
+| Frontend | `http://localhost:3000` |
+| API health | `http://127.0.0.1:8000/health` |
+| API readiness | `http://127.0.0.1:8000/ready` |
+| OpenAPI docs | `http://127.0.0.1:8000/docs` |
 
-Optional full Docker startup:
+<details>
+<summary><strong>Run the whole stack with Docker</strong></summary>
 
 ```powershell
 docker compose up --build
 ```
 
-The full Docker path starts web, API, PostgreSQL, and Redis. It runs migrations on API startup, but it does not reset or reseed the database automatically. Seed manually when needed:
+This starts web, API, PostgreSQL, and Redis, and runs migrations on API startup. It does **not** reseed the database automatically — seed it manually when needed:
 
 ```powershell
 docker compose exec api python scripts/seed_database.py --reset
 ```
 
-## Environment Variables
+</details>
 
-Local defaults live in [.env.example](.env.example). Production values should be configured through the hosting provider or cloud secret manager, not committed.
+<details>
+<summary><strong>Environment variables</strong></summary>
+
+Local defaults live in [.env.example](.env.example). Production values belong in your hosting provider or a cloud secret manager — never committed.
 
 | Variable | Used by | Default | Notes |
 | --- | --- | --- | --- |
 | `APP_ENV` | API | `development` | Displayed by `/health`. |
-| `DATABASE_URL` | API, Alembic, seed script | Local PostgreSQL URL | Use managed PostgreSQL in production. |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | Docker Compose | Local dev values | Local-only container settings. Do not reuse local password in production. |
+| `DATABASE_URL` | API, Alembic, seed | Local PostgreSQL URL | Use managed PostgreSQL in production. |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | Docker Compose | Local dev values | Local-only container settings. |
 | `NEXT_PUBLIC_API_BASE_URL` | Web | `http://localhost:8000` | Public browser-facing API base URL. |
-| `CORS_ORIGINS` | API | Local frontend origins | Comma-separated allowed browser origins. Avoid `*` in production. |
+| `CORS_ORIGINS` | API | Local frontend origins | Comma-separated allowed origins. Avoid `*` in production. |
 | `REDIS_URL` | API | `redis://localhost:6379/0` | Use managed Redis or disable with `REDIS_ENABLED=false`. |
-| `REDIS_ENABLED` | API | `true` | API falls back to PostgreSQL reads when disabled or unavailable. |
+| `REDIS_ENABLED` | API | `true` | API falls back to PostgreSQL reads when disabled/unavailable. |
 | `CACHE_KEY_VERSION` | API | `v1` | Manual namespace bump for cache invalidation. |
 | `CACHE_SEARCH_TTL_SECONDS` | API | `300` | Search response TTL. |
 | `CACHE_PROFILE_TTL_SECONDS` | API | `3600` | Profile response TTL. |
 | `CACHE_RANKING_TTL_SECONDS` | API | `300` | Ranking response TTL. |
 
-## API Overview
+</details>
 
-Implemented endpoints:
+## 🧪 Testing
 
-- `GET /health`: process health, no database dependency.
-- `GET /ready`: database readiness via `SELECT 1`.
-- `GET /schools/search`: structured filters, deterministic sorting, pagination, search-card response fields.
-- `GET /schools/{id}`: full profile assembled from school, academics, cost, outcome, and campus-life tables.
-- `POST /rankings`: deterministic fit ranking against a preference profile.
-- `POST /semantic-search`: natural-language school search with hybrid retrieval, hard constraints, deterministic re-ranking, and reason tags.
-- `GET /schools/{id}/similar`: explainable similar-school alternatives with deterministic variant logic.
-- `POST /decision/offers` and `GET /decision/offers`: create/update and list accepted/finalist offer details.
-- `POST /decision/report`: generate a structured, explainable decision report for accepted/finalist schools.
-- `POST /cost-calculator`: compare school cost assumptions, estimated four-year totals, debt exposure, repayment scenarios, affordability, and directional value.
-- `POST /sensitivity`: rerank schools under weight scenarios and return movement, stable/volatile classifications, category drivers, confidence impacts, and tradeoff explanations.
-- `POST /analytics/events` and `GET /analytics/summary`: privacy-safe product telemetry and internal ranking evaluation summaries.
-
-API docs are generated locally at `http://127.0.0.1:8000/docs`. The contract details live in [docs/api-contract.md](docs/api-contract.md).
-
-## Data Ingestion
-
-V2.1 adds a deterministic backend ingestion CLI for public college-data style CSV snapshots. Raw datasets should stay out of git under `data/raw`; generated processed CSVs are written under `data/processed` and are also ignored by git.
-
-```powershell
-cd apps/api
-python scripts/ingest_college_data.py import --raw-file ..\..\data\raw\college_snapshot.csv --source-year 2024 --data-version scorecard-2024
-python scripts/ingest_college_data.py validate --raw-file ..\..\data\raw\college_snapshot.csv --source-year 2024 --data-version scorecard-2024
-python scripts/ingest_college_data.py seed --raw-file ..\..\data\raw\college_snapshot.csv --output-file ..\..\data\processed\schools_ingested.csv --source-year 2024 --data-version scorecard-2024
-python scripts/ingest_college_data.py refresh --raw-file ..\..\data\raw\college_snapshot.csv --output-file ..\..\data\processed\schools_ingested.csv --source-year 2024 --data-version scorecard-2024
-python scripts/seed_database.py --reset --seed-file ..\..\data\processed\schools_ingested.csv
-```
-
-The stages are raw import, normalization, missing-value handling, derived attributes, validation, and seed/refresh output. Missing numeric values remain blank in CSV output and load as `NULL`, not `0`.
-
-## Semantic Search
-
-V2.2 adds `POST /semantic-search`. It builds school search documents from structured fields, retrieves pgvector candidates when embeddings exist, applies structured filters and hard constraints, then re-ranks with the deterministic ranking engine.
-
-Generate local deterministic embeddings after migrations and seeding:
-
-```powershell
-cd apps/api
-python scripts/refresh_embeddings.py
-```
-
-The CLI uses the built-in `local-hash-embedding-v1` provider, so tests and local development do not require paid API keys. If embeddings are missing or pgvector is unavailable, the endpoint uses a deterministic lexical fallback over the same generated school documents.
-
-## Similar Schools
-
-V2.3 adds a profile-page similar-school section powered by `GET /schools/{id}/similar`. It reuses semantic school documents and deterministic ranking signals, excludes the current school, and supports variants:
-
-- `general`
-- `cheaper`
-- `less_selective`
-- `smaller`
-- `stronger_outcomes`
-- `closer_to_home`
-
-Variant logic is bounded and deterministic. For example, `cheaper` requires a lower known net price when both schools have price data, `smaller` requires lower enrollment when known, and `less_selective` requires a higher acceptance rate when known.
-
-## Acceptance Decisions And Cost Value
-
-V2.4 adds an accepted-schools workspace at `/decision`. Students can mark saved schools as accepted or finalist, enter aid offers, scholarships, estimated yearly cost, visit notes, unresolved questions, and parent/student priority notes, then generate a report-ready decision summary.
-
-The backend exposes `/decision/offers` for offer persistence and `/decision/report` for deterministic summaries. The report distinguishes best overall fit, best value, strongest career upside, lowest risk, and biggest unresolved factor. Missing offer costs, incomplete preferences, and missing outcomes metrics reduce decision confidence instead of being treated as zero.
-
-V2.5 adds a cost/value calculator to `/decision` and `/compare`, backed by `POST /cost-calculator`. It estimates yearly and four-year cost from entered offers or known profile costs, compares each school against a baseline, shows debt exposure and basic lower/base/higher repayment scenarios, and uses known earnings, graduation, and repayment fields only for directional value labels. Missing aid, debt, or outcomes data lowers confidence and creates warnings instead of becoming zero.
-
-V2.6 adds sensitivity analysis to `/compare`, backed by `POST /sensitivity`. Students can adjust academic fit, cost/value, career outcomes, campus/lifestyle, location, prestige/selectivity, and admissions realism weights. The backend reruns the same deterministic ranking engine for each scenario and returns rank deltas, stable choices, volatile choices, category drivers, confidence impacts, and tradeoff explanations. Prestige/selectivity is modeled as a selectivity-emphasis scenario over the existing admissions-realism scoring path, not as a separate opaque score.
-
-V2.7 expands `POST /decision/report` and adds `/decision/report` in the frontend. The report is a parent/counselor-friendly briefing document with recommendation cards, finalist ranking, category scores, cost/value rows, sensitivity highlights, unresolved questions, confidence flags, and methodology/disclaimer language. The current shareability layer is intentionally lightweight: the latest report is stored in browser local storage and presented through a clean printable route for screenshots, demos, and future PDF export.
-
-The workflow is a planning assistant, not admissions or financial advice.
-
-## Analytics And Ranking Evaluation
-
-V2.8 adds typed analytics events and an internal `/analytics` page. The backend tracks structured, privacy-safe events for search, semantic search, school profile views, saves, compares, onboarding completion, ranking generation, sensitivity adjustments, and decision report generation. Events include version-aware ranking metadata where relevant, such as `ranking_version`, fit-score bucket inputs, confidence, rank position, reason codes, and category-weight summaries.
-
-The internal analytics summary reports most-used filters, most-viewed/saved schools, compare frequency, onboarding completion rate, report generation frequency, ranking-version usage, save rate by fit-score bucket, compare rate by ranking position, top reason-code frequency, confidence distribution, and category weights associated with saved schools.
-
-These metrics are descriptive, not causal. The implementation intentionally avoids logging sensitive notes, raw search text, aid amounts, scholarships, offer costs, emails, or free-form preference narratives.
-
-See [docs/privacy-limitations.md](docs/privacy-limitations.md) for privacy-safe logging rules and evaluation caveats.
-
-## Ranking Methodology Summary
-
-Ranking is deterministic and versioned as `v1.0`. The backend computes category scores for academic fit, cost, career, location, campus, and admissions realism, then normalizes user weights and returns:
-
-- `fit_score` from weighted category scores.
-- `confidence_score` from available data coverage.
-- `category_scores` for explainability.
-- `top_reasons` and `top_tradeoffs` as deterministic reason codes.
-
-Missing data is unknown, not zero. LLM-generated prose does not create school facts or alter ranking. See [docs/scoring-methodology.md](docs/scoring-methodology.md).
-
-## Redis / Cache Summary
-
-Redis is used as an optional cache-aside layer for read-heavy responses:
-
-| Resource | TTL | Validation status |
-| --- | --- | --- |
-| Search | 5 minutes | Tests verify second identical call avoids repository work. |
-| School profile | 60 minutes | Tests verify cache hit avoids repository work. |
-| Ranking | 5 minutes | Tests verify cached response avoids ranking candidate repository work. |
-| Similar schools | 5 minutes | Tests verify repeated similar-school calls use cache. |
-| Sensitivity analysis | 5 minutes | Uses ranking TTL and keys including normalized preference/profile snapshot and `RANKING_VERSION`. |
-
-Cache keys include `CACHE_KEY_VERSION`; ranking keys also include `RANKING_VERSION`. Redis outages log a fallback and continue with database reads.
-
-## Deployment Overview
-
-The repository is deployment-ready but not currently publicly hosted.
-
-Recommended production-like deployment:
-
-- Frontend: Vercel or equivalent Next.js host from `apps/web`.
-- Backend: AWS App Runner or ECS/Fargate using `apps/api/Dockerfile`.
-- PostgreSQL: managed PostgreSQL such as AWS RDS with the `vector` extension available for semantic search.
-- Redis: managed Redis such as AWS ElastiCache.
-- CI: GitHub Actions runs frontend lint/typecheck/build, Playwright smoke tests, backend tests, and Docker Compose config validation.
-
-See [docs/deployment.md](docs/deployment.md) for environment setup, startup order, and hosting notes.
-
-## Testing Instructions
-
-Backend:
+**Backend**
 
 ```powershell
 .\.venv\Scripts\activate
@@ -296,7 +234,7 @@ cd apps/api
 pytest
 ```
 
-Frontend:
+**Frontend**
 
 ```powershell
 cd apps/web
@@ -306,73 +244,157 @@ npm run build
 npm run test:e2e
 ```
 
-Docker validation:
+**Docker config validation**
 
 ```powershell
 docker compose config
-docker compose up --build
 ```
 
-## Performance / Engineering Metrics
+CI (GitHub Actions) runs frontend lint/typecheck/build, Playwright smoke tests, backend tests, and Docker Compose config validation.
 
-Current metrics are intentionally limited to verified local evidence. See [docs/performance.md](docs/performance.md) for the running notes.
+## 📚 Feature Deep-Dive
 
-- Search indexes exist for common filters and sorts on state, region, type, setting, enrollment, acceptance rate, graduation rate, tuition, and net price.
-- Cache tests verify repeated search/profile/ranking calls can avoid duplicate repository/database work.
-- Cache hit/miss logs include lightweight `db_call_avoided` and `db_call_required` flags.
-- No production p95, uptime, real-user usage, cache hit-rate, or database reduction claims have been measured yet.
+<details>
+<summary><strong>Data ingestion</strong> — deterministic CLI for public college-data snapshots</summary>
 
-Future V3 work should add reproducible load tests, endpoint latency summaries, query plans, and cache hit-rate reporting before making stronger performance claims.
+A backend CLI imports public college-data-style CSV snapshots through staged steps: raw import, normalization, missing-value handling, derived attributes, validation, and seed/refresh output. Raw datasets stay out of git under `data/raw`; processed CSVs land in `data/processed` (also git-ignored). Missing numeric values stay blank in CSV and load as `NULL` — never `0`.
 
-## Screenshots / Demo Assets
+```powershell
+cd apps/api
+python scripts/ingest_college_data.py import   --raw-file ..\..\data\raw\college_snapshot.csv --source-year 2024 --data-version scorecard-2024
+python scripts/ingest_college_data.py validate --raw-file ..\..\data\raw\college_snapshot.csv --source-year 2024 --data-version scorecard-2024
+python scripts/ingest_college_data.py seed     --raw-file ..\..\data\raw\college_snapshot.csv --output-file ..\..\data\processed\schools_ingested.csv --source-year 2024 --data-version scorecard-2024
+python scripts/seed_database.py --reset --seed-file ..\..\data\processed\schools_ingested.csv
+```
 
-No real screenshots or GIFs are committed yet. The capture checklist is maintained in [docs/screenshots.md](docs/screenshots.md) and covers:
+</details>
 
-- Landing page
-- Onboarding
-- Search/ranked search flow
-- School profile
-- Similar schools variants on the school profile
-- Saved schools dashboard
-- Compare workflow
-- Cost/value calculator in compare and accepted-school decision workflows
-- Sensitivity analysis sliders, movement table, and stable/volatile badges in compare workflow
-- Shareable decision report with printable briefing layout
-- Internal analytics and ranking evaluation dashboard
+<details>
+<summary><strong>Semantic search</strong> — pgvector retrieval with a deterministic re-ranker</summary>
 
-Screenshots should be added only after capturing the real running product.
+`POST /semantic-search` builds school search documents from structured fields, retrieves pgvector candidates when embeddings exist, applies structured filters and hard constraints, then re-ranks with the deterministic ranking engine. Generate local embeddings after seeding:
 
-## Known Limitations
+```powershell
+cd apps/api
+python scripts/refresh_embeddings.py
+```
 
-- Seed data is synthetic or fixture-sized and intended for deterministic development, not factual school reporting.
-- Saved schools and comparisons are browser-local in V1 because authentication is not implemented.
-- The accepted-schools UI keeps browser-local offer and latest-report state for recruiter-demo continuity; backend decision endpoints are available for the future authenticated persistence path.
+The built-in `local-hash-embedding-v1` provider means tests and local dev need no paid API keys. If embeddings are missing or pgvector is unavailable, the endpoint falls back to a deterministic lexical search over the same documents.
+
+</details>
+
+<details>
+<summary><strong>Similar schools</strong> — bounded, explainable alternatives</summary>
+
+`GET /schools/{id}/similar` reuses semantic documents and deterministic ranking signals to surface alternatives via variants: `general`, `cheaper`, `less_selective`, `smaller`, `stronger_outcomes`, and `closer_to_home`. Variant logic is bounded and deterministic — e.g. `cheaper` requires a lower known net price when both schools have price data; `smaller` requires lower known enrollment; `less_selective` requires a higher known acceptance rate.
+
+</details>
+
+<details>
+<summary><strong>Decisions, cost/value & sensitivity</strong></summary>
+
+- **Acceptance decisions** (`/decision`, `POST /decision/offers`): mark saved schools accepted/finalist, enter aid offers, scholarships, estimated costs, visit notes, and unresolved questions, then generate a deterministic summary distinguishing best fit, best value, strongest career upside, lowest risk, and biggest unresolved factor.
+- **Cost / value** (`POST /cost-calculator`): yearly and four-year cost estimates from offers or known profile costs, debt exposure, lower/base/higher repayment scenarios, and directional value labels from known earnings/graduation/repayment fields. Missing aid, debt, or outcomes data lowers confidence and raises warnings instead of becoming zero.
+- **Sensitivity analysis** (`POST /sensitivity`): adjust academic, cost/value, career, campus, location, prestige/selectivity, and admissions-realism weights. The backend re-runs the same deterministic ranker per scenario and returns rank deltas, stable/volatile classifications, category drivers, confidence impacts, and tradeoff explanations.
+
+The workflow is a planning assistant — not admissions or financial advice.
+
+</details>
+
+<details>
+<summary><strong>Analytics & ranking evaluation</strong> — privacy-safe telemetry</summary>
+
+Typed events track search, semantic search, profile views, saves, compares, onboarding completion, ranking generation, sensitivity adjustments, and report generation, with version-aware metadata (`ranking_version`, fit-score buckets, confidence, rank position, reason codes, category-weight summaries). The internal `/analytics` summary reports most-used filters, most-viewed/saved schools, compare frequency, onboarding completion, ranking-version usage, save rate by fit-score bucket, compare rate by ranking position, reason-code frequency, and confidence distribution.
+
+Metrics are descriptive, not causal. The implementation deliberately avoids logging notes, raw search text, aid amounts, scholarships, offer costs, emails, or free-form preferences. See [docs/privacy-limitations.md](docs/privacy-limitations.md).
+
+</details>
+
+## 🔌 API Overview
+
+<details>
+<summary><strong>Implemented endpoints</strong></summary>
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Process health (no DB dependency). |
+| `GET /ready` | Database readiness via `SELECT 1`. |
+| `GET /schools/search` | Structured filters, deterministic sorting, pagination. |
+| `GET /schools/{id}` | Full profile from school, academics, cost, outcome, and campus-life tables. |
+| `POST /rankings` | Deterministic fit ranking against a preference profile. |
+| `POST /semantic-search` | Natural-language search with hybrid retrieval, hard constraints, and deterministic re-ranking. |
+| `GET /schools/{id}/similar` | Explainable similar-school alternatives. |
+| `POST` / `GET /decision/offers` | Create/update and list accepted/finalist offer details. |
+| `POST /decision/report` | Generate a structured, explainable decision report. |
+| `POST /cost-calculator` | Cost assumptions, four-year totals, debt exposure, repayment, directional value. |
+| `POST /sensitivity` | Re-rank under weight scenarios with movement and stability classifications. |
+| `POST /analytics/events`, `GET /analytics/summary` | Privacy-safe telemetry and ranking-evaluation summaries. |
+
+</details>
+
+Interactive docs are generated locally at `http://127.0.0.1:8000/docs`; the full contract lives in [docs/api-contract.md](docs/api-contract.md).
+
+## 🎯 How Ranking Works
+
+Ranking is **deterministic** and versioned as `v1.0`. The backend computes category scores for academic fit, cost, career, location, campus, and admissions realism, normalizes user weights, and returns:
+
+- `fit_score` — from weighted category scores
+- `confidence_score` — from available data coverage
+- `category_scores` — for explainability
+- `top_reasons` and `top_tradeoffs` — as deterministic reason codes
+
+Missing data is treated as *unknown*, never zero, and LLM-generated prose never creates school facts or alters a ranking. Every ranking change requires a bumped `ranking_version` constant. See [docs/scoring-methodology.md](docs/scoring-methodology.md).
+
+## ⚡ Caching
+
+Redis is an optional cache-aside layer for read-heavy responses. Cache keys include `CACHE_KEY_VERSION`; ranking keys also include `RANKING_VERSION`. A Redis outage logs a fallback and continues with database reads.
+
+| Resource | TTL | Validation |
+| --- | --- | --- |
+| Search | 5 min | Tests verify a repeat call avoids repository work. |
+| School profile | 60 min | Tests verify cache hits avoid repository work. |
+| Ranking | 5 min | Tests verify cached responses avoid ranking-candidate queries. |
+| Similar schools | 5 min | Tests verify repeated calls use the cache. |
+| Sensitivity | 5 min | Keyed on normalized preference snapshot + `RANKING_VERSION`. |
+
+## 📈 Performance & Honesty
+
+Performance claims are limited to **verified local evidence** — no invented numbers.
+
+- Indexes exist for common filters/sorts (state, region, type, setting, enrollment, acceptance rate, graduation rate, tuition, net price).
+- Cache tests verify repeated search/profile/ranking calls can avoid duplicate database work.
+- Cache logs include lightweight `db_call_avoided` / `db_call_required` flags.
+- No production p95, uptime, real-user usage, cache hit-rate, or database-reduction numbers have been measured yet.
+
+Reproducible load tests, latency summaries, query plans, and hit-rate reporting are planned before any stronger claims. See [docs/performance.md](docs/performance.md).
+
+## 🗺 Roadmap
+
+**V2 — recommendation & decision intelligence** *(implemented locally)*
+
+`Data ingestion` · `pgvector semantic search` · `Similar-school discovery` · `Acceptance decision mode` · `Cost/value calculator` · `Sensitivity analysis` · `Shareable decision report` · `Analytics & ranking evaluation`
+
+**V3 — production hardening** *(next)*
+
+`Authentication & account persistence` · `Observability & performance dashboards` · `Load testing & query optimization` · `Admin data-quality tooling` · `Security & privacy hardening` · `Expanded end-to-end tests`
+
+See [tasks.md](tasks.md) for the working implementation tracker.
+
+## ⚠️ Known Limitations
+
+- Seed data is synthetic/fixture-sized for deterministic development — **not** factual school reporting.
+- Saved schools, comparisons, and the latest decision report are browser-local in V1 (no authentication yet); backend decision endpoints exist for the future authenticated-persistence path.
 - The frontend search UI does not yet call `POST /rankings`; deterministic ranking is available through the API.
-- Full official dataset operations, production-grade observability, production-grade report sharing, rate limiting, and account persistence are future work.
-- Deployment configuration is documented and Dockerized, but no public hosted environment has been verified.
-- Performance claims are not production measurements.
+- The current report-sharing layer is intentionally lightweight (local storage + a print-ready route), pending production-grade sharing and PDF export.
+- Deployment is documented and Dockerized, but no public hosted environment has been verified.
+- Performance figures are not production measurements.
 
-## Future Roadmap
+## 📄 License
 
-V2 focuses on recommendation and decision intelligence:
+Released under the [MIT License](LICENSE).
 
-- V2.1 Data ingestion pipeline
-- V2.2 pgvector semantic search
-- V2.3 Similar-school discovery
-- V2.4 Acceptance decision mode
-- V2.5 Cost/value calculator
-- V2.6 Sensitivity analysis
-- V2.7 Shareable decision report
-- V2.8 Analytics and ranking evaluation
+---
 
-V3 focuses on hardening:
-
-- Authentication and account persistence
-- Observability and performance dashboards
-- Load testing and query optimization
-- Admin data quality tooling
-- Security and privacy hardening
-- Expanded end-to-end tests
-- Portfolio/demo polish
-
-See [tasks.md](tasks.md) for the working implementation tracker. The recommended next phase is **V3 Production Hardening and Portfolio Polish**.
+<div align="center">
+<sub>Built as a portfolio project to demonstrate full-stack engineering, typed API design, deterministic ranking, and trustworthy data handling.</sub>
+</div>
