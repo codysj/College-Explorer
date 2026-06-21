@@ -24,6 +24,9 @@ College choice is a high-stakes, data-rich decision that most tools treat as eit
 
 The guiding engineering thesis is that a consumer product can stay **trustworthy** when ranking logic, cache behavior, API contracts, and data limitations are all explicit. Rankings are deterministic and versioned, missing data is never silently treated as zero, and language models never invent school facts or alter scores.
 
+> [!IMPORTANT]
+> **Project history:** A much older version of College Explorer was previously deployed on AWS and saw approximately 6,000 unique users. The current codebase is a substantially improved portfolio project that I returned to later; it is not that original production deployment and is not currently presented as a live production service.
+
 > [!NOTE]
 > This is a decision-support and exploration tool — **not** admissions advice, financial advice, or a guarantee of outcomes. Its job is to make tradeoffs visible.
 
@@ -364,7 +367,7 @@ Performance claims are limited to **verified local evidence** — no invented nu
 - Indexes exist for common filters/sorts (state, region, type, setting, enrollment, acceptance rate, graduation rate, tuition, net price).
 - Cache tests verify repeated search/profile/ranking calls can avoid duplicate database work.
 - Cache logs include lightweight `db_call_avoided` / `db_call_required` flags.
-- No production p95, uptime, real-user usage, cache hit-rate, or database-reduction numbers have been measured yet.
+- No production p95, uptime, cache hit-rate, or database-reduction numbers have been measured for the current rebuilt portfolio version. The approximately 6,000 unique users belonged to a much older AWS deployment and should not be interpreted as usage of this codebase.
 
 Reproducible load tests, latency summaries, query plans, and hit-rate reporting are planned before any stronger claims. See [docs/performance.md](docs/performance.md).
 
