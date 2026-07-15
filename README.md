@@ -2,7 +2,13 @@
 
 College Exploration Platform is a full-stack college decision-support product that helps students discover, rank, save, and compare schools with transparent data and deterministic scoring.
 
-Status: V1.13 deployment and README polish complete. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, and deployment documentation. Public cloud deployment, authenticated persistence, pgvector semantic search, and official college-data ingestion remain future work.
+Status: V1.13 deployment and README polish complete. The app has a Next.js frontend, FastAPI backend, PostgreSQL schema and seed data, Redis cache-aside, Docker packaging, CI checks, and deployment documentation. This project was originally deployed on AWS, where it reached about 8,000 users. It has since been revamped as a portfolio project and is not currently hosted live. The revamp modernizes and extends the original product; it is not a completely separate codebase from the version that reached users. Authenticated persistence, pgvector semantic search, and official college-data ingestion remain future work.
+
+## Project History
+
+College Exploration Platform began as an AWS-hosted product that reached roughly 8,000 users. The current repository represents a portfolio-focused revamp of that same project lineage, with updated architecture, documentation, deterministic scoring, local development infrastructure, and deployment notes.
+
+The current version is not publicly hosted live. It should be understood as a modernized continuation of the original project, not as an unrelated replacement for the product that previously reached users.
 
 ## Product Overview
 
