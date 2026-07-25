@@ -25,7 +25,7 @@ College choice is a high-stakes, data-rich decision that most tools treat as eit
 The guiding engineering thesis is that a consumer product can stay **trustworthy** when ranking logic, cache behavior, API contracts, and data limitations are all explicit. Rankings are deterministic and versioned, missing data is never silently treated as zero, and language models never invent school facts or alter scores.
 
 > [!IMPORTANT]
-> **Project history:** A much older version of College Explorer was previously deployed on AWS and saw approximately 6,000 unique users. The current codebase is a substantially improved portfolio project that I returned to later; it is not that original production deployment and is not currently presented as a live production service.
+> **Project history:** College Explorer was originally built by a three-person founding team and deployed on AWS from 2024-2025, where it served 7,600 unique users. This repository is a continued, materially modernized version of the same product and code lineage, not an unrelated replacement project. The current portfolio version is not presently a public production deployment.
 
 > [!NOTE]
 > This is a decision-support and exploration tool — **not** admissions advice, financial advice, or a guarantee of outcomes. Its job is to make tradeoffs visible.
@@ -367,7 +367,7 @@ Performance claims are limited to **verified local evidence** — no invented nu
 - Indexes exist for common filters/sorts (state, region, type, setting, enrollment, acceptance rate, graduation rate, tuition, net price).
 - Cache tests verify repeated search/profile/ranking calls can avoid duplicate database work.
 - Cache logs include lightweight `db_call_avoided` / `db_call_required` flags.
-- No production p95, uptime, cache hit-rate, or database-reduction numbers have been measured for the current rebuilt portfolio version. The approximately 6,000 unique users belonged to a much older AWS deployment and should not be interpreted as usage of this codebase.
+- No production p95, uptime, cache hit-rate, or database-reduction numbers have been measured for the current portfolio version. The 7,600 unique users belonged to the AWS deployment that ran from 2024-2025 and should not be interpreted as current public-production usage.
 
 Reproducible load tests, latency summaries, query plans, and hit-rate reporting are planned before any stronger claims. See [docs/performance.md](docs/performance.md).
 
@@ -395,9 +395,3 @@ See [tasks.md](tasks.md) for the working implementation tracker.
 ## 📄 License
 
 Released under the [MIT License](LICENSE).
-
----
-
-<div align="center">
-<sub>Built as a portfolio project to demonstrate full-stack engineering, typed API design, deterministic ranking, and trustworthy data handling.</sub>
-</div>
