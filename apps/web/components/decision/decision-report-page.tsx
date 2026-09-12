@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { readDecisionReport } from "@/lib/decision";
 import type { DecisionReportResponse } from "@/types/api";
+import { humanize } from "@/lib/utils";
 
 export function DecisionReportPage() {
   const [report, setReport] = useState<DecisionReportResponse | null>(null);
@@ -209,10 +210,6 @@ function ReportSection({ children, icon, title }: { children: ReactNode; icon: R
 
 function formatCurrency(value: number | null) {
   return value === null ? "Unknown" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
-}
-
-function humanize(value: string) {
-  return value.replaceAll("_", " ");
 }
 
 function displayRecommendationLabel(label: string) {

@@ -35,6 +35,11 @@ export type SchoolSearchResponse = {
   has_next: boolean;
 };
 
+/** POST /rankings returns the same cards as search, plus the ranking version used. */
+export type RankingResponse = SchoolSearchResponse & {
+  ranking_version: string;
+};
+
 export type SchoolProfile = {
   school_id: number;
   name: string;

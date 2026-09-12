@@ -12,7 +12,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { trackAnalyticsEvent } from "@/lib/analytics";
 import {
   buildPreferenceProfile,
-  buildSearchParamsFromPreference,
   calculatePreferenceCompletion,
   defaultPreferenceDraft,
   loadPreferenceProfile,
@@ -106,7 +105,6 @@ export function PreferenceQuiz() {
     try {
       const profile = buildPreferenceProfile(draft);
       savePreferenceProfile(profile);
-      const searchParams = buildSearchParamsFromPreference(profile);
       trackAnalyticsEvent({
         event_name: "onboarding_completed",
         entity_type: "preference_profile",
@@ -117,7 +115,8 @@ export function PreferenceQuiz() {
           category_weights: toApiPreferenceProfile(profile).weights,
         },
       });
-      router.push(`/search${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`);
+      // Ranked mode is the default sort, and the saved profile is what drives it.
+      router.push("/search");
     } catch {
       setError("The profile could not be saved locally. Check browser storage settings and try again.");
     }

@@ -39,7 +39,8 @@ test("completes onboarding and routes to search with local preferences", async (
   await page.getByRole("button", { name: "Save and search" }).click();
 
   await expect(page).toHaveURL(/\/search/);
-  await expect(page).toHaveURL(/state=CA/);
+  // Preferences drive ranking, so onboarding no longer copies them into URL filters.
+  await expect(page).not.toHaveURL(/state=CA/);
   await expect(page.getByText("Using local preference profile")).toBeVisible();
 
   const stored = await page.evaluate(() =>

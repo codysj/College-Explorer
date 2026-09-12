@@ -26,7 +26,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   buildSearchParams,
   defaultFilters,
+  isRankedMode,
   parseSearchFilters,
+  rankSchools,
   searchSchools,
   sortOptions,
   type SearchFilters,
@@ -34,7 +36,7 @@ import {
 } from "@/lib/search";
 import { loadPreferenceProfile, type PreferenceProfile } from "@/lib/preferences";
 import { useSchoolActionState } from "@/lib/school-actions";
-import { cn } from "@/lib/utils";
+import { cn, humanize } from "@/lib/utils";
 import type { SchoolSearchCard, SchoolSearchResponse } from "@/types/api";
 
 const schoolTypes = ["Public", "Private"];
@@ -61,6 +63,10 @@ export function SearchExperience() {
   const [isLoading, setIsLoading] = useState(true);
   const [retryNonce, setRetryNonce] = useState(0);
   const [preferenceProfile, setPreferenceProfile] = useState<PreferenceProfile | null>(null);
+  // localStorage is only readable after mount, so the first fetch waits for it rather
+  // than firing an unranked request and then immediately refetching a ranked one.
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [rankingVersion, setRankingVersion] = useState<string | null>(null);
   const {
     compareIds,
     compareLimit,
@@ -75,6 +81,7 @@ export function SearchExperience() {
 
   useEffect(() => {
     setPreferenceProfile(loadPreferenceProfile());
+    setProfileLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -93,15 +100,32 @@ export function SearchExperience() {
   }, [draftFilters, pathname, router, searchParams, startTransition]);
 
   useEffect(() => {
+    if (!profileLoaded) return;
+
     const controller = new AbortController();
-    const params = buildSearchParams(urlFilters);
+    // Narrow to a non-null profile so ranked mode is a value, not just a boolean.
+    const rankingProfile = isRankedMode(urlFilters, preferenceProfile) ? preferenceProfile : null;
 
     setIsLoading(true);
     setError(null);
 
-    searchSchools(params, controller.signal)
-      .then((payload) => {
+    // The branch already knows whether it ranked, so carry the version along rather
+    // than re-deriving it from the response shape.
+    const request: Promise<{ payload: SchoolSearchResponse; version: string | null }> =
+      rankingProfile
+        ? rankSchools(urlFilters, rankingProfile, controller.signal).then((payload) => ({
+            payload,
+            version: payload.ranking_version,
+          }))
+        : searchSchools(buildSearchParams(urlFilters), controller.signal).then((payload) => ({
+            payload,
+            version: null,
+          }));
+
+    request
+      .then(({ payload, version }) => {
         setResponse(payload);
+        setRankingVersion(version);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
@@ -112,9 +136,11 @@ export function SearchExperience() {
       });
 
     return () => controller.abort();
-  }, [urlFilters]);
+  }, [preferenceProfile, profileLoaded, urlFilters]);
 
   const activeChips = useMemo(() => buildActiveChips(draftFilters), [draftFilters]);
+  // Derived from urlFilters, which drive the fetch, not draftFilters, which lead it.
+  const isRanked = isRankedMode(urlFilters, preferenceProfile);
   const results = response?.results ?? [];
   const totalResults = response?.total_results ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalResults / (response?.page_size ?? 10)));
@@ -197,6 +223,22 @@ export function SearchExperience() {
         <section className="min-w-0">
           {preferenceProfile ? <PreferenceBanner profile={preferenceProfile} /> : null}
 
+          {draftFilters.sort === "best_fit" && profileLoaded && !preferenceProfile ? (
+            <div className="mb-4 rounded-lg border border-border bg-muted p-4">
+              <p className="text-sm font-semibold text-foreground">
+                These results are not ranked yet
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                &quot;Best fit&quot; needs your preferences to score schools. Until then results are
+                ordered alphabetically.{" "}
+                <Link className="font-medium text-primary underline" href="/onboarding">
+                  Set your preferences
+                </Link>{" "}
+                to rank them by what matters to you.
+              </p>
+            </div>
+          ) : null}
+
           <div className="mb-4 flex flex-col gap-3 rounded-lg border border-border bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-foreground">
@@ -207,7 +249,11 @@ export function SearchExperience() {
                 {isPending || isLoading ? " - updating" : ""}
               </p>
             </div>
-            {sortOptions.find((option) => option.value === draftFilters.sort)?.note ? (
+            {isRanked ? (
+              <Badge variant="outline">
+                Ranked by your preferences{rankingVersion ? ` - ${rankingVersion}` : ""}
+              </Badge>
+            ) : sortOptions.find((option) => option.value === draftFilters.sort)?.note ? (
               <Badge variant="muted">
                 {sortOptions.find((option) => option.value === draftFilters.sort)?.note}
               </Badge>
@@ -451,13 +497,13 @@ function SchoolCard({
 
         <div className="mt-5 flex-1 space-y-3 border-t border-border pt-5">
           <InsightList
-            emptyText="Ranking reasons will appear after deterministic scoring is implemented."
-            items={school.top_reasons.slice(0, 2)}
+            emptyText="Set your preferences and sort by best fit to see why a school ranks where it does."
+            items={school.top_reasons.slice(0, 2).map(humanize)}
             title="Reasons"
           />
           <InsightList
-            emptyText="No tradeoff has been computed yet."
-            items={school.top_tradeoffs.slice(0, 1)}
+            emptyText="No tradeoff applies to this school."
+            items={school.top_tradeoffs.slice(0, 1).map(humanize)}
             title="Tradeoff"
             warning
           />
