@@ -59,6 +59,45 @@ test("opens a school profile and renders backend fit summary data", async ({ pag
       body: JSON.stringify(profile),
     });
   });
+  await page.route("**:8000/schools/1/similar**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        source_school_id: 1,
+        variant: "general",
+        variant_applied: "general",
+        ranking_version: "v1.0",
+        embedding_model: "local-hash-embedding-v1",
+        embedding_type: "school_search_document",
+        retrieval_mode: "deterministic_fallback",
+        results: [
+          {
+            school_id: 2,
+            name: "Bayview Technical University",
+            city: "New Haven",
+            state: "CT",
+            type: "Public",
+            setting: "Urban",
+            enrollment: 11800,
+            acceptance_rate: 0.52,
+            net_price: 24400,
+            graduation_rate: 0.78,
+            median_earnings: 68000,
+            similarity_score: 0.82,
+            fit_score: 86.4,
+            top_reasons: ["overlapping_majors", "same_school_type"],
+            top_tradeoffs: [],
+            variant_applied: "general",
+            ranking_version: "v1.0",
+          },
+        ],
+        page: 1,
+        page_size: 3,
+        total_results: 1,
+        has_next: false,
+      }),
+    });
+  });
 
   await page.goto("/schools/1");
 
@@ -69,4 +108,54 @@ test("opens a school profile and renders backend fit summary data", async ({ pag
   await expect(page.getByText("Ranking version")).toBeVisible();
   await expect(page.getByText("Biology")).toBeVisible();
   await expect(page.getByText("$22,100").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Similar Schools" })).toBeVisible();
+  await expect(page.getByText("Bayview Technical University")).toBeVisible();
+  await expect(page.getByText("Overlapping Majors")).toBeVisible();
+});
+
+test("renders similar-school empty and variant states", async ({ page }) => {
+  await page.route("**:8000/schools/1", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(profile) });
+  });
+  await page.route("**:8000/schools/1/similar**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        source_school_id: 1,
+        variant: "cheaper",
+        variant_applied: "cheaper",
+        ranking_version: "v1.0",
+        embedding_model: "local-hash-embedding-v1",
+        embedding_type: "school_search_document",
+        retrieval_mode: "deterministic_fallback",
+        results: [],
+        page: 1,
+        page_size: 3,
+        total_results: 0,
+        has_next: false,
+      }),
+    });
+  });
+
+  await page.goto("/schools/1");
+  await page.getByRole("button", { name: "Cheaper" }).click();
+
+  await expect(page.getByText("No close alternatives found")).toBeVisible();
+});
+
+test("renders similar-school error state", async ({ page }) => {
+  await page.route("**:8000/schools/1", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(profile) });
+  });
+  await page.route("**:8000/schools/1/similar**", async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "server_error", message: "Similar schools failed." } }),
+    });
+  });
+
+  await page.goto("/schools/1");
+
+  await expect(page.getByText("Similar schools failed.")).toBeVisible();
 });

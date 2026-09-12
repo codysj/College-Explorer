@@ -1,6 +1,6 @@
 from time import perf_counter
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, text
 from sqlalchemy.orm import Session
 
 from core.logging import get_logger
@@ -145,6 +145,273 @@ class SchoolRepository(BaseRepository[School]):
         )
         filtered_query = self._apply_filters(query, filters).order_by(School.id.asc())
         rows = self.db.execute(filtered_query).mappings().all()
+        return [dict(row) for row in rows]
+
+    def get_ranking_candidate_rows_by_ids(self, school_ids: list[int]) -> list[dict[str, object]]:
+        if not school_ids:
+            return []
+        query = (
+            select(
+                School.id.label("school_id"),
+                School.name,
+                School.city,
+                School.state,
+                School.region,
+                School.type,
+                School.setting,
+                School.undergraduate_enrollment.label("enrollment"),
+                School.acceptance_rate,
+                SchoolAcademics.top_majors,
+                SchoolAcademics.graduation_rate,
+                SchoolAcademics.retention_rate,
+                SchoolAcademics.student_faculty_ratio,
+                SchoolCosts.tuition_in_state,
+                SchoolCosts.tuition_out_state,
+                SchoolCosts.net_price,
+                SchoolCosts.average_aid,
+                SchoolCosts.debt_median,
+                SchoolOutcomes.median_earnings,
+                SchoolOutcomes.repayment_rate,
+                SchoolCampusLife.housing_available,
+                SchoolCampusLife.sports_division,
+                SchoolCampusLife.greek_life_rate,
+                SchoolCampusLife.culture_tags,
+            )
+            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
+            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
+            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
+            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+            .where(School.id.in_(school_ids))
+            .order_by(School.id.asc())
+        )
+        rows = self.db.execute(query).mappings().all()
+        return [dict(row) for row in rows]
+
+    def get_cost_calculator_rows(self, school_ids: list[int]) -> list[dict[str, object]]:
+        if not school_ids:
+            return []
+        query = (
+            select(
+                School.id.label("school_id"),
+                School.name,
+                School.city,
+                School.state,
+                SchoolCosts.tuition_in_state,
+                SchoolCosts.tuition_out_state,
+                SchoolCosts.net_price,
+                SchoolCosts.average_aid,
+                SchoolCosts.debt_median,
+                SchoolAcademics.graduation_rate,
+                SchoolOutcomes.median_earnings,
+                SchoolOutcomes.repayment_rate,
+            )
+            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
+            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
+            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
+            .where(School.id.in_(school_ids))
+            .order_by(School.id.asc())
+        )
+        rows = self.db.execute(query).mappings().all()
+        return [dict(row) for row in rows]
+
+    def get_semantic_document_rows(self) -> list[dict[str, object]]:
+        query = (
+            select(
+                School.id.label("school_id"),
+                School.name,
+                School.city,
+                School.state,
+                School.region,
+                School.type,
+                School.setting,
+                School.undergraduate_enrollment.label("enrollment"),
+                School.acceptance_rate,
+                School.source_name,
+                School.source_year,
+                School.data_version,
+                SchoolAcademics.top_majors,
+                SchoolAcademics.graduation_rate,
+                SchoolAcademics.retention_rate,
+                SchoolAcademics.student_faculty_ratio,
+                SchoolCosts.tuition_in_state,
+                SchoolCosts.tuition_out_state,
+                SchoolCosts.net_price,
+                SchoolCosts.average_aid,
+                SchoolCosts.debt_median,
+                SchoolOutcomes.median_earnings,
+                SchoolOutcomes.repayment_rate,
+                SchoolCampusLife.housing_available,
+                SchoolCampusLife.sports_division,
+                SchoolCampusLife.greek_life_rate,
+                SchoolCampusLife.culture_tags,
+            )
+            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
+            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
+            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
+            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+            .order_by(School.id.asc())
+        )
+        rows = self.db.execute(query).mappings().all()
+        return [dict(row) for row in rows]
+
+    def upsert_school_embedding(
+        self,
+        school_id: int,
+        embedding_type: str,
+        embedding_model: str,
+        vector: list[float],
+        text_snapshot_hash: str,
+    ) -> None:
+        vector_literal = "[" + ",".join(f"{value:.8f}" for value in vector) + "]"
+        statement = text(
+            """
+            INSERT INTO school_embeddings (
+                school_id, embedding_type, embedding_model, vector, text_snapshot_hash, created_at, refreshed_at
+            )
+            VALUES (
+                :school_id, :embedding_type, :embedding_model, CAST(:vector AS vector), :text_snapshot_hash, now(), now()
+            )
+            ON CONFLICT (school_id, embedding_type, embedding_model) DO UPDATE SET
+                vector = EXCLUDED.vector,
+                text_snapshot_hash = EXCLUDED.text_snapshot_hash,
+                refreshed_at = now()
+            """
+        )
+        self.db.execute(
+            statement,
+            {
+                "school_id": school_id,
+                "embedding_type": embedding_type,
+                "embedding_model": embedding_model,
+                "vector": vector_literal,
+                "text_snapshot_hash": text_snapshot_hash,
+            },
+        )
+
+    def get_vector_candidate_rows(
+        self,
+        query_vector: list[float],
+        embedding_type: str,
+        embedding_model: str,
+        limit: int,
+    ) -> list[dict[str, object]]:
+        vector_literal = "[" + ",".join(f"{value:.8f}" for value in query_vector) + "]"
+        statement = text(
+            """
+            SELECT
+                s.id AS school_id,
+                s.name,
+                s.city,
+                s.state,
+                s.region,
+                s.type,
+                s.setting,
+                s.undergraduate_enrollment AS enrollment,
+                s.acceptance_rate,
+                a.top_majors,
+                a.graduation_rate,
+                a.retention_rate,
+                a.student_faculty_ratio,
+                c.tuition_in_state,
+                c.tuition_out_state,
+                c.net_price,
+                c.average_aid,
+                c.debt_median,
+                o.median_earnings,
+                o.repayment_rate,
+                l.housing_available,
+                l.sports_division,
+                l.greek_life_rate,
+                l.culture_tags,
+                1 - (e.vector <=> CAST(:query_vector AS vector)) AS semantic_score
+            FROM school_embeddings e
+            JOIN schools s ON s.id = e.school_id
+            LEFT JOIN school_academics a ON a.school_id = s.id
+            LEFT JOIN school_costs c ON c.school_id = s.id
+            LEFT JOIN school_outcomes o ON o.school_id = s.id
+            LEFT JOIN school_campus_life l ON l.school_id = s.id
+            WHERE e.embedding_type = :embedding_type
+              AND e.embedding_model = :embedding_model
+            ORDER BY e.vector <=> CAST(:query_vector AS vector), s.id ASC
+            LIMIT :limit
+            """
+        )
+        rows = self.db.execute(
+            statement,
+            {
+                "query_vector": vector_literal,
+                "embedding_type": embedding_type,
+                "embedding_model": embedding_model,
+                "limit": limit,
+            },
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def get_similar_vector_candidate_rows(
+        self,
+        school_id: int,
+        embedding_type: str,
+        embedding_model: str,
+        limit: int,
+    ) -> list[dict[str, object]]:
+        statement = text(
+            """
+            WITH source_embedding AS (
+                SELECT vector
+                FROM school_embeddings
+                WHERE school_id = :school_id
+                  AND embedding_type = :embedding_type
+                  AND embedding_model = :embedding_model
+            )
+            SELECT
+                s.id AS school_id,
+                s.name,
+                s.city,
+                s.state,
+                s.region,
+                s.type,
+                s.setting,
+                s.undergraduate_enrollment AS enrollment,
+                s.acceptance_rate,
+                a.top_majors,
+                a.graduation_rate,
+                a.retention_rate,
+                a.student_faculty_ratio,
+                c.tuition_in_state,
+                c.tuition_out_state,
+                c.net_price,
+                c.average_aid,
+                c.debt_median,
+                o.median_earnings,
+                o.repayment_rate,
+                l.housing_available,
+                l.sports_division,
+                l.greek_life_rate,
+                l.culture_tags,
+                1 - (e.vector <=> source_embedding.vector) AS semantic_score
+            FROM source_embedding
+            JOIN school_embeddings e
+              ON e.embedding_type = :embedding_type
+             AND e.embedding_model = :embedding_model
+             AND e.school_id <> :school_id
+            JOIN schools s ON s.id = e.school_id
+            LEFT JOIN school_academics a ON a.school_id = s.id
+            LEFT JOIN school_costs c ON c.school_id = s.id
+            LEFT JOIN school_outcomes o ON o.school_id = s.id
+            LEFT JOIN school_campus_life l ON l.school_id = s.id
+            ORDER BY e.vector <=> source_embedding.vector, s.id ASC
+            LIMIT :limit
+            """
+        )
+        rows = self.db.execute(
+            statement,
+            {
+                "school_id": school_id,
+                "embedding_type": embedding_type,
+                "embedding_model": embedding_model,
+                "limit": limit,
+            },
+        ).mappings().all()
         return [dict(row) for row in rows]
 
     def _apply_filters(self, query: Select[tuple], filters: SearchRequest) -> Select[tuple]:

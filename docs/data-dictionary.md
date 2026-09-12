@@ -7,7 +7,7 @@ V1.2 defines the initial PostgreSQL schema and deterministic seed data. The seed
 - Missing values are stored as `NULL`, not `0`, unless zero is the real value.
 - Rates are stored as decimals from `0` to `1`.
 - Dollar amounts are stored as whole-dollar integers.
-- School records include `source_name` and `source_year`; V1.2 seed rows use `synthetic_v1_seed` and `2026`.
+- School records include `source_name`, `source_year`, `data_version`, `imported_at`, and `refreshed_at`; legacy V1 seed rows default to `synthetic_v1_seed`, `2026`, and `v1_seed`.
 - Tables with user-owned or mutable data include `created_at`; most also include `updated_at`.
 
 ## Tables
@@ -16,7 +16,7 @@ V1.2 defines the initial PostgreSQL schema and deterministic seed data. The seed
 
 Canonical institution identity and search fields.
 
-Key fields: `id`, `unitid`, `name`, `city`, `state`, `region`, `type`, `setting`, `undergraduate_enrollment`, `acceptance_rate`, `latitude`, `longitude`, `source_name`, `source_year`, `created_at`, `updated_at`.
+Key fields: `id`, `unitid`, `name`, `city`, `state`, `region`, `type`, `setting`, `undergraduate_enrollment`, `acceptance_rate`, `latitude`, `longitude`, `source_name`, `source_year`, `data_version`, `imported_at`, `refreshed_at`, `created_at`, `updated_at`.
 
 Indexes: `state`, `region`, `type`, `setting`, `undergraduate_enrollment`, `acceptance_rate`.
 
@@ -47,6 +47,22 @@ Key fields: `school_id`, `median_earnings`, `repayment_rate`, `created_at`.
 One row per school for campus-life attributes.
 
 Key fields: `school_id`, `housing_available`, `sports_division`, `greek_life_rate`, `culture_tags`, `created_at`.
+
+### `school_embeddings`
+
+V2.2 pgvector storage for generated school search document embeddings. Rows are metadata-versioned so embedding providers or document construction can change without silently reusing stale vectors.
+
+Key fields: `school_id`, `embedding_type`, `embedding_model`, `vector`, `text_snapshot_hash`, `created_at`, `refreshed_at`.
+
+Primary key: `school_id`, `embedding_type`, `embedding_model`.
+
+Indexes: `embedding_type`/`embedding_model`, cosine `ivfflat` pgvector index on `vector`.
+
+Current embedding type: `school_search_document`.
+
+Current local/test embedding model: `local-hash-embedding-v1`.
+
+The search document text is generated from structured school fields only: name, location, type/setting, majors/program tags, cost/value summaries, outcome summaries, campus/culture tags, and V2.1 source metadata. Generated vectors are not source-of-truth facts and should not be committed as large data files.
 
 ### `users`
 
@@ -82,16 +98,49 @@ Key fields: `comparison_id`, `school_id`, `position`, `created_at`.
 
 Constraint: `position` must be from `1` to `5`.
 
+### `acceptance_offers`
+
+User-owned accepted/finalist decision workspace entries. These capture offer-level inputs and notes without replacing canonical school cost/outcome facts.
+
+Key fields: `id`, `user_id`, `school_id`, `status`, `aid_offer`, `scholarships`, `estimated_yearly_cost`, `visit_notes`, `unresolved_concerns`, `parent_priority_notes`, `student_priority_notes`, `created_at`, `updated_at`.
+
+Constraint: one offer row per user and school. Status is constrained to `accepted` or `finalist`. Financial fields are nonnegative whole-dollar annual amounts when present.
+
+### `decision_summary_snapshots`
+
+Report-ready JSON snapshots produced by `POST /decision/report`. V2.7 snapshots include recommendation cards, finalist ranking rows, category scores, cost/value comparison, sensitivity highlights, unresolved questions, confidence flags, methodology notes, and disclaimer text. Snapshots preserve a deterministic summary at generation time so later export/share workflows can be added without recomputing from changed inputs.
+
+Key fields: `id`, `user_id`, `summary_version`, `school_ids`, `summary`, `created_at`.
+
 ### `events`
 
-Basic placeholder analytics/event table.
+Privacy-safe analytics/event table for V2.8 product telemetry and ranking evaluation.
 
 Key fields: `id`, `user_id`, `event_name`, `entity_type`, `entity_id`, `metadata`, `created_at`.
 
 Indexes: `user_id`, `event_name`, `created_at`.
 
+Supported V2.8 event names include `search_performed`, `semantic_search_performed`, `school_profile_viewed`, `school_saved`, `school_compared`, `onboarding_completed`, `ranking_generated`, `sensitivity_adjusted`, and `decision_report_generated`.
+
+The `metadata` JSON is sanitized before storage. It may contain structured fields such as enabled filter keys, result counts, rank position, fit score, confidence score, reason codes, normalized category weights, report version, and ranking version. It must not store raw search text, user notes, emails, aid offers, scholarships, estimated yearly costs, loan amounts, or other sensitive free-form student details.
+
+## V2.1 Ingestion Fields
+
+The V2.1 ingestion pipeline writes product-ready school seed CSVs with the same school, academic, cost, outcome, and campus-life columns used by `scripts/seed_database.py`, plus source metadata.
+
+| Field | Meaning |
+| --- | --- |
+| `source_name` | Human-readable dataset/source label, such as `public_college_snapshot` or a local fixture name. |
+| `source_year` | Reporting year for the source snapshot. |
+| `data_version` | Deterministic operator-supplied version string for the ingested snapshot. |
+| `imported_at` | Timestamp attached when raw data is normalized/imported. |
+| `refreshed_at` | Timestamp attached when the refresh command regenerates product-ready output. |
+
+Validation warnings call out unavailable ranking inputs so missing data lowers confidence in downstream scoring instead of silently distorting fit scores.
+
 ## Placeholder vs. Real Data
 
 - V1.2 school records are synthetic fixtures with plausible ranges.
-- User, preference, saved-school, comparison, and event tables are structural placeholders for future V1 features.
-- Public source ingestion, official College Scorecard/IPEDS mapping, and data freshness reporting belong to later tasks.
+- V2.1 includes small public-data-style fixtures for pipeline tests, not full official datasets.
+- User, preference, saved-school, comparison, and decision tables are structural placeholders until full authenticated account persistence and privacy controls are implemented. Event analytics are implemented for V2.8 local/demo evaluation, but production retention, consent, access control, and deletion workflows belong to V3.
+- Full official College Scorecard/IPEDS snapshot operations, similar-school discovery, and data freshness UI belong to later tasks.

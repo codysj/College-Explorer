@@ -2,13 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { SchoolProfile, SchoolSearchCard } from "@/types/api";
+import { trackAnalyticsEvent } from "@/lib/analytics";
+import type { RankingCategoryKey, RankingCategoryScores, SchoolProfile, SchoolSearchCard } from "@/types/api";
 
 const savedKey = "college-exploration.saved-schools.v1";
 const legacySavedIdsKey = "college-exploration.saved-school-ids.v1";
 const compareKey = "college-exploration.compare-schools.v1";
 const legacyCompareIdsKey = "college-exploration.compare-school-ids.v1";
 const maxCompareSchools = 5;
+const rankingCategoryKeys: RankingCategoryKey[] = [
+  "academic",
+  "cost",
+  "career",
+  "location",
+  "campus",
+  "admissions_realism",
+];
 
 export const savedSchoolStatuses = [
   "interested",
@@ -33,7 +42,7 @@ export type SchoolSnapshot = {
   graduation_rate: number | null;
   median_earnings?: number | null;
   fit_score?: number | null;
-  category_scores?: Record<string, number>;
+  category_scores?: RankingCategoryScores;
 };
 
 export type SavedSchoolEntry = SchoolSnapshot & {
@@ -115,6 +124,18 @@ export function useSchoolActionState(): SchoolActionState {
   const saveSchool = useCallback(
     (school: SchoolActionInput, status: SavedSchoolStatus = "interested") => {
       persistSaved((current) => upsertSavedSchool(current, school, status));
+      const snapshot = toSchoolSnapshot(school);
+      trackAnalyticsEvent({
+        event_name: "school_saved",
+        entity_type: "school",
+        entity_id: snapshot.school_id,
+        metadata: {
+          school_name: snapshot.name,
+          saved_status: status,
+          fit_score: snapshot.fit_score,
+          category_scores: snapshot.category_scores,
+        },
+      });
     },
     [persistSaved],
   );
@@ -166,6 +187,17 @@ export function useSchoolActionState(): SchoolActionState {
           added_at: new Date().toISOString(),
         },
       ]);
+      const snapshot = toSchoolSnapshot(school);
+      trackAnalyticsEvent({
+        event_name: "school_compared",
+        entity_type: "school",
+        entity_id: schoolId,
+        metadata: {
+          school_name: snapshot.name,
+          fit_score: snapshot.fit_score,
+          category_scores: snapshot.category_scores,
+        },
+      });
       return true;
     },
     [comparedSchools, persistCompared],
@@ -391,8 +423,8 @@ function normalizeSnapshot(value: Record<string, unknown>): SchoolSnapshot | nul
   if (!Number.isInteger(value.school_id) || typeof value.name !== "string") return null;
   const schoolId = value.school_id as number;
   const categoryScores = isRecord(value.category_scores)
-    ? Object.entries(value.category_scores).reduce<Record<string, number>>((scores, [key, score]) => {
-        if (typeof score === "number") scores[key] = score;
+    ? Object.entries(value.category_scores).reduce<RankingCategoryScores>((scores, [key, score]) => {
+        if (typeof score === "number" && isRankingCategoryKey(key)) scores[key] = score;
         return scores;
       }, {})
     : {};
@@ -447,6 +479,10 @@ function notifyLocalSubscribers() {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRankingCategoryKey(value: string): value is RankingCategoryKey {
+  return rankingCategoryKeys.includes(value as RankingCategoryKey);
 }
 
 function isSchoolSnapshot(value: SchoolActionInput): value is SchoolSnapshot {

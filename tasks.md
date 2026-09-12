@@ -43,14 +43,31 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 
 ## V2: Recommendation and Decision Intelligence
 
-- [ ] V2.1 Data ingestion pipeline
-- [ ] V2.2 pgvector semantic search
-- [ ] V2.3 Similar-school discovery
-- [ ] V2.4 Acceptance decision mode
-- [ ] V2.5 Cost/value calculator
-- [ ] V2.6 Sensitivity analysis
-- [ ] V2.7 Shareable decision report
-- [ ] V2.8 Analytics and ranking evaluation
+- [x] V2.1 Data ingestion pipeline
+  - Added deterministic raw import, normalization, missing-value handling, derived attributes, validation, and seed/refresh CSV output.
+  - Added source metadata fields, public-data-style fixtures, and focused ingestion tests.
+  - Full local pytest validation still needs a Python 3.12 environment with project dependencies installed; dependency-light CLI and manual ingestion test validation passed.
+- [x] V2.2 pgvector semantic search
+  - Added pgvector embedding storage, deterministic school search documents, local/test hash embeddings, refresh CLI, semantic endpoint, hybrid retrieval with deterministic re-ranking, Redis cache keys, and focused backend tests.
+  - Full migration validation against PostgreSQL still needs local Docker/Postgres because the current shell did not have system Python on PATH; `.venv` Python test validation passed for semantic-search coverage.
+- [x] V2.3 Similar-school discovery
+  - Added `GET /schools/{id}/similar`, semantic/fallback source-school retrieval, deterministic variant constraints, similarity scoring, cache keys, backend tests, and profile-page variant cards.
+  - Frontend runtime validation still needs local Node/npm dependencies; backend validation passed in the available `.venv`.
+- [x] V2.4 Acceptance decision mode
+  - Added acceptance/finalist offer capture, deterministic decision reports, confidence flags for missing financial/preferences/outcomes data, backend decision endpoints, report-ready frontend workspace, and focused backend/frontend tests.
+  - Full frontend runtime validation still needs Node/npm dependencies available in the shell.
+- [x] V2.5 Cost/value calculator
+  - Added `POST /cost-calculator`, deterministic yearly/four-year cost, debt exposure, repayment sensitivity scenarios, outcome-adjusted directional value, affordability indicators, confidence warnings, and frontend calculator surfaces in `/decision` and `/compare`.
+  - Frontend runtime validation still needs Node/npm dependencies available in the shell.
+- [x] V2.6 Sensitivity analysis
+  - Added `POST /sensitivity`, deterministic scenario reranking through the existing ranking engine, movement/stability/volatility outputs, confidence impacts, category drivers, Redis cache support, and compare-page slider UI.
+  - Full frontend runtime validation still needs Node/npm dependencies available in the shell.
+- [x] V2.7 Shareable decision report
+  - Expanded `POST /decision/report` into a structured briefing with top recommendation, finalist ranking table, category scores, cost/value comparison, deterministic sensitivity highlights, major tradeoffs, unresolved questions, confidence flags, methodology/disclaimer language, snapshot support, and printable/shareable frontend route.
+  - Production-grade authenticated sharing, hosted URLs, and PDF generation remain V3 scope.
+- [x] V2.8 Analytics and ranking evaluation
+  - Added typed privacy-safe analytics events, `/analytics/events`, `/analytics/summary`, backend instrumentation for search/profile/ranking/semantic/sensitivity/report flows, frontend save/compare/onboarding/report fallback event logging, internal `/analytics` dashboard, ranking evaluation aggregations, and bias/privacy documentation.
+  - Production observability, authenticated user-scoped analytics, alerting, and warehouse-style BI remain V3 scope.
 
 ## V3: Production Hardening and Portfolio Polish
 
@@ -79,7 +96,15 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-15: Completed V1.11 saved schools and comparison MVP. Added localStorage-backed saved school statuses, `/dashboard`, a cross-page compare tray, `/compare`, deterministic comparison helpers, Playwright coverage, docs updates, and `acceptance_rate` on `GET /schools/{id}` for comparison metrics.
 - 2026-05-15: Completed V1.12 Redis cache-aside. Added Docker Redis support, environment-driven cache settings, centralized cache service, cache-aside reads for search/profile/ranking responses, versioned ranking keys, TTL policy documentation, hit/miss/fallback logging, and mock-backed cache tests.
 - 2026-05-15: Completed V1.13 deployment and README polish. Added production-oriented Dockerfiles, full-stack Compose services, local/prod environment documentation, narrow CORS configuration, CI frontend typecheck and Compose validation, architecture diagram, screenshot checklist, honest performance notes, and a recruiter-facing README. Public cloud deployment remains unverified.
+- 2026-05-20: Completed V2.1 data ingestion pipeline. Added deterministic raw import, normalization, missing-value handling, derived attributes, validation, seed/refresh CSV output, source metadata columns, fixture coverage, and ingestion usage docs.
+- 2026-05-21: Completed V2.2 pgvector semantic search. Added school embedding table/migration, structured document generation, local deterministic embedding provider, refresh CLI, `POST /semantic-search`, pgvector/fallback candidate retrieval, structured hard-constraint preservation, semantic reason tags, cache keys, and tests.
+- 2026-05-21: Completed V2.3 similar-school discovery. Added variant-aware similar-school API, deterministic fallback, source exclusion, Redis cache support, explainable reasons/tradeoffs, frontend profile integration with variant controls, and backend/frontend test coverage updates.
+- 2026-05-21: Completed V2.4 acceptance decision mode. Added accepted/finalist offer models, `/decision/offers` and `/decision/report`, deterministic category-based decision summaries, confidence/uncertainty flags, a browser-local accepted-schools workspace with editable offer cards and report panel, and updated docs/tests.
+- 2026-05-21: Completed V2.5 cost/value calculator. Added deterministic cost/value API and service, calculator schemas, backend tests for cost, aid, debt sensitivity, missing data, and validation, plus editable calculator experiences in decision and compare workflows with Playwright smoke coverage updates.
+- 2026-05-21: Completed V2.6 sensitivity analysis. Added deterministic sensitivity schemas/service/route, selected-school candidate reads, scenario weight normalization, stable/volatile classification, category drivers, confidence impacts, cache keys, compare-page sliders, movement table, stability badges, backend tests, and docs updates.
+- 2026-05-21: Completed V2.7 shareable decision report. Expanded the decision report contract, reused deterministic ranking/cost/sensitivity logic, added cost/value and sensitivity report sections, persisted report snapshots, added browser-local latest-report storage, built `/decision/report` printable briefing view, extended Playwright coverage, and updated docs.
+- 2026-05-21: Completed V2.8 analytics and ranking evaluation. Added privacy-safe event schemas, analytics repository/service/routes, endpoint and frontend instrumentation, internal analytics dashboard, ranking evaluation metrics for fit buckets/rank positions/reason codes/confidence/version usage, tests, and documentation of limitations.
 
 ## Next Recommended Task
 
-V2.1 Data ingestion pipeline.
+V3 Production Hardening and Portfolio Polish.

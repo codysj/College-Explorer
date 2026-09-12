@@ -1,6 +1,6 @@
 # API Contract
 
-V1.13 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison workflows. Backend preference persistence, saved schools, comparisons, and semantic search are not implemented yet.
+V2.8 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, cost/value calculation, sensitivity analysis, shareable decision reports, analytics/ranking evaluation, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison/report workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -203,6 +203,153 @@ Hard constraints:
 - `strict_constraints` may also list strict dimensions, such as `["major", "cost"]`.
 - Unknown data is not treated as zero and does not count as a violation by itself.
 
+### `POST /semantic-search`
+
+Natural-language school search using hybrid retrieval. The endpoint retrieves vector candidates when embeddings exist, falls back to deterministic lexical matching when they do not, applies structured filters and hard constraints, then re-ranks candidates with the deterministic ranking engine. Vector similarity never overrides hard constraints or final structured ranking.
+
+Request body:
+
+```json
+{
+  "query": "affordable data science schools near cities",
+  "filters": {
+    "setting": "Urban",
+    "max_net_price": 30000,
+    "page": 1,
+    "page_size": 10
+  },
+  "preferences": {
+    "intended_major": "Data Science",
+    "max_annual_cost": 30000,
+    "weights": {
+      "academic": 0.35,
+      "cost": 0.25,
+      "career": 0.25,
+      "campus": 0.15
+    },
+    "constraints": {
+      "strict_cost": true
+    }
+  },
+  "candidate_limit": 50
+}
+```
+
+Request fields:
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `query` | string | Required natural-language query, 3 to 240 chars. |
+| `filters` | object | Optional `SearchRequest` fields from `GET /schools/search`; page/page_size control the final ranked response page. |
+| `preferences` | object | Optional deterministic ranking preferences; hard constraints are honored after retrieval. |
+| `candidate_limit` | integer | Optional vector/fallback candidate count, `1` to `200`, defaults to `50`. |
+
+Response `200`:
+
+```json
+{
+  "ranking_version": "v1.0",
+  "embedding_model": "local-hash-embedding-v1",
+  "embedding_type": "school_search_document",
+  "retrieval_mode": "deterministic_fallback",
+  "results": [
+    {
+      "school_id": 2,
+      "name": "Bayview Technical University",
+      "city": "New Haven",
+      "state": "CT",
+      "type": "Public",
+      "setting": "Urban",
+      "enrollment": 11800,
+      "acceptance_rate": 0.52,
+      "net_price": 24400,
+      "graduation_rate": 0.78,
+      "fit_score": 86.42,
+      "confidence_score": 0.95,
+      "category_scores": {
+        "academic": 92.0,
+        "cost": 82.5
+      },
+      "top_reasons": ["academic_major_match", "cost_within_budget"],
+      "top_tradeoffs": [],
+      "ranking_version": "v1.0",
+      "semantic_score": 0.71,
+      "match_reasons": ["major_match", "setting_match", "cost_value_match"]
+    }
+  ],
+  "page": 1,
+  "page_size": 10,
+  "total_results": 1,
+  "has_next": false
+}
+```
+
+`retrieval_mode` is `pgvector` when stored vectors are used and `deterministic_fallback` when embeddings are missing or unavailable. `match_reasons` may include `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
+
+### `GET /schools/{id}/similar`
+
+Returns explainable similar-school alternatives for a source school. The endpoint retrieves semantic candidates when embeddings exist, falls back to deterministic lexical similarity when they do not, excludes the source school, applies structured constraints, and returns variant-aware scores and reasons.
+
+Query parameters:
+
+| Name | Type | Rules |
+| --- | --- | --- |
+| `variant` | enum | `general`, `cheaper`, `less_selective`, `smaller`, `stronger_outcomes`, or `closer_to_home`. Defaults to `general`. |
+| `state`, `region`, `type`, `setting` | string | Optional structured constraints. |
+| `home_state` | string | Optional 2-letter state used by `closer_to_home`. |
+| `min_net_price`, `max_net_price`, `min_enrollment`, `max_enrollment` | integer | Optional nonnegative constraints. |
+| `min_acceptance_rate`, `max_acceptance_rate`, `min_graduation_rate` | number | Optional `0` to `1` constraints. |
+| `page` | integer | Defaults to `1`; must be `>= 1`. |
+| `page_size` | integer | Defaults to `6`; must be `1` to `12`. |
+| `candidate_limit` | integer | Defaults to `50`; must be `1` to `200`. |
+
+Variant behavior:
+
+- `cheaper`: requires lower net price when both source and candidate net price are known.
+- `less_selective`: requires higher acceptance rate when both rates are known.
+- `smaller`: requires lower enrollment when both values are known.
+- `stronger_outcomes`: requires higher graduation rate or higher median earnings when comparable data is known.
+- `closer_to_home`: requires `state == home_state` when `home_state` is supplied.
+
+Response `200`:
+
+```json
+{
+  "source_school_id": 1,
+  "variant": "cheaper",
+  "variant_applied": "cheaper",
+  "ranking_version": "v1.0",
+  "embedding_model": "local-hash-embedding-v1",
+  "embedding_type": "school_search_document",
+  "retrieval_mode": "deterministic_fallback",
+  "results": [
+    {
+      "school_id": 2,
+      "name": "Bayview Technical University",
+      "city": "New Haven",
+      "state": "CT",
+      "type": "Public",
+      "setting": "Urban",
+      "enrollment": 11800,
+      "acceptance_rate": 0.52,
+      "net_price": 24400,
+      "graduation_rate": 0.78,
+      "median_earnings": 68000,
+      "similarity_score": 0.82,
+      "fit_score": 86.4,
+      "top_reasons": ["overlapping_majors", "variant_lower_net_price", "academic_major_match"],
+      "top_tradeoffs": [],
+      "variant_applied": "cheaper",
+      "ranking_version": "v1.0"
+    }
+  ],
+  "page": 1,
+  "page_size": 6,
+  "total_results": 1,
+  "has_next": false
+}
+```
+
 ### `GET /schools/{id}`
 
 Full school profile composed from `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life`. The endpoint uses a single repository query with left joins so missing optional profile rows or fields are represented as `null` rather than causing N+1 relationship loads.
@@ -295,6 +442,421 @@ Missing data behavior:
 - `data_fields_missing` makes unknown values explicit for clients.
 - `data_confidence_score` measures data completeness only; it is not a ranking score, admissions signal, ROI estimate, or recommendation confidence.
 
+### `POST /decision/offers`
+
+Creates or updates one accepted/finalist offer. Until authentication exists, requests use explicit `user_id`, defaulting to local demo user `1`.
+
+Request body:
+
+```json
+{
+  "user_id": 1,
+  "school_id": 2,
+  "status": "finalist",
+  "aid_offer": 12000,
+  "scholarships": 8000,
+  "estimated_yearly_cost": 24000,
+  "visit_notes": "Strong department visit; commute felt manageable.",
+  "unresolved_concerns": ["Confirm housing cost", "Compare internship access"],
+  "parent_priority_notes": "Keep debt below the family budget.",
+  "student_priority_notes": "Prefer urban campus and strong CS hiring."
+}
+```
+
+Rules:
+
+- `status` must be `accepted` or `finalist`.
+- Financial inputs must be nonnegative annual whole-dollar amounts.
+- The endpoint also aligns the saved-school status for the same user/school.
+
+Response `200` returns the stored offer plus school display fields.
+
+### `GET /decision/offers`
+
+Lists accepted/finalist offers for a user.
+
+Query parameters:
+
+| Name | Type | Rules |
+| --- | --- | --- |
+| `user_id` | integer | Optional, defaults to `1`, must be `>= 1`. |
+
+Response `200`:
+
+```json
+{
+  "offers": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "school_id": 2,
+      "school_name": "Bayview Technical University",
+      "city": "New Haven",
+      "state": "CT",
+      "status": "finalist",
+      "aid_offer": 12000,
+      "scholarships": 8000,
+      "estimated_yearly_cost": 24000,
+      "visit_notes": "Strong department visit.",
+      "unresolved_concerns": ["Confirm housing cost"],
+      "parent_priority_notes": "Keep debt below budget.",
+      "student_priority_notes": "Prioritize internships."
+    }
+  ]
+}
+```
+
+### `POST /decision/report`
+
+Generates a deterministic accepted-school decision report from existing offers and ranking preferences. The report is a planning artifact, not admissions or financial advice.
+
+Request body:
+
+```json
+{
+  "user_id": 1,
+  "school_ids": [1, 2, 3],
+  "preferences": {
+    "intended_major": "Computer Science",
+    "home_state": "CA",
+    "max_annual_cost": 32000,
+    "weights": {
+      "academic": 0.25,
+      "cost": 0.25,
+      "career": 0.25,
+      "campus": 0.25
+    }
+  },
+  "max_annual_family_budget": 30000,
+  "save_snapshot": true
+}
+```
+
+Response `200` includes:
+
+- `report_title`, `printable_report_path`, and `share_url_path` for the lightweight frontend report view.
+- `best_overall_fit`: highest deterministic fit score.
+- `best_value`: lowest known offer-level yearly cost, falling back to profile net price when offer cost is missing.
+- `strongest_career_upside`: highest deterministic career category score.
+- `lowest_risk`: bounded risk proxy using known cost, confidence, and unresolved concern count.
+- `biggest_unresolved_factor`: school with the most unresolved questions.
+- `finalist_ranking_table`: rank, fit, confidence, estimated cost, career score, and top deterministic tradeoff for each finalist.
+- `category_score_table`: academic, cost, career, location, campus, and admissions-realism scores by finalist.
+- `cost_value_comparison`: estimated yearly/four-year cost, affordability status, directional value label, confidence, and warnings using the same deterministic cost/value rules.
+- `sensitivity_highlights`: deterministic cost, career, and academic stress-test highlights using reranked finalist rows.
+- `unresolved_questions`: user-entered unresolved concerns, falling back to explicit confidence gaps when no questions were entered.
+- `decision_confidence` and `confidence_flags`: explicit uncertainty indicators for missing financial data, incomplete preferences, missing outcomes, limited school data, or too few finalists.
+- `major_tradeoffs`: deterministic comparison sentences grounded in structured data and user-entered offers.
+- `methodology_note` and `disclaimer`: decision-support language that clarifies outputs are deterministic planning support, not admissions or financial advice.
+- `snapshot_id`: present when `save_snapshot=true`.
+
+Validation behavior:
+
+- `school_ids` must contain 1 to 8 positive ids when supplied.
+- The report uses accepted/finalist offers for the supplied `user_id`; if no accepted/finalist offers are available, the endpoint returns `422`.
+- Missing cost, outcomes, preference, or ranking data lowers confidence and creates flags rather than being treated as zero.
+
+### `POST /cost-calculator`
+
+Compares school financial assumptions and directional value. This endpoint is deterministic planning support, not financial advice.
+
+Request body:
+
+```json
+{
+  "schools": [
+    {
+      "school_id": 1,
+      "estimated_net_price": 28000,
+      "scholarships": 8000,
+      "grants_aid": 6000,
+      "annual_loan_amount": 5500,
+      "loan_interest_rate": 0.055,
+      "loan_term_years": 10
+    },
+    {
+      "school_id": 2,
+      "estimated_yearly_cost": 42500,
+      "annual_loan_amount": 12000
+    }
+  ],
+  "baseline_school_id": 1,
+  "max_annual_family_budget": 30000
+}
+```
+
+Rules:
+
+| Field | Rules |
+| --- | --- |
+| `schools` | Required, 1 to 8 unique schools. |
+| `tuition`, `estimated_net_price`, `scholarships`, `grants_aid`, `estimated_yearly_cost`, `annual_loan_amount` | Optional nonnegative annual dollar amounts. |
+| `loan_interest_rate` | Optional, defaults to `0.055`, must be `0` to `0.25`. |
+| `loan_term_years` | Optional, defaults to `10`, must be `1` to `30`. |
+| `baseline_school_id` | Optional; when supplied, it must be one of the requested schools. |
+| `max_annual_family_budget` | Optional nonnegative yearly budget used for affordability indicators. |
+
+Response `200`:
+
+```json
+{
+  "calculator_version": "v1.0",
+  "generated_at": "2026-05-21T12:00:00Z",
+  "disclaimer": "Cost/value calculator outputs are estimates for planning only, not financial advice. Actual aid, costs, borrowing terms, repayment, and outcomes may vary.",
+  "baseline_school_id": 1,
+  "results": [
+    {
+      "school_id": 2,
+      "name": "USC Demo College",
+      "city": "Los Angeles",
+      "state": "CA",
+      "observed_cost_data": {
+        "tuition_in_state": null,
+        "tuition_out_state": 68000,
+        "net_price": 48500,
+        "average_aid": 22000,
+        "debt_median": 26000
+      },
+      "observed_outcome_data": {
+        "median_earnings": 72000,
+        "graduation_rate": 0.86,
+        "repayment_rate": 0.82
+      },
+      "assumptions": {
+        "school_id": 2,
+        "tuition": null,
+        "estimated_net_price": null,
+        "scholarships": null,
+        "grants_aid": null,
+        "estimated_yearly_cost": 42500,
+        "annual_loan_amount": 12000,
+        "loan_interest_rate": 0.055,
+        "loan_term_years": 10
+      },
+      "estimated_yearly_cost": 42500,
+      "estimated_four_year_total_cost": 170000,
+      "yearly_cost_difference": 20500,
+      "four_year_cost_difference": 82000,
+      "estimated_debt_exposure": 48000,
+      "repayment_scenarios": [
+        {
+          "scenario": "base",
+          "principal": 48000,
+          "interest_rate": 0.055,
+          "term_years": 10,
+          "estimated_monthly_payment": 521,
+          "estimated_total_repaid": 62520,
+          "assumption": "Total borrowed matches the current assumption or observed median debt indicator."
+        }
+      ],
+      "directional_outcome_adjusted_value": "reasonable_value",
+      "affordability": {
+        "status": "above_budget",
+        "message": "Estimated yearly cost is above the entered family budget."
+      },
+      "confidence": "high",
+      "warnings": [],
+      "formulas": [
+        "estimated_yearly_cost = max(0, estimated_yearly_cost)",
+        "estimated_four_year_total_cost = estimated_yearly_cost * 4"
+      ]
+    }
+  ],
+  "comparison_summary": [
+    "USC Demo College may cost about $82,000 more over four years than Berkeley Demo University under current assumptions."
+  ]
+}
+```
+
+Calculation rules:
+
+- Yearly cost uses entered `estimated_yearly_cost` first, then entered net price or tuition minus scholarships and grants/aid, then profile net price or tuition when available.
+- Four-year total is yearly cost multiplied by `4`; no inflation or year-by-year sensitivity is applied in V2.5.
+- Debt exposure uses entered annual loans multiplied by `4`; if loans are missing, observed median debt may be shown as a data indicator with a warning.
+- Repayment scenarios use standard amortization for lower debt, base debt, and higher debt. They are simple sensitivities, not personalized repayment advice.
+- Directional value labels use known four-year cost, median earnings, graduation rate, and repayment rate where available. Missing outcomes produce `uncertain`.
+- Missing aid, net price, outcomes, or debt assumptions reduce confidence and appear in `warnings`.
+
+### `POST /sensitivity`
+
+Analyzes how deterministic ranking outputs move when category weights change. This endpoint reuses the existing ranking engine and preserves `ranking_version`; it does not create a second scoring system.
+
+Request body:
+
+```json
+{
+  "preferences": {
+    "intended_major": "Computer Science",
+    "home_state": "CA",
+    "max_annual_cost": 32000,
+    "weights": {
+      "academic": 0.25,
+      "cost": 0.2,
+      "career": 0.2,
+      "campus": 0.12,
+      "location": 0.1,
+      "admissions_realism": 0.13
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "cost_focus",
+      "label": "Cost sensitivity raised",
+      "weight_adjustments": {
+        "cost_value": 0.45
+      }
+    }
+  ],
+  "candidate_school_ids": [1, 2, 3],
+  "filters": {
+    "page": 1,
+    "page_size": 10
+  }
+}
+```
+
+Rules:
+
+| Field | Rules |
+| --- | --- |
+| `preferences` | Existing deterministic ranking preference profile. Supported weights must be `0` to `1` for this endpoint. |
+| `scenarios` | Required, 1 to 8 scenarios. Each scenario has a stable `scenario_id`, user-facing `label`, and weight adjustments. |
+| `weight_adjustments` | Supports `academic`, `academic_fit`, `cost`, `cost_value`, `career`, `career_outcomes`, `campus`, `campus_lifestyle`, `location`, `prestige_selectivity`, and `admissions_realism`. Values must be `0` to `1` before normalization. |
+| `candidate_school_ids` | Optional, unique positive school IDs, up to 20. Used by the compare-page workflow to analyze selected schools only. |
+| `filters` | Existing `SearchRequest` fields used when `candidate_school_ids` is empty. |
+
+Response `200`:
+
+```json
+{
+  "ranking_version": "v1.0",
+  "baseline_weights": {
+    "academic": 0.25,
+    "cost": 0.2,
+    "career": 0.2,
+    "location": 0.1,
+    "campus": 0.12,
+    "admissions_realism": 0.13
+  },
+  "stable_choice_definition": "A stable choice remains highly ranked across many weighting scenarios, with little rank movement.",
+  "volatile_choice_definition": "A volatile choice changes rank dramatically when one preference changes.",
+  "baseline_results": [],
+  "scenarios": [
+    {
+      "scenario_id": "cost_focus",
+      "label": "Cost sensitivity raised",
+      "applied_weights": {
+        "academic": 0.17,
+        "cost": 0.38,
+        "career": 0.14,
+        "location": 0.07,
+        "campus": 0.09,
+        "admissions_realism": 0.15
+      },
+      "emphasis_dimension": "cost_value",
+      "results": [
+        {
+          "school_id": 2,
+          "name": "Bayview Technical University",
+          "city": "New Haven",
+          "state": "CT",
+          "base_rank": 2,
+          "scenario_rank": 1,
+          "rank_delta": 1,
+          "fit_score": 86.4,
+          "fit_delta": 2.5,
+          "confidence_score": 0.91,
+          "confidence_delta": -0.01,
+          "category_scores": {
+            "academic": 92.0,
+            "cost": 82.5,
+            "career": 88.0
+          },
+          "category_drivers": ["cost"],
+          "movement": "up",
+          "stability": "watch_choice",
+          "top_reasons": ["cost_within_budget"],
+          "top_tradeoffs": [],
+          "explanation": "Bayview Technical University rises 1 rank position(s), mainly from cost; classification: watch choice."
+        }
+      ],
+      "summary": "Bayview Technical University rises most when cost value changes."
+    }
+  ],
+  "stable_schools": [],
+  "volatile_schools": [],
+  "category_drivers": [],
+  "confidence_impacts": [],
+  "tradeoff_explanations": [],
+  "summary_messages": []
+}
+```
+
+Definitions:
+
+- Stable choice: remains highly ranked across many weighting scenarios, with little rank movement.
+- Volatile choice: changes rank dramatically when one preference changes.
+- `prestige_selectivity` is handled as a selectivity-emphasis scenario over the existing admissions-realism scoring path. It does not introduce a separate prestige score.
+
+### `POST /analytics/events`
+
+Logs one privacy-safe product analytics event. This endpoint is for lightweight V2.8 product telemetry and ranking evaluation. It does not accept arbitrary event names.
+
+Supported `event_name` values:
+
+- `search_performed`
+- `semantic_search_performed`
+- `school_profile_viewed`
+- `school_saved`
+- `school_compared`
+- `onboarding_completed`
+- `ranking_generated`
+- `sensitivity_adjusted`
+- `decision_report_generated`
+
+Request body:
+
+```json
+{
+  "user_id": 1,
+  "event_name": "school_saved",
+  "entity_type": "school",
+  "entity_id": 2,
+  "metadata": {
+    "source": "search",
+    "rank_position": 3,
+    "fit_score": 86.4,
+    "confidence_score": 0.88,
+    "ranking_version": "v1.0",
+    "top_reasons": ["academic_major_match"]
+  }
+}
+```
+
+Privacy rules:
+
+- Raw search text, notes, emails, aid offers, scholarships, estimated yearly costs, loan amounts, and free-form preference narratives are dropped by the sanitizer.
+- Filter metadata is stored as enabled filter keys, not raw user query text.
+- Preference analytics may store normalized category weights, not major text, home state, or family budget.
+
+Response `200` returns the stored sanitized event.
+
+### `GET /analytics/summary`
+
+Returns internal analytics and ranking evaluation metrics for a configurable lookback window.
+
+Query parameters:
+
+| Name | Type | Rules |
+| --- | --- | --- |
+| `lookback_days` | integer | Optional, defaults to `90`, must be `1` to `365`. |
+
+Response `200` includes event counts, metric cards, most-used filters, most-viewed/saved schools, compare frequency, onboarding completion rate, save rate by rank position, report generation frequency, ranking-version usage, ranking evaluation metrics, privacy notes, and limitations.
+
+`ranking_evaluation` includes save rate by fit-score bucket, compare rate by ranking position, top reason-code frequency, confidence distribution, ranking-version distribution, category-weight summaries for saved schools, and interpretation notes.
+
+Metrics are descriptive. They should not be presented as causal proof that a ranking caused a save, comparison, or final decision.
+
 ## Error Format
 
 ```json
@@ -320,6 +882,14 @@ School profile reads join `schools` to academics, costs, outcomes, and campus li
 
 Ranking reads join `schools`, `school_academics`, `school_costs`, `school_outcomes`, and `school_campus_life` with left joins in one repository query. The ranking service applies hard constraints, computes category scores, confidence, reason codes, and tradeoffs in memory for V1 scale.
 
+Decision reports read `acceptance_offers`, join candidate school rows through the decision repository, call the ranking service for deterministic fit/category scoring, reuse cost/value result builders for report cost rows, and rerank the same finalist rows for report-level sensitivity highlights. Cost calculator reads requested school cost/outcome rows through the school repository and performs deterministic calculations in the service layer. Sensitivity analysis reads either selected candidate IDs or filtered ranking candidates, then calls the ranking service for baseline and scenario ordering. Route handlers do not write SQL directly.
+
+Analytics event writes go through the analytics repository. Analytics aggregation reads recent events and computes V2.8 metrics in the analytics service. Route handlers do not write SQL directly.
+
+Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. The semantic service applies filters and hard constraints after candidate retrieval and delegates final ordering to the ranking service.
+
+Similar-school discovery uses the same generated embedding documents. It compares candidates to a source school, excludes the source school, applies variant constraints, deduplicates name/city/state matches, and returns a deterministic similarity score plus ranking reasons.
+
 ## Cache Behavior
 
 Caching is transparent to clients and does not change request or response contracts. The backend checks Redis before repository/database work, stores successful responses on misses, and falls back to normal execution if Redis is unavailable.
@@ -329,6 +899,9 @@ Caching is transparent to clients and does not change request or response contra
 | Search | Resource name, all filters, sort, direction, page, page size, `CACHE_KEY_VERSION` | 300 seconds |
 | School profile | Resource name, `school_id`, `CACHE_KEY_VERSION` | 3600 seconds |
 | Ranking | Resource name, full request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Semantic search | Resource name, normalized query, filters, preferences, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Similar schools | Resource name, school id, variant request, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Sensitivity analysis | Resource name, request body, normalized profile snapshot, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 
 Example key shapes:
 
@@ -350,6 +923,8 @@ Ranking keys include `RANKING_VERSION` so cached rankings cannot cross determini
 | `GET` | `/saved-schools` | Fetch saved schools. | Planned after auth |
 | `POST` | `/comparisons` | Create a comparison session. | Planned after auth |
 | `GET` | `/comparisons/{id}` | Read comparison output. | Planned after auth |
+
+V2.4 decision endpoints are implemented before authentication with explicit `user_id` for local/demo use. Account-backed ownership and privacy controls remain V3 work.
 
 The V1.11 frontend does not call these planned saved-school or comparison endpoints because there is no authenticated user/session boundary. It persists state locally in browser `localStorage` instead:
 

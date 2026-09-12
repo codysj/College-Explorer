@@ -23,6 +23,15 @@ def split_list(value: str) -> list[str]:
     return [item.strip() for item in value.split("|") if item.strip()]
 
 
+def row_value(row: dict[str, str], key: str, default: str) -> str:
+    value = row.get(key)
+    return value if value else default
+
+
+def nullable_timestamp(value: str) -> str | None:
+    return value if value else None
+
+
 def seed_school(conn: psycopg.Connection, row: dict[str, str]) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -30,12 +39,12 @@ def seed_school(conn: psycopg.Connection, row: dict[str, str]) -> None:
             INSERT INTO schools (
                 unitid, name, city, state, region, type, setting,
                 undergraduate_enrollment, acceptance_rate, latitude, longitude,
-                source_name, source_year
+                source_name, source_year, data_version, imported_at, refreshed_at
             )
             VALUES (
                 %(unitid)s, %(name)s, %(city)s, %(state)s, %(region)s, %(type)s, %(setting)s,
                 %(undergraduate_enrollment)s, %(acceptance_rate)s, %(latitude)s, %(longitude)s,
-                'synthetic_v1_seed', 2026
+                %(source_name)s, %(source_year)s, %(data_version)s, %(imported_at)s, %(refreshed_at)s
             )
             ON CONFLICT (unitid) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -50,6 +59,9 @@ def seed_school(conn: psycopg.Connection, row: dict[str, str]) -> None:
                 longitude = EXCLUDED.longitude,
                 source_name = EXCLUDED.source_name,
                 source_year = EXCLUDED.source_year,
+                data_version = EXCLUDED.data_version,
+                imported_at = EXCLUDED.imported_at,
+                refreshed_at = EXCLUDED.refreshed_at,
                 updated_at = now()
             RETURNING id
             """,
@@ -65,6 +77,11 @@ def seed_school(conn: psycopg.Connection, row: dict[str, str]) -> None:
                 "acceptance_rate": nullable_float(row["acceptance_rate"]),
                 "latitude": nullable_float(row["latitude"]),
                 "longitude": nullable_float(row["longitude"]),
+                "source_name": row_value(row, "source_name", "synthetic_v1_seed"),
+                "source_year": int(row_value(row, "source_year", "2026")),
+                "data_version": row_value(row, "data_version", "v1_seed"),
+                "imported_at": nullable_timestamp(row.get("imported_at", "")),
+                "refreshed_at": nullable_timestamp(row.get("refreshed_at", "")),
             },
         )
         school_id = cur.fetchone()[0]
