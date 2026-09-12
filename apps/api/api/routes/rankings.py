@@ -9,6 +9,7 @@ from schemas.rankings import RankingRequest, RankingResponse
 from services.analytics import AnalyticsService
 from services.cache import CacheService
 from services.ranking_service import RankingService
+from core.rate_limit import RateLimit
 
 router = APIRouter(prefix="/rankings", tags=["rankings"])
 
@@ -25,6 +26,7 @@ def get_ranking_service(
     response_model=RankingResponse,
     summary="Rank schools deterministically",
     description="Returns ranked school search cards using structured preferences and deterministic reason codes.",
+    dependencies=[Depends(RateLimit("rankings"))],
 )
 def rank_schools(
     request: RankingRequest,

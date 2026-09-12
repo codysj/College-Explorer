@@ -857,6 +857,64 @@ Response `200` includes event counts, metric cards, most-used filters, most-view
 
 Metrics are descriptive. They should not be presented as causal proof that a ranking caused a save, comparison, or final decision.
 
+## Rate Limits and Access Control (V3.5)
+
+Added ahead of the public deployment in V3.3: before it, every compute-heavy endpoint
+accepted an unauthenticated POST body and the internal analytics dashboard was open.
+
+### Rate limits
+
+A fixed-window, per-client limit applies to the endpoints that do real work:
+
+| Endpoint | Bucket | Default limit |
+| --- | --- | --- |
+| `POST /rankings` | `rankings` | 60 / 60s |
+| `POST /semantic-search` | `semantic_search` | 60 / 60s |
+| `POST /sensitivity` | `sensitivity` | 60 / 60s |
+| `POST /cost-calculator` | `cost_calculator` | 60 / 60s |
+| `POST /decision/offers`, `POST /decision/report` | `decision` | 60 / 60s |
+| `POST /analytics/events` | `analytics_events` | 120 / 60s |
+| `GET /analytics/summary` | `analytics_summary` | 60 / 60s |
+
+Configured by `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS`, and
+`RATE_LIMIT_WINDOW_SECONDS`. Exceeding a limit returns **429** with a `Retry-After`
+header in seconds.
+
+Clients are bucketed by the first `X-Forwarded-For` hop, falling back to the socket
+address. That header is client-supplied and spoofable; this limit protects capacity and
+is explicitly not an authorization boundary.
+
+Counters are atomic `INCR` operations in Redis, so a limit holds across workers rather
+than per-process. **When Redis is unavailable the limiter fails open** and requests are
+allowed: refusing all traffic because the cache blinked is worse than briefly not
+enforcing a demo limit. The window is fixed rather than sliding, so a client can burst up
+to twice the limit across a boundary.
+
+### Analytics access control
+
+`GET /analytics/summary` reports aggregate product behaviour and is operator-facing.
+
+| `APP_ENV` | `ANALYTICS_API_TOKEN` | Result |
+| --- | --- | --- |
+| development / dev / local / test | unset | Served (local convenience) |
+| anything else | unset | **503** - disabled rather than silently public |
+| any | set | Requires a matching `X-Analytics-Token` header, else **401** |
+
+The token is compared with `hmac.compare_digest` so the check does not leak its prefix
+through timing. The `/analytics` page asks the operator for it and keeps it in
+localStorage; it is deliberately not a `NEXT_PUBLIC_*` variable, which would ship the
+secret to every visitor.
+
+`POST /analytics/events` stays open because the browser must be able to log events, and
+is rate-limited instead.
+
+### Security headers
+
+Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer`, and `Cross-Origin-Resource-Policy: same-site`. No CSP:
+this service returns JSON only, and a CSP protects documents. Add one if it ever serves
+HTML.
+
 ## Error Format
 
 ```json

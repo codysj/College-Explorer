@@ -51,8 +51,39 @@ export function trackAnalyticsEvent(payload: AnalyticsEventPayload) {
   void apiFetch("/analytics/events", { method: "POST", body }).catch(() => undefined);
 }
 
+/**
+ * The analytics summary is operator-facing, so the backend gates it behind
+ * ANALYTICS_API_TOKEN outside development. The token is entered by the operator and kept
+ * in localStorage rather than bundled as NEXT_PUBLIC_*, which would ship it to everyone.
+ */
+export const ANALYTICS_TOKEN_STORAGE_KEY = "college-exploration.analytics-token.v1";
+
+export function loadAnalyticsToken() {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(ANALYTICS_TOKEN_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function saveAnalyticsToken(token: string) {
+  try {
+    if (token.trim()) {
+      window.localStorage.setItem(ANALYTICS_TOKEN_STORAGE_KEY, token.trim());
+    } else {
+      window.localStorage.removeItem(ANALYTICS_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // A browser with storage disabled just means the token must be re-entered.
+  }
+}
+
 export function fetchAnalyticsSummary(lookbackDays = 90) {
-  return apiFetch<AnalyticsSummaryResponse>(`/analytics/summary?lookback_days=${lookbackDays}` as `/${string}`);
+  const token = loadAnalyticsToken();
+  return apiFetch<AnalyticsSummaryResponse>(`/analytics/summary?lookback_days=${lookbackDays}` as `/${string}`, {
+    headers: token ? { "X-Analytics-Token": token } : undefined,
+  });
 }
 
 function sanitizeMetadata(metadata: Record<string, unknown>) {

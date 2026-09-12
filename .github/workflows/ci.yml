@@ -40,6 +40,9 @@ jobs:
       - name: Run frontend smoke tests
         run: npm run test:e2e
 
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
   docker:
     name: Docker config validation
     runs-on: ubuntu-latest
@@ -71,6 +74,8 @@ jobs:
             python -m pip install --upgrade pip
             python -m pip install -r requirements.txt
             pytest
+            python -m pip install pip-audit
+            pip-audit --requirement requirements.txt --strict
           else
             echo "apps/api has no Python project file yet; skipping backend test placeholder."
           fi

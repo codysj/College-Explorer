@@ -36,6 +36,14 @@ class CacheBackend(Protocol):
     def delete_prefix(self, prefix: str) -> int:
         ...
 
+    def incr(self, key: str, ttl_seconds: int) -> int | None:
+        """Atomically increment `key`, setting its TTL on first use.
+
+        Returns the new count, or None when no counter is available - callers must treat
+        None as "cannot enforce" rather than as zero.
+        """
+        ...
+
 
 class NullCacheBackend:
     def get(self, key: str) -> str | None:
@@ -49,6 +57,11 @@ class NullCacheBackend:
 
     def delete_prefix(self, prefix: str) -> int:
         return 0
+
+    def incr(self, key: str, ttl_seconds: int) -> int | None:
+        # No shared counter exists, so limits cannot be enforced. None (not 0) so the
+        # caller fails open deliberately instead of reading it as "first request".
+        return None
 
 
 class RedisCacheBackend:
@@ -97,6 +110,18 @@ class RedisCacheBackend:
         except (OSError, RedisError) as exc:
             self._mark_unavailable("cache_invalidation_failure", prefix, exc)
         return deleted
+
+    def incr(self, key: str, ttl_seconds: int) -> int | None:
+        try:
+            pipeline = self.client.pipeline()
+            pipeline.incr(key)
+            pipeline.expire(key, ttl_seconds, nx=True)
+            count = int(pipeline.execute()[0])
+            self.available = True
+            return count
+        except (OSError, RedisError) as exc:
+            self._mark_unavailable("rate_limit_backend_unavailable", key, exc)
+            return None
 
     def _mark_unavailable(self, message: str, key: str, exc: Exception) -> None:
         if self.available or message != "cache_redis_unavailable":
@@ -176,6 +201,12 @@ class CacheService:
 
     def set_model(self, key: str, value: BaseModel, ttl_seconds: int) -> None:
         self.backend.set(key, value.model_dump_json(), ttl_seconds)
+
+    def incr_counter(self, key: str, ttl_seconds: int) -> int | None:
+        return self.backend.incr(key, ttl_seconds)
+
+    def rate_limit_key(self, bucket: str, client_id: str, window_start: int) -> str:
+        return f"{self.namespace}:{self.key_version}:ratelimit:{bucket}:{client_id}:{window_start}"
 
     def invalidate_key(self, key: str) -> int:
         return self.backend.delete(key)

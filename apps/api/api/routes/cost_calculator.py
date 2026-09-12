@@ -5,6 +5,7 @@ from api.deps import get_db
 from repositories.schools import SchoolRepository
 from schemas.cost_calculator import CostCalculatorRequest, CostCalculatorResponse
 from services.cost_calculator import CostCalculatorService
+from core.rate_limit import RateLimit
 
 router = APIRouter(tags=["cost-calculator"])
 
@@ -17,6 +18,7 @@ def get_cost_calculator_service(db: Session = Depends(get_db)) -> CostCalculator
     "/cost-calculator",
     response_model=CostCalculatorResponse,
     summary="Compare estimated college cost and directional value",
+    dependencies=[Depends(RateLimit("cost_calculator"))],
 )
 def calculate_cost_value(
     request: CostCalculatorRequest,
