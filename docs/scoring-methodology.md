@@ -205,6 +205,25 @@ Preference constraint values may be supplied as a single string, comma- or pipe-
 
 Strict major filters out schools whose known major list does not contain the intended major or academic interests. Strict cost filters out schools whose known net price is above `max_annual_cost`. Unknown data is not treated as a violation; it remains reflected in confidence.
 
+### Product decision: budget is a soft signal (2026-09-12)
+
+None of the strict flags are set by the app, and that is deliberate. A school priced above
+a student's `max_annual_cost` is **ranked lower, not removed**.
+
+The reasoning: a student who says "$30,000" usually means "$30,000 unless something is
+worth stretching for." Removing an over-budget school hides the tradeoff instead of
+presenting it; ranking it lower shows the school, shows the cost penalty in its category
+score, and lets the student decide. It also avoids empty result sets on a ~100-school
+corpus, which is what silently discarding candidates would produce.
+
+V3.1 removed the one place this was violated: onboarding used to copy preferred state,
+setting, and school type into URL filters, which the search endpoint applies as SQL
+`WHERE` clauses. That made soft preferences behave as hard cuts and contradicted this
+design. Preferences are now soft everywhere.
+
+If a strict budget is ever wanted, set `strict_cost` in the preference `constraints` -
+the engine already supports it, so it is a configuration change, not new code.
+
 ## Reason Codes
 
 Explanations are deterministic code strings, not generated prose. The service chooses:

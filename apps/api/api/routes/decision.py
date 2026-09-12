@@ -17,6 +17,7 @@ from services.cache import CacheService
 from services.analytics import AnalyticsService
 from services.decision import DecisionService
 from services.ranking_service import RankingService
+from core.rate_limit import RateLimit
 
 router = APIRouter(prefix="/decision", tags=["decision"])
 
@@ -35,6 +36,7 @@ def get_decision_service(
     "/offers",
     response_model=DecisionOffer,
     summary="Create or update an accepted/finalist offer",
+    dependencies=[Depends(RateLimit("decision"))],
 )
 def upsert_decision_offer(
     request: DecisionOfferCreate,
@@ -59,6 +61,7 @@ def list_decision_offers(
     "/report",
     response_model=DecisionReportResponse,
     summary="Generate a deterministic accepted-school decision report",
+    dependencies=[Depends(RateLimit("decision"))],
 )
 def build_decision_report(
     request: DecisionReportRequest,

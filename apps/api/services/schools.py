@@ -11,6 +11,7 @@ from schemas.schools import (
     SearchResponse,
 )
 from services.cache import CacheService, NullCacheBackend
+from ingestion.college_data import REPORTING_YEARS
 
 
 PROFILE_COMPLETENESS_FIELDS = (
@@ -93,6 +94,7 @@ class SchoolService:
                 repayment_rate=self._to_float(row["repayment_rate"]),
                 outcome_percentiles=None,
             ),
+            reporting_years=dict(REPORTING_YEARS),
             campus_life=SchoolProfileCampusLife(
                 sports=row["sports_division"],
                 greek_life=self._to_float(row["greek_life_rate"]),

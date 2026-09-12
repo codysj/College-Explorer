@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
+from core.rate_limit import RateLimit, require_analytics_token
 from repositories.analytics import AnalyticsRepository
 from schemas.analytics import AnalyticsEventCreate, AnalyticsEventResponse, AnalyticsSummaryResponse
 from services.analytics import AnalyticsService
@@ -17,6 +18,7 @@ def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
     "/events",
     response_model=AnalyticsEventResponse,
     summary="Log a privacy-safe analytics event",
+    dependencies=[Depends(RateLimit("analytics_events", limit=120))],
 )
 def log_analytics_event(
     request: AnalyticsEventCreate,
@@ -29,6 +31,7 @@ def log_analytics_event(
     "/summary",
     response_model=AnalyticsSummaryResponse,
     summary="Return internal analytics and ranking evaluation summary",
+    dependencies=[Depends(require_analytics_token), Depends(RateLimit("analytics_summary"))],
 )
 def analytics_summary(
     lookback_days: int = Query(default=90, ge=1, le=365),

@@ -9,6 +9,7 @@ from schemas.sensitivity import SensitivityRequest, SensitivityResponse
 from services.analytics import AnalyticsService
 from services.cache import CacheService
 from services.sensitivity import SensitivityService
+from core.rate_limit import RateLimit
 
 router = APIRouter(tags=["sensitivity"])
 
@@ -24,6 +25,7 @@ def get_sensitivity_service(
     "/sensitivity",
     response_model=SensitivityResponse,
     summary="Analyze deterministic ranking sensitivity to preference weights",
+    dependencies=[Depends(RateLimit("sensitivity"))],
 )
 def analyze_sensitivity(
     request: SensitivityRequest,

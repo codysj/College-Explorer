@@ -9,12 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchAnalyticsSummary } from "@/lib/analytics";
+import { fetchAnalyticsSummary, loadAnalyticsToken, saveAnalyticsToken } from "@/lib/analytics";
+import { ApiClientError } from "@/lib/api-client";
 import type { AnalyticsCountRow, AnalyticsRateRow, AnalyticsSummaryResponse } from "@/types/api";
+import { humanize } from "@/lib/utils";
 
 export function AnalyticsDashboard() {
   const [summary, setSummary] = useState<AnalyticsSummaryResponse | null>(null);
-  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error" | "unauthorized">("loading");
+  const [token, setToken] = useState("");
 
   function load() {
     setLoadState("loading");
@@ -23,12 +26,16 @@ export function AnalyticsDashboard() {
         setSummary(payload);
         setLoadState("ready");
       })
-      .catch(() => {
-        setLoadState("error");
+      .catch((reason: unknown) => {
+        // 401 means the token is missing or wrong; 503 means the deployment has no token
+        // configured at all. Both are fixed by supplying a token, not by retrying.
+        const status = reason instanceof ApiClientError ? reason.status : 0;
+        setLoadState(status === 401 || status === 503 ? "unauthorized" : "error");
       });
   }
 
   useEffect(() => {
+    setToken(loadAnalyticsToken());
     load();
   }, []);
 
@@ -61,6 +68,37 @@ export function AnalyticsDashboard() {
           title="Analytics unavailable"
           description="Start the FastAPI backend or seed events, then refresh this internal dashboard."
         />
+      ) : null}
+      {loadState === "unauthorized" ? (
+        <div className="rounded-lg border border-border bg-white p-6 shadow-soft">
+          <h2 className="text-lg font-semibold text-foreground">Operator token required</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            This dashboard reports aggregate product behaviour, so the API requires the value of
+            its <code>ANALYTICS_API_TOKEN</code> outside development. It is stored in this browser
+            only and never bundled into the app.
+          </p>
+          <form
+            className="mt-4 flex flex-col gap-3 sm:flex-row"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveAnalyticsToken(token);
+              load();
+            }}
+          >
+            <label className="sr-only" htmlFor="analytics-token">
+              Analytics operator token
+            </label>
+            <input
+              id="analytics-token"
+              className="h-10 w-full max-w-sm rounded-md border border-border px-3 text-sm outline-none transition focus:border-primary"
+              type="password"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              placeholder="ANALYTICS_API_TOKEN"
+            />
+            <Button type="submit">Unlock dashboard</Button>
+          </form>
+        </div>
       ) : null}
       {loadState === "ready" && summary ? <DashboardBody summary={summary} /> : null}
     </main>
@@ -222,6 +260,3 @@ function rateToCount(row: AnalyticsRateRow): AnalyticsCountRow {
   return { key: row.bucket, count: Math.round(row.rate * 100) };
 }
 
-function humanize(value: string) {
-  return value.replaceAll("_", " ");
-}

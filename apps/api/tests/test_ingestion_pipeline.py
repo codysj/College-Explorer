@@ -107,3 +107,24 @@ def test_seed_output_is_deterministic(tmp_path: Path) -> None:
 
     assert first_output.read_text(encoding="utf-8") == second_output.read_text(encoding="utf-8")
     assert first_output.read_text(encoding="utf-8").splitlines()[0].endswith("refreshed_at")
+
+
+def test_every_state_and_dc_maps_to_a_region() -> None:
+    """Real data caught DC missing, which silently sent Georgetown to region "Unknown".
+
+    AK and HI were absent for the same reason. Territories are intentionally excluded:
+    none of the five regions describes them, so "Unknown" plus a validation warning is
+    the honest result.
+    """
+    from ingestion.college_data import STATE_REGIONS
+
+    states = {
+        "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL",
+        "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT",
+        "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI",
+        "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+    }
+
+    assert not states - set(STATE_REGIONS), "every state and DC needs a region"
+    assert STATE_REGIONS["DC"] == "South"
+    assert "PR" not in STATE_REGIONS, "territories stay unmapped on purpose"

@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError as PydanticValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
 
 from api.routes.health import router as health_router
 from api.routes.analytics import router as analytics_router
@@ -22,6 +23,17 @@ from core.errors import (
 from core.logging import configure_logging
 
 
+# ponytail: a middleware function, not a Starlette middleware class. Four static
+# headers do not need a class, and this is a JSON API - no CSP, because there is no
+# document to protect. Add one if the API ever serves HTML.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cross-Origin-Resource-Policy": "same-site",
+}
+
+
 def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
@@ -39,6 +51,13 @@ def create_app() -> FastAPI:
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["*"],
         )
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for header, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(header, value)
+        return response
+
     app.include_router(health_router)
     app.include_router(schools_router)
     app.include_router(rankings_router)

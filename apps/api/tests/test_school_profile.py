@@ -198,6 +198,7 @@ def test_response_structure_correctness(client: TestClient) -> None:
         "campus_life",
         "data_fields_missing",
         "data_confidence_score",
+        "reporting_years",
         "fit_score",
         "category_scores",
         "top_reasons",

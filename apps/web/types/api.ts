@@ -35,6 +35,11 @@ export type SchoolSearchResponse = {
   has_next: boolean;
 };
 
+/** POST /rankings returns the same cards as search, plus the ranking version used. */
+export type RankingResponse = SchoolSearchResponse & {
+  ranking_version: string;
+};
+
 export type SchoolProfile = {
   school_id: number;
   name: string;
@@ -75,6 +80,8 @@ export type SchoolProfile = {
   };
   data_fields_missing: string[];
   data_confidence_score: number;
+  /** Reporting year per metric group. Scorecard mixes vintages across groups. */
+  reporting_years?: Record<string, number>;
   fit_score: number | null;
   category_scores: RankingCategoryScores;
   top_reasons: string[];

@@ -138,9 +138,84 @@ The V2.1 ingestion pipeline writes product-ready school seed CSVs with the same 
 
 Validation warnings call out unavailable ranking inputs so missing data lowers confidence in downstream scoring instead of silently distorting fit scores.
 
+## V3.0 College Scorecard Snapshot
+
+Real data is fetched by `apps/api/scripts/fetch_scorecard.py`, which writes the raw CSV
+that `ingest_college_data.py` already consumes. Normalization, validation, and
+missing-value handling stay in the V2.1 pipeline.
+
+### Selection rule
+
+The sample is the union of two slices over the same base population, so it spans both
+selective private universities and large public ones — the cost and geography spread the
+ranking engine needs to produce meaningful tradeoffs.
+
+Base population (Scorecard filters, reproducible from these alone):
+
+| Filter | Value | Meaning |
+| --- | --- | --- |
+| `school.carnegie_basic` | `15,16,17` | Doctoral universities (the standard academic definition of "university") |
+| `school.ownership` | `1,2` | Public or private nonprofit; for-profit excluded |
+| `school.degrees_awarded.predominant` | `3` | Predominantly bachelor's-degree granting |
+| `school.operating` | `1` | Currently operating |
+
+Slices, 50 each by default (`--per-slice`):
+
+1. Most selective by latest reported admission rate, bounded to `0.01..0.40` so the slice
+   only contains institutions that actually report a rate.
+2. Largest by latest reported undergraduate enrollment.
+
+No magazine or commercial ranking is used anywhere in the selection. Slice ordering uses
+`latest.*` aliases because the API only permits sorting on those; that choice affects
+which schools enter the sample, never the value of any displayed metric.
+
+### Reporting years
+
+Scorecard's `latest.*` fields can describe different years, which the official
+documentation warns about. A probe across several institutions confirmed it: cost,
+admissions, completion, and enrollment carry data through 2023, while median earnings and
+median debt stop at 2020 and return null for later years.
+
+The fetcher therefore pins **one explicit year per metric group for every school**, rather
+than reading `latest.*`:
+
+| Metric group | Year | Fields |
+| --- | --- | --- |
+| Admissions | 2023 | `acceptance_rate` |
+| Student body | 2023 | `undergraduate_enrollment`, `retention_rate` |
+| Cost | 2023 | `tuition_in_state`, `tuition_out_state`, `net_price` |
+| Completion | 2023 | `graduation_rate` |
+| Earnings | 2020 | `median_earnings` |
+| Debt | 2020 | `debt_median` |
+| Repayment | latest | `repayment_rate` (no explicit-year series is published) |
+
+Because the year is uniform per group, a column never mixes vintages across schools, and
+the years are dataset-level facts rather than per-row columns. Each fetch writes them to
+`<output>.manifest.json` alongside the selection rule. There is deliberately no per-school
+fallback to an older year: a school missing 2023 cost stays missing rather than borrowing
+2022 and breaking comparability.
+
+### Fields Scorecard does not publish
+
+Left empty, because missing data is never zero:
+
+| Column | Why | Path to filling it |
+| --- | --- | --- |
+| `student_faculty_ratio` | Not in the Scorecard API | IPEDS |
+| `housing_available` | Not in the Scorecard API | IPEDS |
+| `sports_division` | Not in the Scorecard API | IPEDS or NCAA |
+| `greek_life_rate` | Not published by any official source | Remains unavailable |
+| `average_aid` | Scorecard publishes aid *rates*, not an average grant amount. Deriving it from sticker price minus net price would be wrong, not merely approximate: net price already nets living costs and covers aided students only. | IPEDS student financial aid survey |
+
+`top_majors` is derived from `latest.academics.program_percentage.*`, taking the three
+largest program shares. `culture_tags` is derived only from reported structural fields
+(ownership, locale, enrollment band, research classification) — no invented descriptors.
+
 ## Placeholder vs. Real Data
 
-- V1.2 school records are synthetic fixtures with plausible ranges.
+- V1.2 school records were synthetic fixtures with plausible ranges. V3.0 replaces them
+  with real College Scorecard data; the synthetic generator is retained only as a test
+  fixture so tests never depend on the network.
 - V2.1 includes small public-data-style fixtures for pipeline tests, not full official datasets.
 - User, preference, saved-school, comparison, and decision tables are structural placeholders until full authenticated account persistence and privacy controls are implemented. Event analytics are implemented for V2.8 local/demo evaluation, but production retention, consent, access control, and deletion workflows belong to V3.
 - Full official College Scorecard/IPEDS snapshot operations, similar-school discovery, and data freshness UI belong to later tasks.

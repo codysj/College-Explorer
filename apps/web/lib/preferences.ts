@@ -135,15 +135,3 @@ export function loadPreferenceProfile() {
     return null;
   }
 }
-
-export function buildSearchParamsFromPreference(profile: PreferenceProfile) {
-  const params = new URLSearchParams();
-  params.set("from_onboarding", "1");
-  if (profile.preferred_states[0] || profile.home_state) {
-    params.set("state", profile.preferred_states[0] ?? profile.home_state);
-  }
-  if (profile.preferred_settings[0]) params.set("setting", profile.preferred_settings[0]);
-  if (profile.preferred_school_types[0]) params.set("type", profile.preferred_school_types[0]);
-  if (profile.max_annual_cost !== null) params.set("max_net_price", String(profile.max_annual_cost));
-  return params;
-}

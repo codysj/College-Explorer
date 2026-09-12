@@ -1,5 +1,6 @@
-import type { SchoolSearchResponse } from "@/types/api";
+import type { RankingResponse, SchoolSearchResponse } from "@/types/api";
 import { apiFetch } from "@/lib/api-client";
+import { toApiPreferenceProfile, type PreferenceProfile } from "@/lib/preferences";
 
 export const PAGE_SIZE = 10;
 
@@ -15,9 +16,11 @@ export const sortOptions = [
   {
     value: "best_fit",
     label: "Best fit",
+    // Only used as the fallback ordering when no preference profile exists; with a
+    // profile, POST /rankings decides the order and these are ignored.
     apiSort: "name",
     direction: "asc",
-    note: "Uses name until ranking exists",
+    note: undefined,
   },
   {
     value: "lowest_cost",
@@ -125,4 +128,44 @@ export function buildApiSearchPath(params: URLSearchParams) {
 
 export function searchSchools(params: URLSearchParams, signal?: AbortSignal) {
   return apiFetch<SchoolSearchResponse>(buildApiSearchPath(params), { signal });
+}
+
+/**
+ * Ranked mode needs both halves: the "Best fit" sort and a stored preference profile.
+ * Without a profile there is nothing to rank against, so search stays structured.
+ */
+export function isRankedMode(filters: SearchFilters, profile: PreferenceProfile | null) {
+  return filters.sort === "best_fit" && profile !== null;
+}
+
+export function buildRankingBody(filters: SearchFilters, profile: PreferenceProfile) {
+  return {
+    preferences: toApiPreferenceProfile(profile),
+    // The ranking engine applies these as hard constraints before scoring, so the
+    // filter panel keeps working exactly as it does in structured search.
+    filters: {
+      ...(filters.query.trim() ? { query: filters.query.trim() } : {}),
+      ...(filters.state.trim() ? { state: filters.state.trim().toUpperCase() } : {}),
+      ...(filters.type ? { type: filters.type } : {}),
+      ...(filters.setting ? { setting: filters.setting } : {}),
+      ...(filters.maxNetPrice ? { max_net_price: Number(filters.maxNetPrice) } : {}),
+      ...(filters.minGraduationRate
+        ? { min_graduation_rate: Number(filters.minGraduationRate) / 100 }
+        : {}),
+      page: filters.page,
+      page_size: PAGE_SIZE,
+    },
+  };
+}
+
+export function rankSchools(
+  filters: SearchFilters,
+  profile: PreferenceProfile,
+  signal?: AbortSignal,
+) {
+  return apiFetch<RankingResponse>("/rankings", {
+    method: "POST",
+    body: buildRankingBody(filters, profile),
+    signal,
+  });
 }

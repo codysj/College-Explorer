@@ -9,6 +9,7 @@ from schemas.semantic_search import SemanticSearchRequest, SemanticSearchRespons
 from services.analytics import AnalyticsService
 from services.cache import CacheService
 from services.semantic_search import SemanticSearchService
+from core.rate_limit import RateLimit
 
 router = APIRouter(tags=["semantic-search"])
 
@@ -25,6 +26,7 @@ def get_semantic_search_service(
     response_model=SemanticSearchResponse,
     summary="Semantic school search",
     description="Retrieves semantic candidates, applies structured constraints, and re-ranks with deterministic scoring.",
+    dependencies=[Depends(RateLimit("semantic_search"))],
 )
 def semantic_search(
     request: SemanticSearchRequest,
