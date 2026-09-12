@@ -11,7 +11,7 @@ from schemas.schools import SchoolSearchResult
 from services.cache import CacheService, NullCacheBackend
 
 
-RANKING_VERSION = "v1.0"
+RANKING_VERSION = "v1.1"
 CATEGORY_KEYS = (
     "academic",
     "cost",
@@ -452,6 +452,24 @@ def normalize_weights(weights: dict[str, float] | None) -> dict[str, float]:
     return {key: normalized[key] / total for key in CATEGORY_KEYS}
 
 
+def tradeoff_code_for(key: str, category: CategoryScore) -> str:
+    """Choose between "this school falls short" and "we do not have the data".
+
+    A category's tradeoff_code is fixed before scoring, so a thinly-evidenced category
+    would assert a preference mismatch it cannot support. With real College Scorecard
+    data that was routine: campus has no published housing, athletics, or Greek-life
+    figures, and a home-state-only location preference carries just 0.35 confidence, so
+    schools were told they missed preferences the student never stated - and in
+    location's case, ones they actually matched.
+
+    Below the confidence floor the score is not meaningful either, so the honest
+    statement is about the data, not the school. Missing data is never a demerit.
+    """
+    if category.confidence < 0.5:
+        return f"{key}_data_limited"
+    return category.tradeoff_code
+
+
 def build_explanations(
     categories: dict[str, CategoryScore],
     weights: dict[str, float],
@@ -466,7 +484,7 @@ def build_explanations(
     )
     tradeoff_candidates = sorted(
         (
-            ((100 - categories[key].score) * weights[key], key, categories[key].tradeoff_code)
+            ((100 - categories[key].score) * weights[key], key, tradeoff_code_for(key, categories[key]))
             for key in CATEGORY_KEYS
             if weights[key] > 0 and (categories[key].confidence < 0.5 or categories[key].score < 68)
         ),

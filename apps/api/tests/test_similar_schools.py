@@ -5,6 +5,7 @@ from apps.api.main import app
 from schemas.similar_schools import SimilarSchoolsRequest
 from services.cache import CacheService
 from services.similar_schools import SimilarSchoolsService, row_matches_variant, score_candidate
+from services.ranking_service import RANKING_VERSION
 
 
 def make_row(**overrides: object) -> dict[str, object]:
@@ -159,7 +160,7 @@ def test_response_schema_validation_via_endpoint(client: TestClient) -> None:
     assert payload["variant_applied"] == "smaller"
     assert payload["results"][0]["similarity_score"] >= 0
     assert payload["results"][0]["variant_applied"] == "smaller"
-    assert payload["results"][0]["ranking_version"] == "v1.0"
+    assert payload["results"][0]["ranking_version"] == RANKING_VERSION
 
 
 def test_cache_avoids_recomputing_similar_schools() -> None:

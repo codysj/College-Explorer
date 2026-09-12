@@ -4,6 +4,7 @@ from api.routes.semantic_search import get_semantic_search_service
 from apps.api.main import app
 from schemas.preferences import Preference
 from schemas.semantic_search import SemanticSearchRequest
+from services.ranking_service import RANKING_VERSION
 from services.semantic_search import (
     EMBEDDING_TYPE,
     LOCAL_EMBEDDING_MODEL,
@@ -213,7 +214,7 @@ def test_semantic_endpoint_returns_ranked_response(client: TestClient) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["ranking_version"] == "v1.0"
+    assert payload["ranking_version"] == RANKING_VERSION
     assert payload["embedding_model"] == LOCAL_EMBEDDING_MODEL
     assert payload["results"][0]["fit_score"] is not None
     assert payload["results"][0]["match_reasons"]

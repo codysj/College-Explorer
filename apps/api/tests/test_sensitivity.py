@@ -5,6 +5,7 @@ from apps.api.main import app
 from schemas.sensitivity import SensitivityRequest
 from services.sensitivity import SensitivityService
 from tests.test_ranking_service import make_row
+from services.ranking_service import RANKING_VERSION
 
 
 class FakeSensitivityRepository:
@@ -78,7 +79,7 @@ def sensitivity_payload() -> dict[str, object]:
 def test_sensitivity_reports_ranking_movement_and_drivers() -> None:
     response = make_service().analyze(SensitivityRequest.model_validate(sensitivity_payload()))
 
-    assert response.ranking_version == "v1.0"
+    assert response.ranking_version == RANKING_VERSION
     assert response.baseline_results
     assert len(response.scenarios) == 2
     assert any(item.rank_delta != 0 for scenario in response.scenarios for item in scenario.results)
@@ -143,6 +144,6 @@ def test_sensitivity_endpoint_returns_schema(client: TestClient) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["ranking_version"] == "v1.0"
+    assert payload["ranking_version"] == RANKING_VERSION
     assert payload["scenarios"][0]["results"][0]["school_id"]
     assert "stable_choice_definition" in payload

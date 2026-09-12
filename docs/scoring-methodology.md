@@ -4,9 +4,34 @@ V1.9 implements a deterministic ranking engine in the FastAPI backend. Scores, r
 
 ## Version
 
-The initial ranking version is `v1.0`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
+The current ranking version is `v1.1`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
 
 Ranking cache keys include this version. A future ranking formula change must bump the version so cached responses from older deterministic scoring logic cannot be reused.
+
+### v1.1 (2026-09-12)
+
+Explanation-only change; scores, weights, and ordering are identical to `v1.0`.
+
+`build_explanations()` surfaces a category as a tradeoff when its confidence is below
+0.5 **or** its score is below 68. Because each category's `tradeoff_code` is fixed before
+scoring, a thinly-evidenced category asserted a preference mismatch it could not support.
+Real College Scorecard data made this routine:
+
+- Campus emitted `campus_preference_not_matched` on 65 of 92 schools even when the student
+  stated no campus preference, because Scorecard publishes no housing, athletics, or
+  Greek-life figures and the category falls back to derived tags alone.
+- Worse, location emitted `location_preference_not_matched` for schools that *matched*. A
+  home state with no explicit `preferred_states` carries 0.35 confidence, so a California
+  school could score 90, earn the `location_home_state` reason, and be told it missed the
+  preference in the same response.
+
+Below the confidence floor the score is not meaningful either, so `tradeoff_code_for()`
+now returns `<category>_data_limited` for any category under 0.5 confidence, and the
+category's own tradeoff code only when there is enough data to support the claim. Missing
+data is never reported as a demerit.
+
+The version bump is required because cache keys embed it: without it, cached rankings
+would keep serving the old, misleading codes.
 
 ## Categories
 
@@ -241,6 +266,9 @@ Example reason and tradeoff codes include:
 - `career_priorities_less_visible`
 - `location_preferred_state`
 - `campus_preferred_setting`
+- `<category>_data_limited` for each category (`academic`, `cost`, `career`, `location`,
+  `campus`, `admissions_realism`) when confidence is below 0.5 - the evidence is too
+  thin to make a claim about the school
 - `admissions_meets_acceptance_comfort`
 - `admissions_below_acceptance_comfort`
 
