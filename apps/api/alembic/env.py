@@ -1,7 +1,9 @@
 from logging.config import fileConfig
 import os
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from db.base import Base
@@ -11,6 +13,12 @@ config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# The app reads .env through pydantic-settings, but alembic runs outside the app and
+# previously only honoured an exported DATABASE_URL. That made `alembic upgrade head`
+# silently fall back to the hardcoded URL in alembic.ini, so a .env pointing at a
+# different host or port was ignored. A real environment variable still wins.
+load_dotenv(Path(__file__).resolve().parents[3] / ".env", override=False)
 
 database_url = os.getenv("DATABASE_URL")
 if database_url:
