@@ -69,6 +69,7 @@ STATE_REGIONS = {
     "TX": "South",
     "VA": "South",
     "WV": "South",
+    "DC": "South",
     "IA": "Midwest",
     "IL": "Midwest",
     "IN": "Midwest",
@@ -91,8 +92,14 @@ STATE_REGIONS = {
     "OR": "West",
     "UT": "Mountain",
     "WA": "West",
+    "AK": "West",
+    "HI": "West",
     "WY": "Mountain",
 }
+
+# US territories (PR, GU, VI, AS, MP) are deliberately absent: none of the five regions
+# above describes them, and normalize_record() already falls back to "Unknown" with a
+# validation warning, which is more honest than filing Puerto Rico under "South".
 
 CONTROL_TYPES = {
     "1": "Public",

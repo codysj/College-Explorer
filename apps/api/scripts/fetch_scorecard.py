@@ -233,12 +233,27 @@ def to_raw_row(result: dict) -> dict[str, str]:
     return row
 
 
+# Public and private net price are alternatives, not independent columns: a public
+# school fills NPT4_PUB and a private one fills NPT4_PRIV, and the pipeline's pick()
+# takes whichever is present. Counting them separately makes both look half-empty.
+EITHER_OR_COLUMNS = {"NPT4_PUB": "NPT4_PRIV"}
+
+
 def fill_report(rows: list[dict[str, str]]) -> list[tuple[str, int]]:
     """Per-column count of populated values. Catches a wrong year pin immediately."""
-    return [
-        (column, sum(1 for row in rows if row.get(column, "").strip()))
-        for column in RAW_COLUMNS
-    ]
+    report = []
+    for column in RAW_COLUMNS:
+        partner = EITHER_OR_COLUMNS.get(column)
+        if column in EITHER_OR_COLUMNS.values():
+            continue
+        if partner:
+            count = sum(
+                1 for row in rows if row.get(column, "").strip() or row.get(partner, "").strip()
+            )
+            report.append((f"{column}/{partner}", count))
+        else:
+            report.append((column, sum(1 for row in rows if row.get(column, "").strip())))
+    return report
 
 
 def self_check() -> None:
@@ -295,7 +310,7 @@ def main() -> None:
     parser.add_argument("--per-slice", type=int, default=50, help="schools per selection slice (default 50)")
     parser.add_argument(
         "--output",
-        default="data/raw/public_college_snapshot.csv",
+        default="data/raw/college_snapshot.csv",
         help="raw CSV path consumed by ingest_college_data.py",
     )
     parser.add_argument("--timeout", type=int, default=60)
