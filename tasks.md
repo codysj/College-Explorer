@@ -71,13 +71,44 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 
 ## V3: Production Hardening and Portfolio Polish
 
-- [ ] V3.1 Authentication and account persistence
-- [ ] V3.2 Observability and performance dashboard
-- [ ] V3.3 Load testing and query optimization
-- [ ] V3.4 Admin data quality console
-- [ ] V3.5 Security and privacy hardening
-- [ ] V3.6 End-to-end test suite
-- [ ] V3.7 Portfolio/demo polish
+Reordered 2026-09-12 against an audit of the real repo state. Rationale, evidence, and
+scope decisions live in `docs/roadmap.md` — read it before starting any V3 task.
+
+### Phase 0 - Credibility (blocking, sequential)
+
+- [~] V3.0 Real data for the top ~100 US universities (College Scorecard + IPEDS, per-metric-group reporting years)
+  - Fetcher, selection rule, reporting-year pinning, and offline self-check are done.
+  - Blocked on an api.data.gov key: DEMO_KEY's hourly limit is exhausted. The fetch itself needs only 2 requests.
+- [x] V3.1 Connect preferences to ranked results in the UI
+- [~] V3.2 One end-to-end test covering onboarding -> ranked -> shortlist -> compare -> report
+  - `apps/web/tests/journey.spec.ts` crosses the whole journey with no seeded state, plus a
+    dead-end check that every stage offers a way forward. Runs in CI via the existing
+    `npm run test:e2e` step. The root `tests/e2e/` directory is vestigial and unwired:
+    playwright.config.ts points at `apps/web/tests`.
+  - Remaining: the ranking snapshot test over the real corpus, which needs V3.0 data first.
+
+### Phase 1 - Make it real and public
+
+- [ ] V3.3 Public deployment (Vercel + Fly/Render + Neon pgvector + Upstash)
+- [ ] V3.4 Shareable read-only decision report links
+- [x] V3.5 Lock exposed surfaces: gate `/analytics`, rate-limit expensive POST endpoints, CI dependency audit
+
+### Phase 2 - Engineering substance
+
+- [ ] V3.6 Retrieval evaluation: hash vs Postgres full-text vs sentence embeddings vs hybrid; constraints applied during retrieval
+- [ ] V3.7 Measured performance under load and failure (cold/warm/Redis-down, query plans, one real optimization)
+- [ ] V3.8 Trustworthy data refresh (API mode, schema-change detection, validation + anomaly diff, data-version cache invalidation)
+
+### Phase 3 - Optional depth
+
+- [ ] V3.9 Authentication and cross-device account persistence
+- [ ] V3.10 Preference learning from forced-choice comparisons
+- [ ] V3.11 Usefulness study with 5-8 real students or counselors
+- [ ] V3.12 Portfolio polish (reshoot GIFs with real data, demo script, honest limitations)
+
+Deprioritized with reasons in `docs/roadmap.md` section 3: admin data-quality console,
+observability dashboard and alerting, field-level provenance, collaborative comments and
+report versioning, formal threat model.
 
 ## Session Log
 
@@ -105,6 +136,83 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 - 2026-05-21: Completed V2.7 shareable decision report. Expanded the decision report contract, reused deterministic ranking/cost/sensitivity logic, added cost/value and sensitivity report sections, persisted report snapshots, added browser-local latest-report storage, built `/decision/report` printable briefing view, extended Playwright coverage, and updated docs.
 - 2026-05-21: Completed V2.8 analytics and ranking evaluation. Added privacy-safe event schemas, analytics repository/service/routes, endpoint and frontend instrumentation, internal analytics dashboard, ranking evaluation metrics for fit buckets/rank positions/reason codes/confidence/version usage, tests, and documentation of limitations.
 
+- 2026-09-12: Audited the repo against external feedback and rewrote the V3 plan into `docs/roadmap.md`. Three findings reordered it: `POST /rankings` is never called from `apps/web` so the preferences-to-ranked-results journey does not exist in the running app; all 50 seed schools are synthetic; and the semantic provider is a 64-bucket token hash rather than a learned embedding, making it strictly weaker than the already-installed Postgres full-text search. No code changed in this pass.
+
+- 2026-09-12: V3.1 complete. `/search` now calls `POST /rankings` when "Best fit" is selected and a
+  preference profile exists, so fit scores, reason codes, and tradeoffs render from the deterministic
+  engine instead of always being null. The display layer already supported this - `ScorePill` and the
+  reason lists were built in V1.7 and never received data - so the change was a fetch branch plus
+  copy fixes, not new UI. Also: removed the onboarding handoff that copied "preferred" values into URL
+  filters, because the search endpoint applies those as hard SQL filters while the ranking engine
+  treats the same values as soft inputs (`constraint_enabled()` is opt-in via `strict_*`), so the two
+  disagreed and the duplicate narrowing could empty the result set; deleted the dead
+  `buildSearchParamsFromPreference` and its never-read `from_onboarding` flag; de-duplicated
+  `humanize()` into `lib/utils.ts` instead of adding a third copy. New `ranked-search.spec.ts` covers
+  ranked mode and the no-profile fallback. 12 Playwright tests, typecheck, and lint all pass.
+  V3.0 remains blocked on an API key.
+
+- 2026-09-12: V3.2 journey test added. `journey.spec.ts` walks onboarding -> ranked results ->
+  shortlist -> dashboard statuses -> compare -> decision -> report while seeding no localStorage,
+  so each handoff has to be produced by the previous step; it also asserts the weights captured in
+  onboarding are what reach `POST /rankings`. A second test checks no stage is a dead end for a
+  student arriving with no state. Extracted the shared fixtures out of `saved-compare.spec.ts` into
+  `tests/fixtures.ts` rather than copying ~100 lines of mocks (that spec dropped from 269 to 129
+  lines). Raised the journey timeout to 180s: six dev-server routes compile on first hit and the
+  30s default is sized for single-page specs. 14 Playwright tests, typecheck, and lint pass.
+  CI needed no change - `npm run test:e2e` already runs the whole directory.
+
+- 2026-09-12: V3.5 complete. Added a Redis-backed fixed-window rate limiter on every
+  compute-heavy POST endpoint plus both analytics routes, gated `GET /analytics/summary`
+  behind `ANALYTICS_API_TOKEN` (open in development, 503 when unset in a deployed
+  environment so it fails closed, constant-time token compare), added four security headers,
+  and added `npm audit`/`pip-audit` gates to CI. Reused the existing cache abstraction by
+  adding an atomic `incr` to the backend protocol rather than opening a second Redis client;
+  the limiter fails open when Redis is down, which is a deliberate availability-over-
+  enforcement tradeoff documented in docs/api-contract.md. The `/analytics` page now prompts
+  the operator for the token and keeps it in localStorage instead of bundling a
+  `NEXT_PUBLIC_*` secret. Caught during testing: `from __future__ import annotations` in the
+  limiter module made FastAPI treat `request: Request` as a query parameter (a callable-class
+  dependency has no `__globals__` for resolving stringized annotations), which would have
+  422'd every rate-limited endpoint in production. 94 backend tests and 14 Playwright tests pass.
+
+## Planned Next Steps
+
+Recorded 2026-09-12. Ordered by dependency: each step unblocks the one after it.
+
+### 1. Land real data (V3.0) - IN PROGRESS, key now available
+- Run `fetch_scorecard.py` with `SCORECARD_API_KEY` from `.env`.
+- Run the existing V2.1 pipeline over the raw output to produce the seed CSV.
+- Load it, re-run `refresh_embeddings.py`, and spot-check several schools against
+  collegescorecard.ed.gov.
+- Expect missing-data rates to jump versus the synthetic seed. Re-tune the confidence
+  scoring if it now reads as uniformly low, and confirm the UI says "unavailable" rather
+  than scoring a school badly for a gap.
+- Surface the per-group reporting years next to compared metrics.
+
+### 2. Ranking snapshot test (finishes V3.2)
+- Deferred from V3.2 because it needs a real corpus. Pin the ranked order for a fixed
+  preference profile so a future data refresh cannot silently reorder results.
+
+### 3. Public deployment (V3.3)
+- Vercel (web), Fly.io or Render (API), Neon (Postgres + pgvector), Upstash (Redis).
+- Needs accounts from the operator; configuration is scriptable from there.
+- Set `ANALYTICS_API_TOKEN` and `APP_ENV=production` so the analytics gate closes.
+- Then replace the README's "no public deployment has been verified" line.
+
+### 4. Re-record demo media (part of V3.12, pulled forward)
+- The GIFs in `docs/media/` show synthetic schools. Cheap to redo once step 1 lands, and
+  it is the most visible flaw to anyone reviewing the repo.
+
+### 5. Retrieval comparison (V3.6) and load measurement (V3.7)
+- The two items that demonstrate engineering judgement rather than feature assembly.
+- Both need step 1 first: labeled queries need a real corpus, load numbers need real rows.
+
+### Deferred deliberately
+- IPEDS supplement for campus-life fields (student-faculty ratio, housing, athletics,
+  average aid). Until then the campus category is thin and `average_aid` is absent.
+- Vitest/RTL: not added. See the Stack note in CLAUDE.md.
+- Accounts, preference learning, usefulness study: Phase 3, unchanged.
+
 ## Next Recommended Task
 
-V3 Production Hardening and Portfolio Polish.
+V3.0 step 1 above: fetch and load the real College Scorecard snapshot.
