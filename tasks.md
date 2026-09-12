@@ -76,9 +76,13 @@ scope decisions live in `docs/roadmap.md` — read it before starting any V3 tas
 
 ### Phase 0 - Credibility (blocking, sequential)
 
-- [~] V3.0 Real data for the top ~100 US universities (College Scorecard + IPEDS, per-metric-group reporting years)
-  - Fetcher, selection rule, reporting-year pinning, and offline self-check are done.
-  - Blocked on an api.data.gov key: DEMO_KEY's hourly limit is exhausted. The fetch itself needs only 2 requests.
+- [~] V3.0 Real data for the top ~100 US universities
+  - Done: fetcher, documented selection rule, reporting years pinned per metric group and
+    surfaced in the profile UI, 92 real universities validated and written to the seed CSV.
+  - Remaining: load into Postgres and re-run `refresh_embeddings.py`. Blocked only because
+    Docker Desktop is not running locally; no code work left.
+  - Follow-up (not blocking): IPEDS supplement for student_faculty_ratio, housing,
+    sports_division, and average_aid, which Scorecard does not publish.
 - [x] V3.1 Connect preferences to ranked results in the UI
 - [~] V3.2 One end-to-end test covering onboarding -> ranked -> shortlist -> compare -> report
   - `apps/web/tests/journey.spec.ts` crosses the whole journey with no seeded state, plus a
@@ -179,15 +183,16 @@ report versioning, formal threat model.
 
 Recorded 2026-09-12. Ordered by dependency: each step unblocks the one after it.
 
-### 1. Land real data (V3.0) - IN PROGRESS, key now available
-- Run `fetch_scorecard.py` with `SCORECARD_API_KEY` from `.env`.
-- Run the existing V2.1 pipeline over the raw output to produce the seed CSV.
-- Load it, re-run `refresh_embeddings.py`, and spot-check several schools against
-  collegescorecard.ed.gov.
-- Expect missing-data rates to jump versus the synthetic seed. Re-tune the confidence
-  scoring if it now reads as uniformly low, and confirm the UI says "unavailable" rather
-  than scoring a school badly for a gap.
-- Surface the per-group reporting years next to compared metrics.
+### 1. Land real data (V3.0) - MOSTLY DONE
+- Done: fetched 92 universities, validated, seed CSV written, reporting years shown in the
+  profile UI. Spot-checked against collegescorecard.ed.gov (Caltech 3.14%, Harvard 3.45%,
+  Princeton net price $10,555, MIT 10-year earnings $143,372).
+- Remaining, needs Docker Desktop running:
+  `docker compose up -d postgres redis`, `alembic upgrade head`, `seed_database.py`,
+  then `refresh_embeddings.py`.
+- After loading, check the confidence scoring against real missing-data rates. Four schools
+  have genuinely unavailable ranking inputs; confirm the UI marks them unavailable rather
+  than scoring them badly for the gap.
 
 ### 2. Ranking snapshot test (finishes V3.2)
 - Deferred from V3.2 because it needs a real corpus. Pin the ranked order for a fixed
@@ -212,6 +217,17 @@ Recorded 2026-09-12. Ordered by dependency: each step unblocks the one after it.
   average aid). Until then the campus category is thin and `average_aid` is absent.
 - Vitest/RTL: not added. See the Stack note in CLAUDE.md.
 - Accounts, preference learning, usefulness study: Phase 3, unchanged.
+
+- 2026-09-12: V3.0 data landed. Fetched 92 real universities (union of the 50 most selective and
+  50 largest doctoral universities, 8 overlapping) and replaced the synthetic seed. Fill rates are
+  91/92 on net price, tuition, graduation, retention, earnings and repayment. Real data exposed two
+  bugs: DC was missing from `STATE_REGIONS`, so Georgetown normalized to region "Unknown" and lost
+  its location score (AK and HI were absent for the same reason - fixed the shared map and added a
+  coverage test), and the fetcher counted the public/private net-price columns separately, making
+  both look half-empty when they are alternatives. Reporting years now render on the Academics,
+  Cost, and Outcomes sections so a 2023 cost figure is not silently compared against 2020 earnings.
+  Confirmed the budget-as-soft-signal decision: no strict flags are set anywhere, so an over-budget
+  school ranks lower rather than disappearing. 86 backend and 14 Playwright tests pass.
 
 ## Next Recommended Task
 
