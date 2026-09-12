@@ -80,6 +80,8 @@ export type SchoolProfile = {
   };
   data_fields_missing: string[];
   data_confidence_score: number;
+  /** Reporting year per metric group. Scorecard mixes vintages across groups. */
+  reporting_years?: Record<string, number>;
   fit_score: number | null;
   category_scores: RankingCategoryScores;
   top_reasons: string[];

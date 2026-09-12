@@ -7,6 +7,19 @@ from pathlib import Path
 from typing import Iterable
 
 
+# Which reporting year each metric group comes from. Scorecard's `latest.*` aliases mix
+# vintages - cost and admissions run through 2023 while earnings and median debt stop at
+# 2020 - so the fetcher pins one explicit year per group for every school and the API
+# reports it alongside the numbers. Update this when re-fetching a newer snapshot.
+REPORTING_YEARS = {
+    "admissions": 2023,
+    "student": 2023,
+    "cost": 2023,
+    "completion": 2023,
+    "earnings": 2020,
+    "debt": 2020,
+}
+
 SEED_COLUMNS = [
     "unitid",
     "name",

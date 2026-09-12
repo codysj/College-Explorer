@@ -223,7 +223,7 @@ function FitSummary({ profile }: { profile: SchoolProfile }) {
 
 function AcademicsSection({ profile }: { profile: SchoolProfile }) {
   return (
-    <SectionCard icon={GraduationCap} title="Academics">
+    <SectionCard icon={GraduationCap} title="Academics" reportingYear={profile.reporting_years?.completion}>
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <TagPanel emptyText="Data unavailable for popular majors." items={profile.academics.popular_majors ?? []} title="Popular majors" />
         <MetricStack
@@ -240,7 +240,7 @@ function AcademicsSection({ profile }: { profile: SchoolProfile }) {
 
 function CostSection({ profile }: { profile: SchoolProfile }) {
   return (
-    <SectionCard icon={CircleDollarSign} title="Cost">
+    <SectionCard icon={CircleDollarSign} title="Cost" reportingYear={profile.reporting_years?.cost}>
       <div className="grid gap-4 md:grid-cols-2">
         <MetricStack
           metrics={[
@@ -262,7 +262,7 @@ function CostSection({ profile }: { profile: SchoolProfile }) {
 
 function OutcomesSection({ profile }: { profile: SchoolProfile }) {
   return (
-    <SectionCard icon={TrendingUp} title="Outcomes">
+    <SectionCard icon={TrendingUp} title="Outcomes" reportingYear={profile.reporting_years?.earnings}>
       <div className="grid gap-4 md:grid-cols-3">
         <MetricTile label="Median earnings" value={formatCurrency(profile.outcomes.median_earnings)} />
         <MetricTile label="Completion rate" value={formatPercent(profile.outcomes.completion_rate)} />
@@ -482,17 +482,26 @@ function SectionCard({
   children,
   icon: Icon,
   title,
+  reportingYear,
 }: {
   children: ReactNode;
   icon: LucideIcon;
   title: string;
+  reportingYear?: number;
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
-          {title}
+        <CardTitle className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+            {title}
+          </span>
+          {reportingYear ? (
+            <Badge variant="muted" title={`Reported for ${reportingYear}`}>
+              {reportingYear} data
+            </Badge>
+          ) : null}
         </CardTitle>
       </CardHeader>
       <CardContent>{children}</CardContent>

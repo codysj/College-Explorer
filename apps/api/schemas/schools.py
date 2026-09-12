@@ -85,6 +85,10 @@ class SchoolProfileResponse(BaseModel):
     campus_life: SchoolProfileCampusLife
     data_fields_missing: list[str] = Field(default_factory=list)
     data_confidence_score: float
+    # Which year each metric group describes. Scorecard mixes vintages, so a cost figure
+    # and an earnings figure on the same page are not from the same year and the UI has
+    # to say so rather than implying they are comparable.
+    reporting_years: dict[str, int] = Field(default_factory=dict)
     fit_score: float | None = None
     category_scores: dict[str, float] = Field(default_factory=dict)
     top_reasons: list[str] = Field(default_factory=list)

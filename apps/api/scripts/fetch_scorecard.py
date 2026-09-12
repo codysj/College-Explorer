@@ -30,25 +30,11 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-API_ROOT = "https://api.data.gov/ed/collegescorecard/v1/schools"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# Each metric group is pinned to ONE explicit year for every school, rather than using
-# Scorecard's `latest.*` aliases. Scorecard's own docs warn that "latest" fields can
-# describe different years, and a probe confirmed it: cost/admissions/completion carry
-# data through 2023 while earnings and median debt stop at 2020. Pinning a single year
-# per group means a column never mixes vintages across schools.
-#
-# ponytail: no per-school fallback to an older year. A school missing 2023 cost stays
-# missing rather than silently borrowing 2022 and breaking comparability. Add per-row
-# year columns first if you ever want that fallback.
-REPORTING_YEARS = {
-    "admissions": 2023,
-    "student": 2023,
-    "cost": 2023,
-    "completion": 2023,
-    "earnings": 2020,
-    "debt": 2020,
-}
+from ingestion.college_data import REPORTING_YEARS  # noqa: E402
+
+API_ROOT = "https://api.data.gov/ed/collegescorecard/v1/schools"
 
 # raw CSV column -> Scorecard API field path.
 FIELD_MAP = {
