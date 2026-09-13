@@ -76,20 +76,20 @@ scope decisions live in `docs/roadmap.md` — read it before starting any V3 tas
 
 ### Phase 0 - Credibility (blocking, sequential)
 
-- [~] V3.0 Real data for the top ~100 US universities
-  - Done: fetcher, documented selection rule, reporting years pinned per metric group and
-    surfaced in the profile UI, 92 real universities validated and written to the seed CSV.
-  - Remaining: load into Postgres and re-run `refresh_embeddings.py`. Blocked only because
-    Docker Desktop is not running locally; no code work left.
-  - Follow-up (not blocking): IPEDS supplement for student_faculty_ratio, housing,
-    sports_division, and average_aid, which Scorecard does not publish.
+- [x] V3.0 Real data for the top ~100 US universities
+  - 92 universities from College Scorecard, with the four fields Scorecard does not publish
+    (student-faculty ratio, on-campus housing, athletics division, grant aid) filled from
+    IPEDS. Every metric group is pinned to one reporting year, shown on the profile.
+  - Selection excludes online-only institutions. Data version `scorecard-2023.2`.
+  - Local database: re-run `seed_database.py --reset` and `refresh_embeddings.py` whenever
+    Docker Desktop is up after a seed change. That is an environment step, not open work.
 - [x] V3.1 Connect preferences to ranked results in the UI
-- [~] V3.2 One end-to-end test covering onboarding -> ranked -> shortlist -> compare -> report
+- [x] V3.2 One end-to-end test covering onboarding -> ranked -> shortlist -> compare -> report
   - `apps/web/tests/journey.spec.ts` crosses the whole journey with no seeded state, plus a
     dead-end check that every stage offers a way forward. Runs in CI via the existing
     `npm run test:e2e` step. The root `tests/e2e/` directory is vestigial and unwired:
     playwright.config.ts points at `apps/web/tests`.
-  - Remaining: the ranking snapshot test over the real corpus, which needs V3.0 data first.
+  - `apps/api/tests/test_ranking_snapshot.py` pins ranked order against the real corpus.
 
 ### Phase 1 - Make it real and public
 
@@ -179,45 +179,6 @@ report versioning, formal threat model.
   dependency has no `__globals__` for resolving stringized annotations), which would have
   422'd every rate-limited endpoint in production. 94 backend tests and 14 Playwright tests pass.
 
-## Planned Next Steps
-
-Recorded 2026-09-12. Ordered by dependency: each step unblocks the one after it.
-
-### 1. Land real data (V3.0) - MOSTLY DONE
-- Done: fetched 92 universities, validated, seed CSV written, reporting years shown in the
-  profile UI. Spot-checked against collegescorecard.ed.gov (Caltech 3.14%, Harvard 3.45%,
-  Princeton net price $10,555, MIT 10-year earnings $143,372).
-- Remaining, needs Docker Desktop running:
-  `docker compose up -d postgres redis`, `alembic upgrade head`, `seed_database.py`,
-  then `refresh_embeddings.py`.
-- After loading, check the confidence scoring against real missing-data rates. Four schools
-  have genuinely unavailable ranking inputs; confirm the UI marks them unavailable rather
-  than scoring them badly for the gap.
-
-### 2. Ranking snapshot test (finishes V3.2)
-- Deferred from V3.2 because it needs a real corpus. Pin the ranked order for a fixed
-  preference profile so a future data refresh cannot silently reorder results.
-
-### 3. Public deployment (V3.3)
-- Vercel (web), Fly.io or Render (API), Neon (Postgres + pgvector), Upstash (Redis).
-- Needs accounts from the operator; configuration is scriptable from there.
-- Set `ANALYTICS_API_TOKEN` and `APP_ENV=production` so the analytics gate closes.
-- Then replace the README's "no public deployment has been verified" line.
-
-### 4. Re-record demo media (part of V3.12, pulled forward)
-- The GIFs in `docs/media/` show synthetic schools. Cheap to redo once step 1 lands, and
-  it is the most visible flaw to anyone reviewing the repo.
-
-### 5. Retrieval comparison (V3.6) and load measurement (V3.7)
-- The two items that demonstrate engineering judgement rather than feature assembly.
-- Both need step 1 first: labeled queries need a real corpus, load numbers need real rows.
-
-### Deferred deliberately
-- IPEDS supplement for campus-life fields (student-faculty ratio, housing, athletics,
-  average aid). Until then the campus category is thin and `average_aid` is absent.
-- Vitest/RTL: not added. See the Stack note in CLAUDE.md.
-- Accounts, preference learning, usefulness study: Phase 3, unchanged.
-
 - 2026-09-12: V3.0 data landed. Fetched 92 real universities (union of the 50 most selective and
   50 largest doctoral universities, 8 overlapping) and replaced the synthetic seed. Fill rates are
   91/92 on net price, tuition, graduation, retention, earnings and repayment. Real data exposed two
@@ -229,6 +190,74 @@ Recorded 2026-09-12. Ordered by dependency: each step unblocks the one after it.
   Confirmed the budget-as-soft-signal decision: no strict flags are set anywhere, so an over-budget
   school ranks lower rather than disappearing. 86 backend and 14 Playwright tests pass.
 
+- 2026-09-12: Loaded the real snapshot into local Postgres and verified the stack end to end:
+  search returns 92 schools, profiles carry reporting years, and rankings return real reason
+  codes. Fixed on the way: `alembic upgrade head` ignored `.env` because `env.py` only honoured
+  an exported `DATABASE_URL`; a native Windows PostgreSQL service owns port 5432, so the
+  container publishes 5433 locally; and the first load kept the 50 synthetic rows beside the
+  real ones until reseeded with the existing `--reset` flag.
+
+- 2026-09-12: Ranking snapshot test added, finishing V3.2, and RANKING_VERSION moved to v1.1.
+  Building the snapshot exposed that `build_explanations()` reported thin evidence as a
+  preference mismatch: campus claimed `campus_preference_not_matched` on 65 of 92 schools with
+  no campus preference stated, and location told home-state schools they had missed the
+  location preference while also awarding them `location_home_state`. `tradeoff_code_for()`
+  now reports `<category>_data_limited` below 0.5 confidence. Scores and order were unchanged.
+  Also stopped four tests hardcoding "v1.0" where they meant the current version.
+
+- 2026-09-12: IPEDS supplement. Student-faculty ratio (2024, 92/92), on-campus housing (2023,
+  92/92), athletics division from EADA (2021, 91/92), and grant aid (2021, 92/92) now come from
+  the Urban Institute Education Data API, replacing four columns that were empty for every
+  school. Online-only institutions are excluded: ASU Digital Immersion had entered on headcount
+  alone and UT Rio Grande Valley replaced it, cutting validation warnings from four to two.
+  Added retries for transient network failures after a single read timeout killed a refresh.
+  Campus preferences now separate schools: a student asking for athletics and residential life
+  previously scored every school 0 on campus, and now 82 score 100 and 10 score 65. The
+  earnings-focused snapshot reordered in its lower half; no scoring rule changed, so
+  RANKING_VERSION stays v1.1. 96 backend and 14 Playwright tests pass. Not yet reloaded into
+  local Postgres because Docker Desktop was stopped.
+
+## Planned Next Steps
+
+Updated 2026-09-12. Ordered by dependency.
+
+### 1. Retrieval comparison (V3.6) - next
+- Label ~30 realistic queries against the real corpus with relevant schools, before any
+  retrieval code, so the labels cannot be tuned to a method.
+- Compare four arms: the current 64-bucket hash, Postgres full-text, sentence embeddings,
+  and hybrid lexical plus vector feeding the existing deterministic re-rank.
+- Apply hard constraints during retrieval rather than filtering the survivors, so a tight
+  filter cannot empty the result set.
+- Report precision@10, empty-result rate, constraint adherence, and p95 latency per arm,
+  including the arms that lose. Keep the simplest arm that wins.
+- Needs Docker running for the full-text arm, and a decision on the embedding model (a
+  local model versus a hosted API).
+
+### 2. Measured performance (V3.7)
+- A repeatable workload over the four heaviest endpoints; cold-cache, warm-cache, and
+  Redis-down scenarios; committed query plans; one optimization with before and after
+  numbers. Needs Docker running.
+
+### 3. Public deployment (V3.3)
+- Vercel (web), Fly.io or Render (API), Neon (Postgres + pgvector), Upstash (Redis).
+- Needs accounts from the operator; configuration is scriptable from there.
+- Set `ANALYTICS_API_TOKEN` and `APP_ENV=production` so the analytics gate closes.
+
+### 4. Re-record demo media (V3.12)
+- The GIFs in `docs/media/` still show synthetic schools.
+
+### Open questions for the operator
+- The "most selective" slice ranks on admission rate alone, which admits small schools with
+  low reported rates: Mississippi Christian University (about 2,500 undergraduates, latest
+  reported rate 29%). Tightening the rule would change the corpus, so it stays as documented.
+- Penn State has no 2021 EADA record, so athletics-minded profiles score it like a Division
+  III school. Treating unknown athletics as neutral is a scoring change needing a version bump.
+
+### Deferred deliberately
+- Vitest/RTL: not added. See the Stack note in CLAUDE.md.
+- Accounts, preference learning, usefulness study: Phase 3, unchanged.
+
 ## Next Recommended Task
 
-V3.0 step 1 above: fetch and load the real College Scorecard snapshot.
+V3.6 retrieval comparison, starting with the labeled query set, which needs neither Docker
+nor an embedding-model decision.
