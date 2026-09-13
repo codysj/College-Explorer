@@ -27,7 +27,9 @@ SEED_PATH = Path(__file__).resolve().parents[3] / "data" / "seed" / "schools_see
 # reviewed against new scoring, not carried forward unexamined.
 # v1.1 reviewed: explanation output only - thin categories report <category>_data_limited
 # instead of claiming a preference mismatch. Scores and order are byte-identical to v1.0.
-SNAPSHOT_RANKING_VERSION = "v1.1"
+# v1.2 reviewed: semantic search now orders its final page by query relevance, with fit
+# breaking ties. The deterministic engine pinned here is unchanged, so these orders are too.
+SNAPSHOT_RANKING_VERSION = "v1.2"
 
 
 class SeedRepository:

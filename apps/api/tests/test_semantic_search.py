@@ -3,14 +3,18 @@ from fastapi.testclient import TestClient
 from api.routes.semantic_search import get_semantic_search_service
 from apps.api.main import app
 from schemas.preferences import Preference
+from schemas.schools import SearchRequest
 from schemas.semantic_search import SemanticSearchRequest
 from services.ranking_service import RANKING_VERSION
 from services.semantic_search import (
+    DIVISION_WORDS,
     EMBEDDING_TYPE,
     LOCAL_EMBEDDING_MODEL,
+    STATE_NAMES,
     LocalHashEmbeddingProvider,
     SemanticSearchService,
     build_search_document,
+    row_matches_filters,
 )
 
 
@@ -54,8 +58,8 @@ class FakeSemanticRepository:
         self.vector_rows = vector_rows or []
         self.upserts: list[dict[str, object]] = []
 
-    def get_semantic_document_rows(self) -> list[dict[str, object]]:
-        return self.rows
+    def get_semantic_document_rows(self, filters: object = None) -> list[dict[str, object]]:
+        return [row for row in self.rows if filters is None or row_matches_filters(row, filters)]
 
     def upsert_school_embedding(
         self,
@@ -81,8 +85,10 @@ class FakeSemanticRepository:
         embedding_type: str,
         embedding_model: str,
         limit: int,
+        filters: object = None,
     ) -> list[dict[str, object]]:
-        return self.vector_rows[:limit]
+        eligible = [row for row in self.vector_rows if filters is None or row_matches_filters(row, filters)]
+        return eligible[:limit]
 
     def get_ranking_candidate_rows(self, filters: object) -> list[dict[str, object]]:
         return self.rows
@@ -96,14 +102,30 @@ def make_service(
 
 
 def test_search_document_generation_includes_structured_fields() -> None:
-    document = build_search_document(make_row())
+    row = make_row()
+    document = build_search_document(row)
 
     assert document.school_id == 1
     assert "Bayview Technical University" in document.text
     assert "Data Science" in document.text
-    assert "net price 24400" in document.text
-    assert "culture tags technical, urban, career-focused" in document.text
+    assert "technical, urban, career-focused" in document.text
     assert len(document.text_snapshot_hash) == 64
+
+
+def test_search_document_spells_out_codes_and_drops_shared_boilerplate() -> None:
+    """Document v3.0: codes become words, and nothing appears in every school's text.
+
+    The v2.2 labels ("in-state tuition", "cost value affordability:") and the source line
+    were identical across documents, so words like "in" and "cost" matched every school.
+    """
+    row = make_row()
+    text = build_search_document(row).text
+
+    assert STATE_NAMES[str(row["state"])] in text
+    assert DIVISION_WORDS[str(row["sports_division"])] in text
+    for shared_label in ("cost value affordability", "in-state tuition", "campus culture", "source attributes"):
+        assert shared_label not in text
+    assert str(row["net_price"]) not in text, "raw numbers are left to structured filters"
 
 
 def test_embedding_refresh_stores_versioned_metadata() -> None:
@@ -218,3 +240,55 @@ def test_semantic_endpoint_returns_ranked_response(client: TestClient) -> None:
     assert payload["embedding_model"] == LOCAL_EMBEDDING_MODEL
     assert payload["results"][0]["fit_score"] is not None
     assert payload["results"][0]["match_reasons"]
+
+
+def test_filters_apply_before_retrieval_so_matching_schools_are_not_lost() -> None:
+    """A filtered search must still find a match outside the nearest candidates overall.
+
+    Before RANKING_VERSION v1.2 the service took the nearest `candidate_limit` schools and
+    then filtered them, which returned nothing here.
+    """
+    nearby = [
+        make_row(school_id=index, name=f"California School {index}", state="CA", semantic_score=0.9 - index / 100)
+        for index in range(1, 6)
+    ]
+    oregon = make_row(school_id=99, name="Oregon School", state="OR", semantic_score=0.1)
+    service = make_service([*nearby, oregon], vector_rows=[*nearby, oregon])
+
+    response = service.search(
+        SemanticSearchRequest(query="data science schools", filters=SearchRequest(state="OR"), candidate_limit=3)
+    )
+
+    assert [result.school_id for result in response.results] == [99]
+
+
+def test_final_order_follows_relevance_with_fit_breaking_ties() -> None:
+    """Relevance leads; among equally relevant schools, the deterministic fit order decides."""
+    weaker_fit = make_row(
+        school_id=1,
+        name="Relevant But Weaker College",
+        graduation_rate=0.35,
+        retention_rate=0.5,
+        median_earnings=26000,
+        repayment_rate=0.3,
+        semantic_score=0.9,
+    )
+    stronger_fit = make_row(school_id=2, name="Relevant And Strong University", semantic_score=0.9)
+    best_fit_but_off_topic = make_row(
+        school_id=3,
+        name="Off Topic Institute",
+        graduation_rate=0.97,
+        retention_rate=0.98,
+        median_earnings=120000,
+        semantic_score=0.2,
+    )
+    rows = [weaker_fit, stronger_fit, best_fit_but_off_topic]
+    service = make_service(rows, vector_rows=rows)
+
+    response = service.search(SemanticSearchRequest(query="data science schools"))
+    fit = {result.school_id: result.fit_score for result in response.results}
+
+    assert fit[3] > fit[1], "fixture check: the off-topic school must have the better fit"
+    assert fit[2] > fit[1], "fixture check: the tie must be decided by fit"
+    assert [result.school_id for result in response.results] == [2, 1, 3]
+

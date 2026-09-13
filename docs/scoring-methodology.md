@@ -4,7 +4,7 @@ V1.9 implements a deterministic ranking engine in the FastAPI backend. Scores, r
 
 ## Version
 
-The current ranking version is `v1.1`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
+The current ranking version is `v1.2`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
 
 Ranking cache keys include this version. A future ranking formula change must bump the version so cached responses from older deterministic scoring logic cannot be reused.
 
@@ -55,6 +55,36 @@ The ranking snapshot was re-reviewed against the new data instead.
   Treating unknown athletics as neutral rather than a non-match would be a scoring change
   that needs a version bump; it is recorded as a follow-up rather than made silently.
 
+### v1.2 (2026-09-12): semantic search ordering
+
+The deterministic engine is unchanged: category formulas, weights, hard constraints,
+confidence, and reason codes are identical, and the ranking snapshot still passes. The
+version moves because `POST /semantic-search` orders its page differently, and its cache
+keys must not serve v1.1 responses.
+
+Measured offline against 35 labeled queries (`data/evaluation/`) at the production default
+candidate limit of 50:
+
+| Pipeline | End-to-end P@10 | Filtered queries returning nothing | Mean fit of page |
+| --- | ---: | ---: | ---: |
+| v1.1: v2.2 documents, filter after retrieval, fit order | 0.35 | 0 of 6 (5 of 6 at limit 10) | 81.5 |
+| v1.2: v3.0 documents, filter first, relevance order | 0.77 | 0 of 6 at every limit | 78.1 |
+
+Both rows use the production hash retriever. Three changes produce the difference:
+
+- Filters apply inside the candidate query, before the nearest-neighbour limit.
+- The page is ordered by query relevance, with the fit order breaking ties. Before, fit
+  alone ordered the page and the similarity score was display-only.
+- Search documents (v3.0) drop the labels and source line that every school shared,
+  spell out state names and athletics divisions, and omit raw numbers.
+
+This stays within the rule against replacing deterministic ranking: similarity is
+computed rather than generated, and `rank_rows()` still removes constraint violations and
+computes every fit score before anything is reordered. Page fit falls 3.4 points on
+average, the measured cost of respecting the query. Precision for synonym and
+numeric-only queries is inflated by state-name tie groups; see
+`data/evaluation/README.md`.
+
 ## Categories
 
 All category scores are normalized to a `0` to `100` scale. Missing data is not treated as zero. When a category has no usable data, the category receives a neutral score of `50.0` and `0.0` confidence so the uncertainty is visible separately from fit.
@@ -98,9 +128,16 @@ The overall `fit_score` is the weighted sum of category scores, rounded to two d
 
 ## Hybrid Semantic Search
 
-V2.2 semantic search does not change `RANKING_VERSION` or the deterministic scoring formulas. `POST /semantic-search` uses vector similarity only as candidate retrieval. After retrieval, the service applies structured filters and ranking hard constraints, then calls the existing deterministic ranking engine for final ordering, scores, confidence, reasons, and tradeoffs.
+`POST /semantic-search` combines retrieval with the deterministic engine. Since `RANKING_VERSION` v1.2:
 
-If stored embeddings are missing or pgvector is unavailable, semantic search uses a deterministic lexical fallback over the same generated school search documents. This fallback is stable for local development and tests and does not require paid API keys.
+1. Structured filters are applied inside the candidate query, before the candidate limit.
+2. Candidates are retrieved by vector similarity when embeddings exist, or by a deterministic lexical fallback over the same search documents when they do not.
+3. The ranking engine removes schools that violate hard constraints and computes fit scores, confidence, reasons, and tradeoffs, exactly as for `POST /rankings`.
+4. The page is ordered by query relevance, and the fit order breaks ties between equally relevant schools.
+
+Relevance decides order but never overrides a hard constraint or changes a score. Before v1.2 the page was ordered by fit alone and the similarity score was display-only, which discarded more than half of retrieval's precision in offline evaluation.
+
+The lexical fallback is stable for local development and tests and does not require paid API keys.
 
 Semantic match tags are separate from ranking reason codes. They explain retrieval alignment only and may include:
 
@@ -111,7 +148,7 @@ Semantic match tags are separate from ranking reason codes. They explain retriev
 - `outcomes_match`
 - `campus_culture_match`
 
-These tags do not alter `fit_score`, category scores, hard-constraint behavior, or final ranked order.
+These tags do not alter `fit_score`, category scores, or hard-constraint behavior.
 
 ## Similar-School Scoring
 

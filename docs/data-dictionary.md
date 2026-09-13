@@ -62,7 +62,7 @@ Current embedding type: `school_search_document`.
 
 Current local/test embedding model: `local-hash-embedding-v1`.
 
-The search document text is generated from structured school fields only: name, location, type/setting, majors/program tags, cost/value summaries, outcome summaries, campus/culture tags, and V2.1 source metadata. Generated vectors are not source-of-truth facts and should not be committed as large data files.
+The search document text (`DOCUMENT_VERSION` v3.0) is generated from structured school fields only: name, city, full state name, region, type and setting, top majors, culture tags, and the athletics division spelled out. It deliberately omits raw numbers and any label or source line that would repeat across every school, because shared text makes every document match the same query words. Changing the document changes `text_snapshot_hash`, so embeddings must be refreshed. Generated vectors are not source-of-truth facts and should not be committed as large data files.
 
 ### `users`
 

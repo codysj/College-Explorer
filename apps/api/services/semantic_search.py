@@ -4,7 +4,6 @@ import hashlib
 import math
 import re
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Iterable, Protocol
 
 from repositories.schools import SchoolRepository
@@ -17,7 +16,9 @@ from services.ranking_service import RANKING_VERSION, RankingService, RankedScho
 EMBEDDING_TYPE = "school_search_document"
 LOCAL_EMBEDDING_MODEL = "local-hash-embedding-v1"
 EMBEDDING_DIMENSIONS = 64
-DOCUMENT_VERSION = "v2.2"
+# v3.0 removes the section labels and source line that every document shared, spells out
+# coded values, and omits raw numbers. See build_search_document().
+DOCUMENT_VERSION = "v3.0"
 REASON_TAGS = (
     "major_match",
     "location_match",
@@ -26,6 +27,21 @@ REASON_TAGS = (
     "outcomes_match",
     "campus_culture_match",
 )
+
+STATE_NAMES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "District of Columbia",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois",
+    "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana",
+    "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
+    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
+    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York",
+    "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon",
+    "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota",
+    "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia",
+    "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+}
+DIVISION_WORDS = {"DI": "NCAA Division I", "DII": "NCAA Division II", "DIII": "NCAA Division III", "NAIA": "NAIA"}
 
 
 class EmbeddingProvider(Protocol):
@@ -98,6 +114,9 @@ class SemanticSearchService:
                 "embedding_type": EMBEDDING_TYPE,
                 "candidate_limit": request.candidate_limit,
                 "ranking_version": RANKING_VERSION,
+                # Documents feed both retrieval and embeddings, so a document change must not
+                # be served from results cached under the previous text.
+                "document_version": DOCUMENT_VERSION,
             },
         )
         cached = self.cache.get_model(cache_key, SemanticSearchResponse)
@@ -105,8 +124,7 @@ class SemanticSearchService:
             return cached
 
         rows, retrieval_mode = self._retrieve_candidates(request)
-        filtered_rows = [row for row in rows if row_matches_filters(row, request.filters)]
-        ranked_rows = self.ranking_service.rank_rows(filtered_rows, merged_preferences(request))
+        ranked_rows = order_by_relevance(self.ranking_service.rank_rows(rows, merged_preferences(request)))
         total_results = len(ranked_rows)
         start = (request.filters.page - 1) * request.filters.page_size
         end = start + request.filters.page_size
@@ -128,6 +146,9 @@ class SemanticSearchService:
         return response
 
     def _retrieve_candidates(self, request: SemanticSearchRequest) -> tuple[list[dict[str, object]], str]:
+        # Filters are applied by the repository before the candidate limit, on both paths.
+        # Filtering the nearest candidates afterwards emptied filtered searches whenever the
+        # matching schools were not among the nearest `candidate_limit` overall.
         query_vector = self.embedding_provider.embed(request.query)
         try:
             rows = self.repository.get_vector_candidate_rows(
@@ -135,30 +156,60 @@ class SemanticSearchService:
                 embedding_type=EMBEDDING_TYPE,
                 embedding_model=self.embedding_provider.model,
                 limit=request.candidate_limit,
+                filters=request.filters,
             )
         except Exception:
             rows = []
         if rows:
             return rows, "pgvector"
+        # ponytail: an empty vector result also routes here when the filters admit no school,
+        # so retrieval_mode can read "deterministic_fallback" on an empty page. Distinguishing
+        # that needs a second query; add it if the mode label ever drives behaviour.
         fallback_rows = lexical_fallback_rows(
-            self.repository.get_semantic_document_rows(),
+            self.repository.get_semantic_document_rows(filters=request.filters),
             request.query,
             request.candidate_limit,
         )
         return fallback_rows, "deterministic_fallback"
 
 
+def order_by_relevance(ranked: list[RankedSchool]) -> list[RankedSchool]:
+    """Relevance to the query first, with the deterministic fit order breaking ties.
+
+    rank_rows() has already removed schools that violate hard constraints and computed every
+    fit score, so this only reorders the survivors: it cannot override a constraint or change
+    a score. Until RANKING_VERSION v1.2 the page was pure fit order and the semantic score was
+    display-only, which an offline evaluation showed discarded more than half of retrieval's
+    precision (data/evaluation/results-variants.md).
+    """
+    return [
+        item
+        for _, item in sorted(
+            enumerate(ranked),
+            key=lambda pair: (-float(pair[1].row.get("semantic_score") or 0.0), pair[0]),
+        )
+    ]
+
+
 def build_search_document(row: dict[str, object]) -> SearchDocument:
+    """The text a school is retrieved by, for both embeddings and the lexical fallback.
+
+    Before v3.0 every document carried identical section labels ("majors programs:",
+    "in-state tuition", "cost value affordability:", "campus culture:") and a source line,
+    so query words such as programs, in, state, cost, or campus matched all schools equally.
+    States appeared only as abbreviations and athletics as codes such as DIII. Raw numbers
+    are left out: text retrieval cannot compare them, and structured filters already do.
+    """
     school_id = int(row["school_id"])
+    state = str(row.get("state") or "").upper()
+    division = row.get("sports_division")
     fields = [
-        f"name: {row.get('name')}",
-        f"location: {row.get('city')}, {row.get('state')} {row.get('region')}",
-        f"type setting: {row.get('type')} {row.get('setting')}",
-        f"majors programs: {join_values(row.get('top_majors'))}",
-        cost_summary(row),
-        outcome_summary(row),
-        campus_summary(row),
-        f"source attributes: {row.get('source_name')} {row.get('source_year')} {row.get('data_version')} {DOCUMENT_VERSION}",
+        str(row.get("name") or ""),
+        ", ".join(part for part in (str(row.get("city") or ""), STATE_NAMES.get(state, ""), str(row.get("region") or "")) if part),
+        " ".join(part for part in (str(row.get("type") or ""), str(row.get("setting") or "")) if part),
+        join_values(row.get("top_majors")),
+        join_values(row.get("culture_tags")),
+        DIVISION_WORDS.get(str(division), "") if division else "",
     ]
     text = "\n".join(field for field in fields if field.strip())
     return SearchDocument(
@@ -247,6 +298,12 @@ def build_match_reasons(row: dict[str, object], query: str) -> list[str]:
 
 
 def row_matches_filters(row: dict[str, object], filters: object) -> bool:
+    """In-memory mirror of SchoolRepository._apply_filters.
+
+    Production filters in SQL. This copy serves the offline retrieval evaluation and test
+    fakes, which have no database. One difference: region, type, and setting compare
+    case-insensitively here and exactly in SQL.
+    """
     for key in ("state", "region", "type", "setting"):
         expected = getattr(filters, key)
         if expected and str(row.get(key) or "").lower() != str(expected).lower():
@@ -292,53 +349,10 @@ def merged_preferences(request: SemanticSearchRequest) -> Preference:
     return request.preferences.model_copy(update={"constraints": constraints})
 
 
-def cost_summary(row: dict[str, object]) -> str:
-    values = []
-    for label, key in (
-        ("in-state tuition", "tuition_in_state"),
-        ("out-of-state tuition", "tuition_out_state"),
-        ("net price", "net_price"),
-        ("average aid", "average_aid"),
-        ("median debt", "debt_median"),
-    ):
-        if row.get(key) is not None:
-            values.append(f"{label} {row[key]}")
-    return "cost value affordability: " + ", ".join(values)
-
-
-def outcome_summary(row: dict[str, object]) -> str:
-    values = []
-    if row.get("graduation_rate") is not None:
-        values.append(f"graduation rate {rate_text(row['graduation_rate'])}")
-    if row.get("retention_rate") is not None:
-        values.append(f"retention rate {rate_text(row['retention_rate'])}")
-    if row.get("median_earnings") is not None:
-        values.append(f"median earnings {row['median_earnings']}")
-    if row.get("repayment_rate") is not None:
-        values.append(f"repayment rate {rate_text(row['repayment_rate'])}")
-    return "cost outcomes career value: " + ", ".join(values)
-
-
-def campus_summary(row: dict[str, object]) -> str:
-    values = [
-        f"housing {row.get('housing_available')}",
-        f"sports {row.get('sports_division')}",
-        f"greek life {rate_text(row.get('greek_life_rate'))}",
-        f"culture tags {join_values(row.get('culture_tags'))}",
-    ]
-    return "campus culture: " + ", ".join(value for value in values if not value.endswith("None"))
-
-
 def join_values(value: object) -> str:
     if isinstance(value, list | tuple | set):
         return ", ".join(str(item) for item in value)
     return str(value or "")
-
-
-def rate_text(value: object) -> str:
-    if isinstance(value, Decimal):
-        return f"{float(value):.2f}"
-    return str(value)
 
 
 def tokenize(text: str) -> list[str]:

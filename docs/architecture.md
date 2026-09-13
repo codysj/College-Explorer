@@ -106,19 +106,20 @@ Profile responses keep missing values as `null`, list missing dot-paths in `data
 - `services/ranking_service.py` owns deterministic category scoring, normalized weights, hard constraints, confidence, reason codes, tradeoffs, and stable ordering.
 - `repositories/schools.py` fetches all V1 ranking inputs with one left-joined query across core, academic, cost, outcome, and campus-life tables.
 
-Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: they produce neutral category fit and lower confidence rather than zero-valued penalties. The ranking version is currently `v1.0`.
+Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: they produce neutral category fit and lower confidence rather than zero-valued penalties. The ranking version is currently `v1.2`.
 
-`POST /semantic-search` adds V2.2 hybrid retrieval:
+`POST /semantic-search` adds hybrid retrieval (V2.2, reworked in `RANKING_VERSION` v1.2):
 
-- `services/semantic_search.py` builds deterministic school search documents from school identity, location, type/setting, majors, costs, outcomes, campus/culture tags, and V2.1 source metadata.
+- `services/semantic_search.py` builds deterministic school search documents (`DOCUMENT_VERSION` v3.0) from name, city, full state name, region, type and setting, majors, culture tags, and the spelled-out athletics division. Raw numbers and any text that would repeat across every school are left out.
 - `scripts/refresh_embeddings.py` writes versioned embeddings to `school_embeddings` using the local deterministic provider unless a future provider is wired in.
-- The repository retrieves pgvector candidates from `school_embeddings` when vectors are available. If embeddings or pgvector are unavailable, the service uses a deterministic lexical fallback over the same generated documents.
-- Structured filters and ranking hard constraints are applied after retrieval. Vector similarity narrows candidates but does not override hard constraints or final deterministic ranking.
+- Structured filters are applied inside the candidate query, reusing `SchoolRepository._apply_filters`, before the nearest-neighbour limit. The repository retrieves pgvector candidates when vectors are available; otherwise the service uses a deterministic lexical fallback over documents filtered the same way.
+- The ranking engine removes hard-constraint violations and computes fit. The page is then ordered by query relevance, with the fit order breaking ties, so relevance never overrides a constraint or changes a score.
 - Responses expose semantic match reason tags such as `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
+- `scripts/evaluate_retrieval.py` measures retrieval offline against the labeled queries in `data/evaluation/`, and refuses to report unless its production configurations reproduce the real service.
 
 `GET /schools/{id}/similar` adds V2.3 profile-page discovery:
 
-- `services/similar_schools.py` retrieves semantically similar candidates with pgvector when embeddings exist and falls back to deterministic lexical similarity over V2.2 search documents.
+- `services/similar_schools.py` retrieves semantically similar candidates with pgvector when embeddings exist and falls back to deterministic lexical similarity over the same search documents.
 - The source school is always excluded, duplicate name/city/state candidates are removed, and structured constraints are applied before response assembly.
 - Variants are deterministic: `cheaper` biases and filters toward lower net price, `less_selective` toward higher acceptance rate, `smaller` toward lower enrollment, `stronger_outcomes` toward stronger graduation or earnings, and `closer_to_home` toward the supplied `home_state`.
 - The service reuses ranking code for fit score, top reasons, and tradeoffs, but final similarity also includes explicit source-school similarity and variant scores.
@@ -167,7 +168,7 @@ Cached resources:
 - Search responses use keys based on all search filters, pagination, sort, and direction. TTL: 300 seconds.
 - School profiles use keys based on `school_id`. TTL: 3600 seconds.
 - Ranking responses use keys based on the full ranking request plus the deterministic `RANKING_VERSION`. TTL: 300 seconds.
-- Semantic search responses use normalized query text, filters, preferences, embedding type/model, and `RANKING_VERSION`. TTL: 300 seconds.
+- Semantic search responses use normalized query text, filters, preferences, embedding type/model, candidate limit, `RANKING_VERSION`, and `DOCUMENT_VERSION`. TTL: 300 seconds.
 - Similar-school responses use source school id, variant request parameters, embedding type/model, and `RANKING_VERSION`. TTL: 300 seconds.
 - Sensitivity responses use the scenario request, normalized profile snapshot, and `RANKING_VERSION`. TTL: 300 seconds.
 

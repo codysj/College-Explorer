@@ -205,7 +205,7 @@ Hard constraints:
 
 ### `POST /semantic-search`
 
-Natural-language school search using hybrid retrieval. The endpoint retrieves vector candidates when embeddings exist, falls back to deterministic lexical matching when they do not, applies structured filters and hard constraints, then re-ranks candidates with the deterministic ranking engine. Vector similarity never overrides hard constraints or final structured ranking.
+Natural-language school search. Structured filters are applied first, inside the candidate query, so a filter cannot empty the page by excluding every nearest candidate. The endpoint then retrieves vector candidates when embeddings exist, or falls back to deterministic lexical matching when they do not. The deterministic ranking engine removes schools that violate hard constraints and scores the rest, and the page is ordered by query relevance with the fit order breaking ties (`RANKING_VERSION` v1.2). Relevance never overrides a hard constraint or changes a fit score. For ordering by preference fit alone, use `POST /rankings`.
 
 Request body:
 
@@ -240,8 +240,8 @@ Request fields:
 | Field | Type | Rules |
 | --- | --- | --- |
 | `query` | string | Required natural-language query, 3 to 240 chars. |
-| `filters` | object | Optional `SearchRequest` fields from `GET /schools/search`; page/page_size control the final ranked response page. |
-| `preferences` | object | Optional deterministic ranking preferences; hard constraints are honored after retrieval. |
+| `filters` | object | Optional `SearchRequest` fields from `GET /schools/search`, applied before candidate retrieval; page/page_size control the final response page. |
+| `preferences` | object | Optional deterministic ranking preferences. Hard constraints remove schools before ordering, and fit breaks ties between equally relevant schools. |
 | `candidate_limit` | integer | Optional vector/fallback candidate count, `1` to `200`, defaults to `50`. |
 
 Response `200`:
@@ -944,7 +944,7 @@ Decision reports read `acceptance_offers`, join candidate school rows through th
 
 Analytics event writes go through the analytics repository. Analytics aggregation reads recent events and computes V2.8 metrics in the analytics service. Route handlers do not write SQL directly.
 
-Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. The semantic service applies filters and hard constraints after candidate retrieval and delegates final ordering to the ranking service.
+Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. Structured filters go into the candidate query itself, through the same `_apply_filters` that structured search uses, before the nearest-neighbour `LIMIT`. The ranking service then applies hard constraints and computes fit, and the semantic service orders the page by relevance with fit breaking ties.
 
 Similar-school discovery uses the same generated embedding documents. It compares candidates to a source school, excludes the source school, applies variant constraints, deduplicates name/city/state matches, and returns a deterministic similarity score plus ranking reasons.
 
@@ -957,7 +957,7 @@ Caching is transparent to clients and does not change request or response contra
 | Search | Resource name, all filters, sort, direction, page, page size, `CACHE_KEY_VERSION` | 300 seconds |
 | School profile | Resource name, `school_id`, `CACHE_KEY_VERSION` | 3600 seconds |
 | Ranking | Resource name, full request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
-| Semantic search | Resource name, normalized query, filters, preferences, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Semantic search | Resource name, normalized query, filters, preferences, embedding type/model, candidate limit, `RANKING_VERSION`, `DOCUMENT_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Similar schools | Resource name, school id, variant request, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Sensitivity analysis | Resource name, request body, normalized profile snapshot, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 
