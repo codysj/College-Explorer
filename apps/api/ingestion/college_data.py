@@ -18,6 +18,13 @@ REPORTING_YEARS = {
     "completion": 2023,
     "earnings": 2020,
     "debt": 2020,
+    # IPEDS supplement, fetched through the Urban Institute Education Data API. Each is the
+    # latest year that source actually reports: 2024 housing is still the -1 "not reported"
+    # sentinel, and the aid and EADA athletics series both end in 2021.
+    "student_faculty": 2024,
+    "housing": 2023,
+    "athletics": 2021,
+    "aid": 2021,
 }
 
 SEED_COLUMNS = [

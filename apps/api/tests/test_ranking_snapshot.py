@@ -26,8 +26,8 @@ SEED_PATH = Path(__file__).resolve().parents[3] / "data" / "seed" / "schools_see
 
 # The scoring rules this snapshot was captured under. A bump means the order below was
 # reviewed against new scoring, not carried forward unexamined.
-# v1.1 reviewed: only a tradeoff code changed (campus_preference_not_matched ->
-# campus_data_unavailable). Scores and order are byte-identical to v1.0.
+# v1.1 reviewed: explanation output only - thin categories report <category>_data_limited
+# instead of claiming a preference mismatch. Scores and order are byte-identical to v1.0.
 SNAPSHOT_RANKING_VERSION = "v1.1"
 
 
@@ -140,18 +140,44 @@ def test_budget_conscious_engineer_ranking(seed_rows: list[dict[str, object]]) -
 def test_earnings_focused_ranking(seed_rows: list[dict[str, object]]) -> None:
     # A "likely" admissions strategy plus heavy career weighting surfaces large publics
     # with strong business earnings, not the most selective schools in the corpus.
+    # Reviewed after the IPEDS supplement (data version scorecard-2023.2): grant aid and
+    # student-faculty ratio now feed the cost and academic categories, which reorders the
+    # lower half of this list. Scoring rules are unchanged, so RANKING_VERSION is too.
     assert top_names(seed_rows, EARNINGS_FOCUSED) == [
         "Brigham Young University",
         "Virginia Polytechnic Institute and State University",
+        "University of Illinois Urbana-Champaign",
         "University of Maryland-College Park",
         "University of Minnesota-Twin Cities",
         "Texas A&M University-College Station",
-        "University of Illinois Urbana-Champaign",
-        "University of Colorado Boulder",
         "Rutgers University-New Brunswick",
-        "University of Wisconsin-Madison",
-        "Purdue University-Main Campus",
+        "University of Colorado Boulder",
+        "University of Notre Dame",
+        "Washington University in St Louis",
     ]
+
+
+def test_campus_preferences_discriminate_once_ipeds_fields_exist(
+    seed_rows: list[dict[str, object]],
+) -> None:
+    """A student who asks for athletics and residential life must see schools differ.
+
+    Scorecard publishes neither housing nor athletics, so before the IPEDS supplement this
+    profile gave every school in the corpus a campus score of 0 - missing data acting as a
+    zero. Division I and II schools now match athletics and Division III schools do not.
+    """
+    campus_minded = Preference(
+        intended_major="Computer Science",
+        weights={"academic": 0.2, "cost": 0.2, "career": 0.2, "campus": 0.3, "location": 0.1},
+        constraints={"campus_preferences": ["athletics", "residential"]},
+    )
+    ranked = RankingService(SeedRepository(seed_rows)).rank_rows(seed_rows, campus_minded)
+    campus_by_name = {str(item.row["name"]): item.category_scores["campus"] for item in ranked}
+
+    assert len(set(campus_by_name.values())) > 1, "campus scores must vary across schools"
+    assert (
+        campus_by_name["University of California-Berkeley"] > campus_by_name["Johns Hopkins University"]
+    ), "a Division I school must outscore a Division III school for a student who wants athletics"
 
 
 def test_ranking_is_deterministic(seed_rows: list[dict[str, object]]) -> None:

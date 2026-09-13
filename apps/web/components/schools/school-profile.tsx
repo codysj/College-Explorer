@@ -230,7 +230,7 @@ function AcademicsSection({ profile }: { profile: SchoolProfile }) {
           metrics={[
             ["Graduation rate", formatPercent(profile.academics.graduation_rate)],
             ["Retention rate", formatPercent(profile.academics.retention_rate)],
-            ["Student-faculty ratio", profile.academics.student_faculty_ratio === null ? "Data unavailable" : `${profile.academics.student_faculty_ratio}:1`],
+            [withYear("Student-faculty ratio", profile.reporting_years?.student_faculty), profile.academics.student_faculty_ratio === null ? "Data unavailable" : `${profile.academics.student_faculty_ratio}:1`],
           ]}
         />
       </div>
@@ -251,7 +251,7 @@ function CostSection({ profile }: { profile: SchoolProfile }) {
         />
         <MetricStack
           metrics={[
-            ["Average aid", formatCurrency(profile.cost.average_aid)],
+            [withYear("Average grant aid", profile.reporting_years?.aid), formatCurrency(profile.cost.average_aid)],
             ["Median debt", formatCurrency(profile.cost.debt_median)],
           ]}
         />
@@ -286,8 +286,8 @@ function CampusLifeSection({ profile }: { profile: SchoolProfile }) {
         <MetricStack
           metrics={[
             ["Setting", profile.setting],
-            ["Housing", formatBoolean(profile.campus_life.housing)],
-            ["Athletics", profile.campus_life.sports ?? "Data unavailable"],
+            [withYear("On-campus housing", profile.reporting_years?.housing), formatBoolean(profile.campus_life.housing)],
+            [withYear("Athletics", profile.reporting_years?.athletics), profile.campus_life.sports ?? "Data unavailable"],
             ["Greek life", formatPercent(profile.campus_life.greek_life)],
           ]}
         />
@@ -476,6 +476,15 @@ function CompareTraySummary({ selectedCount, selectionLimit }: { selectedCount: 
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * IPEDS fields come from different years than the section they sit in (athletics and aid
+ * are 2021, housing 2023, ratio 2024), so they carry their own year rather than
+ * inheriting the section badge.
+ */
+function withYear(label: string, year?: number) {
+  return year ? `${label} (${year})` : label;
 }
 
 function SectionCard({

@@ -158,6 +158,7 @@ Base population (Scorecard filters, reproducible from these alone):
 | `school.ownership` | `1,2` | Public or private nonprofit; for-profit excluded |
 | `school.degrees_awarded.predominant` | `3` | Predominantly bachelor's-degree granting |
 | `school.operating` | `1` | Currently operating |
+| `school.online_only` | not `1` | Online-only institutions excluded. Applied while paging, because the API rejects this column as a filter. ASU Digital Immersion had entered the largest-enrollment slice on headcount alone, with no housing, aid, or athletics record. |
 
 Slices, 50 each by default (`--per-slice`):
 
@@ -195,17 +196,52 @@ the years are dataset-level facts rather than per-row columns. Each fetch writes
 fallback to an older year: a school missing 2023 cost stays missing rather than borrowing
 2022 and breaking comparability.
 
-### Fields Scorecard does not publish
+### IPEDS supplement
 
-Left empty, because missing data is never zero:
+Scorecard does not publish four of the fields the ranking engine uses. The fetcher fills
+them from IPEDS through the Urban Institute Education Data API (`educationdata.urban.org`,
+no key required), each pinned to one explicit year:
 
-| Column | Why | Path to filling it |
-| --- | --- | --- |
-| `student_faculty_ratio` | Not in the Scorecard API | IPEDS |
-| `housing_available` | Not in the Scorecard API | IPEDS |
-| `sports_division` | Not in the Scorecard API | IPEDS or NCAA |
-| `greek_life_rate` | Not published by any official source | Remains unavailable |
-| `average_aid` | Scorecard publishes aid *rates*, not an average grant amount. Deriving it from sticker price minus net price would be wrong, not merely approximate: net price already nets living costs and covers aided students only. | IPEDS student financial aid survey |
+| Column | Source endpoint | Year | Notes |
+| --- | --- | --- | --- |
+| `student_faculty_ratio` | `ipeds/student-faculty-ratio` | 2024 | Students per instructional faculty member. |
+| `housing_available` | `ipeds/institutional-characteristics` (`oncampus_housing`) | 2023 | 2024 still carries the `-1` "not reported" code. |
+| `sports_division` | `eada/institutional-characteristics` (`ath_classification_name`) | 2021 | Latest EADA year; mapped to `DI`, `DII`, `DIII`, or `NAIA`. |
+| `average_aid` | `ipeds/sfa-ftft`, `type_of_aid = 3` | 2021 | Latest year; see below. |
+
+The years live in `REPORTING_YEARS` and appear on the school profile next to each field,
+because they differ from the year of the section each field sits in.
+
+**Average grant aid** is all grant aid - federal, state, local, and institutional - and
+excludes loans, since a loan does not reduce what a family pays. The population is
+first-time, full-time, degree-seeking undergraduates, and the amount is the average among
+students who *received* a grant, not across every student (Berkeley: $21,669 to the 52%
+who received one). Sticker price minus net price is still not used as a proxy: net price
+already nets living costs and covers aided students only, so that derivation would be wrong.
+
+**Sentinel codes.** IPEDS reports missing, not-applicable, and suppressed values as `-1`,
+`-2`, and `-3`. They become empty cells, never numbers. Housing is `true` only for `1` and
+`false` only for `0`; any other value is unknown rather than "no".
+
+**Athletics mapping.** EADA names such as "NCAA Division I-FBS" or "NCAA Division III
+without football" map to their division. A classification of "Other" is resolved from its
+free-text note, where the first division named is the primary one: Johns Hopkins files
+"NCAA DIII w/FB; M/W LAX DI" and maps to `DIII`. A note with no recognisable division stays
+empty rather than guessed.
+
+**Known gaps and vintage effects.**
+
+- Penn State (University Park) has no 2021 EADA record under its unitid, so its athletics
+  division is empty rather than filled in from general knowledge.
+- UC San Diego reads `DII` because it moved to Division I after the 2021 reporting year.
+  The year label on the profile is what makes that legible.
+- `greek_life_rate` is not published by any official source and remains unavailable.
+
+Transient failures - timeouts, dropped connections, and 5xx responses - are retried up to
+three times with a short backoff, because a single read timeout once killed a full refresh
+that succeeded moments later. Client errors are not retried. If an IPEDS request still
+fails, the whole fetch stops: writing Scorecard rows with silently empty IPEDS columns
+would look like a real data regression, so a partial snapshot is never produced.
 
 `top_majors` is derived from `latest.academics.program_percentage.*`, taking the three
 largest program shares. `culture_tags` is derived only from reported structural fields

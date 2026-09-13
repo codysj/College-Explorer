@@ -33,6 +33,28 @@ data is never reported as a demerit.
 The version bump is required because cache keys embed it: without it, cached rankings
 would keep serving the old, misleading codes.
 
+### Data inputs after the IPEDS supplement (2026-09-12)
+
+A data change, not a scoring change: `RANKING_VERSION` stays `v1.1` because no rule moved.
+The ranking snapshot was re-reviewed against the new data instead.
+
+- `student_faculty_ratio` now feeds the academic category for every school (weight 0.10)
+  and `average_aid` feeds the cost category (0.15, or 0.25 when aid importance is high).
+  For the budget-led snapshot profile, distinct cost scores across the 92 schools rose
+  from 38 to 57.
+- The campus category reads housing and athletics only when a student states campus
+  preferences. For those students it now discriminates: with "athletics" and "residential"
+  stated, 82 schools score 100 and 10 score 65. Before the supplement, that same profile
+  scored every school 0, because neither field existed - missing data acting as a zero.
+  Without stated campus preferences, campus is still a constant fallback and reports
+  `campus_data_limited`.
+- Housing does not discriminate on this corpus: all 92 doctoral universities report
+  on-campus housing.
+- Known gap: Penn State has no 2021 EADA record, so it scores as not matching an athletics
+  preference, the same as a Division III school, although it competes in Division I.
+  Treating unknown athletics as neutral rather than a non-match would be a scoring change
+  that needs a version bump; it is recorded as a follow-up rather than made silently.
+
 ## Categories
 
 All category scores are normalized to a `0` to `100` scale. Missing data is not treated as zero. When a category has no usable data, the category receives a neutral score of `50.0` and `0.0` confidence so the uncertainty is visible separately from fit.
