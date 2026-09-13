@@ -10,13 +10,15 @@ filters apply, and how the final page is ordered. Two groups anchor the comparis
   before v1.2    the pipeline that shipped until RANKING_VERSION v1.2, rebuilt from a frozen
                  copy of the v2.2 document format. Its numbers should reproduce
                  data/evaluation/results-variants.md, which is the check that the copy is faithful.
-  v1.2           the pipeline that ships now. It is compared against the real
-                 SemanticSearchService for every query and candidate limit, and the script
-                 refuses to report if they diverge.
+  v1.2           filter first and relevance order, with the hash embedding it retrieved by.
+  v1.3           the pipeline that ships now: v1.2 with Postgres full-text retrieval, which
+                 needs DATABASE_URL and a running database. It and the lexical fallback are
+                 compared against the real SemanticSearchService, through the real repository
+                 SQL, for every query and candidate limit; the script refuses to report if
+                 they diverge.
 
-Candidate retrievers are measured on the v1.2 pipeline so only the retriever varies:
-model2vec static embeddings (needs the model under data/models), Postgres full-text search
-(needs DATABASE_URL and a running database), and reciprocal-rank-fusion hybrids of them.
+Other retrievers are measured on the same pipeline so only the retriever varies: model2vec
+static embeddings (needs the model under data/models) and reciprocal-rank-fusion hybrids.
 
 Metrics:
   pool recall        share of relevant schools that survive retrieval and filtering
@@ -53,6 +55,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(API_ROOT))
 
 from ingestion.college_data import load_seed_rows  # noqa: E402
+from repositories.schools import SchoolRepository  # noqa: E402
 from schemas.preferences import Preference  # noqa: E402
 from schemas.schools import SearchRequest  # noqa: E402
 from schemas.semantic_search import SemanticSearchRequest  # noqa: E402
@@ -76,10 +79,6 @@ RRF_K = 60  # The conventional reciprocal-rank-fusion constant; not tuned to thi
 # Each hybrid fuses the rank order of its component retrievers.
 RRF_COMPONENTS = {"rrf": ("lexical", "model2vec"), "rrf_fts": ("fts", "model2vec")}
 
-FTS_SQL = """
-    SELECT t.id, ts_rank_cd(to_tsvector('english', t.doc), websearch_to_tsquery('english', %(query)s)) AS score
-    FROM unnest(%(ids)s::bigint[], %(docs)s::text[]) AS t(id, doc)
-"""
 
 
 def legacy_rate_text(value: object) -> str:
@@ -145,10 +144,10 @@ class Config:
 CONFIGS = [
     Config("before v1.2: hash", "hash", "legacy", "post", "fit"),
     Config("before v1.2: lexical fallback", "lexical", "legacy", "post", "fit"),
-    Config("v1.2 production: hash", "hash", "v3", "pre", "relevance", production=True),
-    Config("v1.2 production: lexical fallback", "lexical", "v3", "pre", "relevance", production=True),
+    Config("v1.2: hash", "hash", "v3", "pre", "relevance"),
+    Config("v1.3 production: full-text", "fts", "v3", "pre", "relevance", production=True),
+    Config("v1.3 production: lexical fallback", "lexical", "v3", "pre", "relevance", production=True),
     Config("model2vec potion-base-8M", "model2vec", "v3", "pre", "relevance"),
-    Config("postgres full-text", "fts", "v3", "pre", "relevance"),
     Config("hybrid: lexical + model2vec (RRF)", "rrf", "v3", "pre", "relevance"),
     Config("hybrid: full-text + model2vec (RRF)", "rrf_fts", "v3", "pre", "relevance"),
 ]
@@ -189,16 +188,18 @@ class Scorer:
             self.model_index = {school_id: index for index, school_id in enumerate(ids)}
             self.model_matrix = self.model.encode([self.texts["v3"][school_id] for school_id in ids])
 
-        self.db = None
+        # The production repository, so the full-text arm runs the SQL that ships.
+        self.fulltext: SchoolRepository | None = None
         if not database_url:
             self.unavailable["fts"] = "DATABASE_URL not set"
         else:
-            try:
-                import psycopg
+            from sqlalchemy import create_engine, text
+            from sqlalchemy.orm import Session
 
-                self.db = psycopg.connect(
-                    database_url.replace("postgresql+psycopg://", "postgresql://", 1), connect_timeout=3, autocommit=True
-                )
+            try:
+                session = Session(create_engine(database_url, connect_args={"connect_timeout": 3}))
+                session.execute(text("SELECT 1"))
+                self.fulltext = SchoolRepository(session)
             except Exception as error:  # noqa: BLE001 - any connection failure just skips the arm
                 self.unavailable["fts"] = f"database unavailable ({type(error).__name__})"
         for hybrid, components in RRF_COMPONENTS.items():
@@ -223,18 +224,10 @@ class Scorer:
             matrix = self.model_matrix[[self.model_index[s] for s in school_ids]]
             return {s: float(value) for s, value in zip(school_ids, matrix @ query_vector)}
         if retriever == "fts":
-            # Tokens are alphanumeric, so joining them with "or" cannot inject tsquery syntax,
-            # and the query, ids, and documents are all bound parameters.
-            with self.db.cursor() as cursor:
-                cursor.execute(
-                    FTS_SQL,
-                    {
-                        "query": " or ".join(tokenize(query)),
-                        "ids": school_ids,
-                        "docs": [self.texts[document][s] for s in school_ids],
-                    },
-                )
-                return {int(school_id): float(score) for school_id, score in cursor.fetchall()}
+            # Same query text as production's _retrieve_candidates().
+            return self.fulltext.get_fulltext_scores(
+                " or ".join(tokenize(query)), {s: self.texts[document][s] for s in school_ids}
+            )
         if retriever in RRF_COMPONENTS:
             fused = {s: 0.0 for s in school_ids}
             for component in RRF_COMPONENTS[retriever]:
@@ -249,36 +242,23 @@ class Scorer:
 class OfflineRepository:
     """Stands in for SchoolRepository so the real service runs without Postgres.
 
-    Filters apply before the candidate limit, as the SQL does, using row_matches_filters as the
-    in-memory mirror of _apply_filters. Vector retrieval reproduces the pgvector query: cosine
-    similarity, nearest first, school id as tiebreak. With no vectors it returns nothing, which
-    sends the service onto its lexical fallback. Rows are keyed by unitid rather than the
-    database serial id, so exact score ties could order differently than in Postgres.
+    Filters apply in memory through row_matches_filters, the mirror of _apply_filters. Full-text
+    scoring delegates to the real repository when a database is connected; without one it
+    raises, which sends the service onto its lexical fallback. Rows are keyed by unitid rather
+    than the database serial id, so exact score ties could order differently than in the API.
     """
 
-    def __init__(self, rows: list[dict[str, object]], vectors: dict[int, list[float]] | None) -> None:
+    def __init__(self, rows: list[dict[str, object]], fulltext: SchoolRepository | None) -> None:
         self.rows = rows
-        self.vectors = vectors
+        self.fulltext = fulltext
 
     def get_semantic_document_rows(self, filters: SearchRequest | None = None) -> list[dict[str, object]]:
         return [row for row in self.rows if filters is None or row_matches_filters(row, filters)]
 
-    def get_vector_candidate_rows(
-        self,
-        query_vector: list[float],
-        embedding_type: str,
-        embedding_model: str,
-        limit: int,
-        filters: SearchRequest | None = None,
-    ) -> list[dict[str, object]]:
-        if not self.vectors:
-            return []
-        scored = [
-            {**row, "semantic_score": cosine(query_vector, self.vectors[int(row["school_id"])])}
-            for row in self.get_semantic_document_rows(filters)
-        ]
-        scored.sort(key=lambda candidate: (-float(candidate["semantic_score"]), int(candidate["school_id"])))
-        return scored[:limit]
+    def get_fulltext_scores(self, tsquery_text: str, documents: dict[int, str]) -> dict[int, float]:
+        if self.fulltext is None:
+            raise RuntimeError("no database connected")
+        return self.fulltext.get_fulltext_scores(tsquery_text, documents)
 
 
 def size_band(enrollment: object) -> str | None:
@@ -344,13 +324,16 @@ def run_pipeline(
 
 
 def verify_production_equivalence(rows, scorer, ranking, rows_by_id, queries, limits) -> int:
-    """Fail loudly unless the v1.2 configurations reproduce the real service exactly."""
+    """Fail loudly unless the production configurations reproduce the real service exactly."""
     services = {
-        "hash": SemanticSearchService(OfflineRepository(rows, scorer.vectors["v3"]), embedding_provider=scorer.provider),
-        "lexical": SemanticSearchService(OfflineRepository(rows, None), embedding_provider=scorer.provider),
+        "fts": SemanticSearchService(OfflineRepository(rows, scorer.fulltext)),
+        "lexical": SemanticSearchService(OfflineRepository(rows, None)),
     }
     checked = 0
     for config in (c for c in CONFIGS if c.production):
+        if config.retriever in scorer.unavailable:
+            print(f"production equivalence NOT checked for {config.name!r}: {scorer.unavailable[config.retriever]}")
+            continue
         for limit in limits:
             for spec in queries:
                 request = build_request(spec, limit)

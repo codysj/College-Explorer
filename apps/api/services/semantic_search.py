@@ -16,6 +16,9 @@ from services.ranking_service import RANKING_VERSION, RankingService, RankedScho
 EMBEDDING_TYPE = "school_search_document"
 LOCAL_EMBEDDING_MODEL = "local-hash-embedding-v1"
 EMBEDDING_DIMENSIONS = 64
+# Semantic search retrievers, reported in the response's embedding_model field.
+FULLTEXT_RETRIEVER = "postgres-fulltext-english"
+LEXICAL_RETRIEVER = "lexical-token-overlap"
 # v3.0 removes the section labels and source line that every document shared, spells out
 # coded values, and omits raw numbers. See build_search_document().
 DOCUMENT_VERSION = "v3.0"
@@ -110,7 +113,7 @@ class SemanticSearchService:
                 "query": normalize_query(request.query),
                 "filters": request.filters.model_dump(mode="json"),
                 "preferences": request.preferences.model_dump(mode="json"),
-                "embedding_model": self.embedding_provider.model,
+                "retriever": FULLTEXT_RETRIEVER,
                 "embedding_type": EMBEDDING_TYPE,
                 "candidate_limit": request.candidate_limit,
                 "ranking_version": RANKING_VERSION,
@@ -123,14 +126,15 @@ class SemanticSearchService:
         if cached is not None:
             return cached
 
-        rows, retrieval_mode = self._retrieve_candidates(request)
+        rows, retrieval_mode, retriever = self._retrieve_candidates(request)
         ranked_rows = order_by_relevance(self.ranking_service.rank_rows(rows, merged_preferences(request)))
         total_results = len(ranked_rows)
         start = (request.filters.page - 1) * request.filters.page_size
         end = start + request.filters.page_size
         response = SemanticSearchResponse(
             ranking_version=RANKING_VERSION,
-            embedding_model=self.embedding_provider.model,
+            # Kept under its original name for API compatibility; it now names the retriever.
+            embedding_model=retriever,
             embedding_type=EMBEDDING_TYPE,
             retrieval_mode=retrieval_mode,
             results=[
@@ -145,32 +149,28 @@ class SemanticSearchService:
         self.cache.set_model(cache_key, response, self.cache.search_ttl_seconds)
         return response
 
-    def _retrieve_candidates(self, request: SemanticSearchRequest) -> tuple[list[dict[str, object]], str]:
-        # Filters are applied by the repository before the candidate limit, on both paths.
-        # Filtering the nearest candidates afterwards emptied filtered searches whenever the
-        # matching schools were not among the nearest `candidate_limit` overall.
-        query_vector = self.embedding_provider.embed(request.query)
+    def _retrieve_candidates(self, request: SemanticSearchRequest) -> tuple[list[dict[str, object]], str, str]:
+        """Scores every school the filters admit, then keeps the best `candidate_limit`.
+
+        Since RANKING_VERSION v1.3 retrieval is Postgres full-text search, which stems words and
+        drops stopwords. It replaced a 64-dimension hash embedding that the offline evaluation
+        scored at 0.77 end-to-end P@10 against 0.86 for full-text
+        (data/evaluation/results-v1.3.md). Filters come first, through the same
+        _apply_filters as structured search, so the limit never drops a matching school.
+        """
+        rows = self.repository.get_semantic_document_rows(filters=request.filters)
+        # Query terms are OR-ed so a school matching some of them still scores; tokenize() keeps
+        # only [a-z0-9] runs, so the text cannot carry websearch syntax such as quotes or "-".
+        tsquery_text = " or ".join(tokenize(request.query))
         try:
-            rows = self.repository.get_vector_candidate_rows(
-                query_vector=query_vector,
-                embedding_type=EMBEDDING_TYPE,
-                embedding_model=self.embedding_provider.model,
-                limit=request.candidate_limit,
-                filters=request.filters,
+            scores = self.repository.get_fulltext_scores(
+                tsquery_text, {int(row["school_id"]): build_search_document(row).text for row in rows}
             )
         except Exception:
-            rows = []
-        if rows:
-            return rows, "pgvector"
-        # ponytail: an empty vector result also routes here when the filters admit no school,
-        # so retrieval_mode can read "deterministic_fallback" on an empty page. Distinguishing
-        # that needs a second query; add it if the mode label ever drives behaviour.
-        fallback_rows = lexical_fallback_rows(
-            self.repository.get_semantic_document_rows(filters=request.filters),
-            request.query,
-            request.candidate_limit,
-        )
-        return fallback_rows, "deterministic_fallback"
+            return lexical_fallback_rows(rows, request.query, request.candidate_limit), "deterministic_fallback", LEXICAL_RETRIEVER
+        scored = [{**row, "semantic_score": scores[int(row["school_id"])]} for row in rows]
+        scored.sort(key=lambda row: (-float(row["semantic_score"]), int(row["school_id"])))
+        return scored[: request.candidate_limit], "fulltext", FULLTEXT_RETRIEVER
 
 
 def order_by_relevance(ranked: list[RankedSchool]) -> list[RankedSchool]:

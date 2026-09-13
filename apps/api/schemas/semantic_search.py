@@ -21,9 +21,9 @@ class SemanticSearchResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "ranking_version": "v1.0",
-                "embedding_model": "local-hash-embedding-v1",
+                "embedding_model": "postgres-fulltext-english",
                 "embedding_type": "school_search_document",
-                "retrieval_mode": "deterministic_fallback",
+                "retrieval_mode": "fulltext",
                 "results": [
                     {
                         "school_id": 2,

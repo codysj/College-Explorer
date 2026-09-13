@@ -26,7 +26,7 @@ Data dictionary: docs/data-dictionary.md
 - DB: `docker compose up -d postgres redis`
 - Migrations: `cd apps/api && alembic upgrade head`
 - Real data: `python apps/api/scripts/fetch_scorecard.py --api-key "$SCORECARD_API_KEY"`
-- Retrieval eval: `python apps/api/scripts/evaluate_retrieval.py --per-query` (offline, no Postgres; labels in `data/evaluation/retrieval_queries.json`)
+- Retrieval eval: `python apps/api/scripts/evaluate_retrieval.py --per-query` (in-process; the production full-text arm needs `DATABASE_URL` and Docker Postgres; labels in `data/evaluation/retrieval_queries.json`)
 
 Uses npm (package-lock.json) and a plain venv + requirements.txt. There is no pnpm
 lockfile, pyproject.toml, or uv.lock - do not use `pnpm` or `uv run`.

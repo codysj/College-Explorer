@@ -50,7 +50,7 @@ Key fields: `school_id`, `housing_available`, `sports_division`, `greek_life_rat
 
 ### `school_embeddings`
 
-V2.2 pgvector storage for generated school search document embeddings. Rows are metadata-versioned so embedding providers or document construction can change without silently reusing stale vectors.
+V2.2 pgvector storage for generated school search document embeddings, read by similar-school discovery. Semantic search stopped reading it in `RANKING_VERSION` v1.3 and scores the same documents with Postgres full-text search, which stores nothing. Rows are metadata-versioned so embedding providers or document construction can change without silently reusing stale vectors.
 
 Key fields: `school_id`, `embedding_type`, `embedding_model`, `vector`, `text_snapshot_hash`, `created_at`, `refreshed_at`.
 

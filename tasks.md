@@ -99,7 +99,7 @@ scope decisions live in `docs/roadmap.md` — read it before starting any V3 tas
 
 ### Phase 2 - Engineering substance
 
-- [~] V3.6 Retrieval evaluation: hash vs Postgres full-text vs sentence embeddings vs hybrid; constraints applied during retrieval
+- [x] V3.6 Retrieval evaluation: hash vs Postgres full-text vs sentence embeddings vs hybrid; constraints applied during retrieval
 - [ ] V3.7 Measured performance under load and failure (cold/warm/Redis-down, query plans, one real optimization)
 - [ ] V3.8 Trustworthy data refresh (API mode, schema-change detection, validation + anomaly diff, data-version cache invalidation)
 
@@ -243,21 +243,30 @@ report versioning, formal threat model.
   best component on single queries. model2vec, installed for evaluation only, is the only
   retriever above zero on world-knowledge queries. 99 backend tests pass.
 
+- 2026-09-12: V3.6 done. Semantic search retrieves with Postgres full-text (`RANKING_VERSION`
+  v1.3), the operator's pick from the measured options. The service builds documents for every
+  school the filters admit and `SchoolRepository.get_fulltext_scores` scores them in one
+  statement (`unnest` over bound arrays, `ts_rank_cd` normalized to `rank / (rank + 1)`), so no
+  migration, stored text, or refresh step was needed; the unused pgvector semantic query was
+  deleted. End-to-end P@10 at limit 50: 0.86, from 0.77 for the hash. The harness now scores
+  full-text through the real repository SQL and verifies 210 runs against the real service.
+  Measured on Windows + Docker: the full-text call takes about 4 ms on `127.0.0.1` and 44 ms on
+  `localhost`, where the ~16 KB statement crosses the IPv6 port proxy. `.env.example` and the
+  settings default now use `127.0.0.1`. Dropped the planned four-decimal tie rounding: it
+  guarded against pgvector float32 near-ties, and semantic search no longer reads pgvector.
+  Similar schools still uses hash embeddings. 100 backend tests pass.
+
 ## Planned Next Steps
 
 Updated 2026-09-12. Ordered by dependency.
 
-### 1. Retrieval comparison (V3.6) - retriever decision pending
-- Done: labeled queries, offline harness with a production-equivalence check, the v1.2
-  pipeline, and six retrievers compared (`data/evaluation/results-v1.2.md`).
-- Open decision: which retriever replaces the hash, the weakest measured arm. Full-text needs
-  search document text stored in the database with a generated `tsvector` and a GIN index.
-  model2vec needs the `vector(64)` column widened or a second column, plus the model in the
-  API image.
-- Fold into that change: treat relevance scores equal to four decimals as ties. pgvector stores
-  32-bit floats, so hash scores that differ by about 1e-9 can order differently live than in the
-  64-bit offline harness (verified on "small private colleges").
-- Similar schools has no labeled evaluation; add one before claiming its results improved.
+### 1. Retrieval follow-ups (after V3.6)
+- Similar schools still retrieves by hash embedding and has no labeled evaluation; add one
+  before changing or claiming anything about its results.
+- World-knowledge queries (Ivy League, HBCU, Bay Area) score 0 with full-text. model2vec is the
+  only measured arm above zero; revisit only if those queries matter to users.
+- Local `.env` files created before this change still say `localhost`; switch them to
+  `127.0.0.1` on Windows.
 
 ### 2. Measured performance (V3.7)
 - A repeatable workload over the four heaviest endpoints; cold-cache, warm-cache, and
@@ -266,7 +275,12 @@ Updated 2026-09-12. Ordered by dependency.
 - Known from V3.6: the IVFFlat index on `school_embeddings` was created on an empty table with
   16 lists, and at 92 rows the planner ignores it and sorts every row exactly. If a larger corpus
   makes the planner start using it, `ivfflat.probes = 1` over centroids trained on nothing would
-  silently return wrong neighbours. Rebuild or drop it as part of V3.7.
+  silently return wrong neighbours. Rebuild or drop it as part of V3.7. It now serves only
+  similar schools.
+- Known from V3.6: full-text sends every admitted document with each query. Measure it under
+  the V3.7 workload; the upgrade is a stored generated `tsvector` column with a GIN index.
+- Check whether `localhost` also slows other large statements or result sets before attributing
+  any V3.7 latency to the code.
 
 ### 3. Public deployment (V3.3)
 - Vercel (web), Fly.io or Render (API), Neon (Postgres + pgvector), Upstash (Redis).
@@ -289,5 +303,4 @@ Updated 2026-09-12. Ordered by dependency.
 
 ## Next Recommended Task
 
-V3.6 retrieval comparison, starting with the labeled query set, which needs neither Docker
-nor an embedding-model decision.
+V3.7 measured performance, now that retrieval is settled and Docker is running.

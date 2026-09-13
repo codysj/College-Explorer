@@ -4,7 +4,7 @@ V1.9 implements a deterministic ranking engine in the FastAPI backend. Scores, r
 
 ## Version
 
-The current ranking version is `v1.2`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
+The current ranking version is `v1.3`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
 
 Ranking cache keys include this version. A future ranking formula change must bump the version so cached responses from older deterministic scoring logic cannot be reused.
 
@@ -85,6 +85,32 @@ average, the measured cost of respecting the query. Precision for synonym and
 numeric-only queries is inflated by state-name tie groups; see
 `data/evaluation/README.md`.
 
+### v1.3 (2026-09-12): full-text retrieval for semantic search
+
+The deterministic engine is again unchanged and the ranking snapshot still passes. Semantic
+search now retrieves with Postgres full-text search instead of a 64-dimension hash embedding:
+the query's tokens joined with `or` into `websearch_to_tsquery('english', ...)`, scored by
+`ts_rank_cd` normalized to `rank / (rank + 1)`, over every school the filters admit. Full-text
+stems words and drops stopwords, which the hash could not.
+
+End-to-end P@10 at candidate limit 50 (`data/evaluation/results-v1.3.md`):
+
+| Retriever | End-to-end P@10 | Deployed |
+| --- | ---: | --- |
+| hash embedding (v1.2) | 0.77 | was |
+| Postgres full-text (v1.3) | 0.86 | yes |
+| model2vec potion-base-8M | 0.86 | no |
+| full-text + model2vec, reciprocal rank fusion | 0.89 | no |
+| token overlap + model2vec, reciprocal rank fusion | 0.91 | no |
+
+Full-text was chosen over the higher-scoring hybrids because it runs in the Postgres that is
+already deployed, adds no dependency or model to the API image, and the gap among the top
+rows comes down to one to three of 35 queries. Its known weaknesses are measured, not
+guessed: 0.00 on world-knowledge queries (Ivy League, HBCU) and 0.78 on synonyms. The
+harness checks that its full-text configuration reproduces the real service through the real
+repository SQL before it reports anything. Similar schools still uses hash embeddings; it
+has no labeled evaluation yet.
+
 ## Categories
 
 All category scores are normalized to a `0` to `100` scale. Missing data is not treated as zero. When a category has no usable data, the category receives a neutral score of `50.0` and `0.0` confidence so the uncertainty is visible separately from fit.
@@ -131,7 +157,7 @@ The overall `fit_score` is the weighted sum of category scores, rounded to two d
 `POST /semantic-search` combines retrieval with the deterministic engine. Since `RANKING_VERSION` v1.2:
 
 1. Structured filters are applied inside the candidate query, before the candidate limit.
-2. Candidates are retrieved by vector similarity when embeddings exist, or by a deterministic lexical fallback over the same search documents when they do not.
+2. Every admitted school is scored with Postgres full-text search (since v1.3), and the best `candidate_limit` are kept. If the full-text query fails, a deterministic token-overlap fallback scores the same documents.
 3. The ranking engine removes schools that violate hard constraints and computes fit scores, confidence, reasons, and tradeoffs, exactly as for `POST /rankings`.
 4. The page is ordered by query relevance, and the fit order breaks ties between equally relevant schools.
 

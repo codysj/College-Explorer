@@ -9,6 +9,8 @@ from services.ranking_service import RANKING_VERSION
 from services.semantic_search import (
     DIVISION_WORDS,
     EMBEDDING_TYPE,
+    FULLTEXT_RETRIEVER,
+    LEXICAL_RETRIEVER,
     LOCAL_EMBEDDING_MODEL,
     STATE_NAMES,
     LocalHashEmbeddingProvider,
@@ -53,9 +55,13 @@ def make_row(**overrides: object) -> dict[str, object]:
 
 
 class FakeSemanticRepository:
-    def __init__(self, rows: list[dict[str, object]], vector_rows: list[dict[str, object]] | None = None) -> None:
+    """Full-text scores come from each scored row's semantic_score; no scored rows means the
+    database is unavailable, which sends the service onto its lexical fallback."""
+
+    def __init__(self, rows: list[dict[str, object]], scored_rows: list[dict[str, object]] | None = None) -> None:
         self.rows = rows
-        self.vector_rows = vector_rows or []
+        self.scores = {int(row["school_id"]): float(row.get("semantic_score") or 0.0) for row in scored_rows or []}
+        self.tsquery_texts: list[str] = []
         self.upserts: list[dict[str, object]] = []
 
     def get_semantic_document_rows(self, filters: object = None) -> list[dict[str, object]]:
@@ -79,16 +85,11 @@ class FakeSemanticRepository:
             }
         )
 
-    def get_vector_candidate_rows(
-        self,
-        query_vector: list[float],
-        embedding_type: str,
-        embedding_model: str,
-        limit: int,
-        filters: object = None,
-    ) -> list[dict[str, object]]:
-        eligible = [row for row in self.vector_rows if filters is None or row_matches_filters(row, filters)]
-        return eligible[:limit]
+    def get_fulltext_scores(self, tsquery_text: str, documents: dict[int, str]) -> dict[int, float]:
+        if not self.scores:
+            raise RuntimeError("database unavailable")
+        self.tsquery_texts.append(tsquery_text)
+        return {school_id: self.scores.get(school_id, 0.0) for school_id in documents}
 
     def get_ranking_candidate_rows(self, filters: object) -> list[dict[str, object]]:
         return self.rows
@@ -96,9 +97,9 @@ class FakeSemanticRepository:
 
 def make_service(
     rows: list[dict[str, object]] | None = None,
-    vector_rows: list[dict[str, object]] | None = None,
+    scored_rows: list[dict[str, object]] | None = None,
 ) -> SemanticSearchService:
-    return SemanticSearchService(FakeSemanticRepository(rows or [make_row()], vector_rows))
+    return SemanticSearchService(FakeSemanticRepository(rows or [make_row()], scored_rows))
 
 
 def test_search_document_generation_includes_structured_fields() -> None:
@@ -164,7 +165,7 @@ def test_deterministic_fallback_when_embeddings_are_missing() -> None:
             make_row(school_id=1, name="Bayview Technical University"),
             make_row(school_id=2, name="Cedar Hill College", top_majors=["Biology"], setting="Rural"),
         ],
-        vector_rows=[],
+        scored_rows=[],
     )
 
     response = service.search(SemanticSearchRequest(query="affordable data science schools near cities"))
@@ -176,7 +177,7 @@ def test_deterministic_fallback_when_embeddings_are_missing() -> None:
 
 
 def test_fallback_still_returns_stable_results_for_sparse_queries() -> None:
-    service = make_service([make_row()], vector_rows=[])
+    service = make_service([make_row()], scored_rows=[])
 
     response = service.search(SemanticSearchRequest(query="schools like Berkeley but smaller"))
 
@@ -190,7 +191,7 @@ def test_hybrid_reranking_preserves_hard_constraints() -> None:
         make_row(school_id=1, name="Expensive Data Science Institute", net_price=60000, semantic_score=0.99),
         make_row(school_id=2, name="Affordable Data Science College", net_price=18000, semantic_score=0.75),
     ]
-    service = make_service(rows, vector_rows=rows)
+    service = make_service(rows, scored_rows=rows)
 
     response = service.search(
         SemanticSearchRequest(
@@ -207,10 +208,12 @@ def test_hybrid_reranking_preserves_hard_constraints() -> None:
 
 
 def test_explanation_reason_tags_are_returned() -> None:
-    service = make_service([make_row()], vector_rows=[make_row(semantic_score=0.9)])
+    service = make_service([make_row()], scored_rows=[make_row(semantic_score=0.9)])
 
     response = service.search(SemanticSearchRequest(query="urban data science career outcomes campus"))
 
+    assert response.retrieval_mode == "fulltext"
+    assert response.embedding_model == FULLTEXT_RETRIEVER
     assert response.results[0].match_reasons
     assert "major_match" in response.results[0].match_reasons
     assert "setting_match" in response.results[0].match_reasons
@@ -219,7 +222,7 @@ def test_explanation_reason_tags_are_returned() -> None:
 
 def test_semantic_endpoint_returns_ranked_response(client: TestClient) -> None:
     def override_semantic_service() -> SemanticSearchService:
-        return make_service([make_row()], vector_rows=[])
+        return make_service([make_row()], scored_rows=[])
 
     app.dependency_overrides[get_semantic_search_service] = override_semantic_service
     try:
@@ -237,7 +240,7 @@ def test_semantic_endpoint_returns_ranked_response(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["ranking_version"] == RANKING_VERSION
-    assert payload["embedding_model"] == LOCAL_EMBEDDING_MODEL
+    assert payload["embedding_model"] == LEXICAL_RETRIEVER
     assert payload["results"][0]["fit_score"] is not None
     assert payload["results"][0]["match_reasons"]
 
@@ -253,7 +256,7 @@ def test_filters_apply_before_retrieval_so_matching_schools_are_not_lost() -> No
         for index in range(1, 6)
     ]
     oregon = make_row(school_id=99, name="Oregon School", state="OR", semantic_score=0.1)
-    service = make_service([*nearby, oregon], vector_rows=[*nearby, oregon])
+    service = make_service([*nearby, oregon], scored_rows=[*nearby, oregon])
 
     response = service.search(
         SemanticSearchRequest(query="data science schools", filters=SearchRequest(state="OR"), candidate_limit=3)
@@ -283,7 +286,7 @@ def test_final_order_follows_relevance_with_fit_breaking_ties() -> None:
         semantic_score=0.2,
     )
     rows = [weaker_fit, stronger_fit, best_fit_but_off_topic]
-    service = make_service(rows, vector_rows=rows)
+    service = make_service(rows, scored_rows=rows)
 
     response = service.search(SemanticSearchRequest(query="data science schools"))
     fit = {result.school_id: result.fit_score for result in response.results}
@@ -292,3 +295,14 @@ def test_final_order_follows_relevance_with_fit_breaking_ties() -> None:
     assert fit[2] > fit[1], "fixture check: the tie must be decided by fit"
     assert [result.school_id for result in response.results] == [2, 1, 3]
 
+
+
+def test_fulltext_query_ors_plain_tokens_and_limit_keeps_best_scores() -> None:
+    """Terms are OR-ed so partial matches score, and punctuation cannot reach websearch syntax."""
+    rows = [make_row(school_id=index, name=f"School {index}", semantic_score=index / 10) for index in range(1, 6)]
+    service = make_service(rows, scored_rows=rows)
+
+    response = service.search(SemanticSearchRequest(query='"nursing" -programs, in Ohio!', candidate_limit=2))
+
+    assert service.repository.tsquery_texts == ["nursing or programs or in or ohio"]
+    assert [result.school_id for result in response.results] == [5, 4]

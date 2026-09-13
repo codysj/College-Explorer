@@ -1,7 +1,9 @@
 # Retrieval evaluation
 
 Offline evaluation of `POST /semantic-search` (V3.6). Everything here runs in-process against
-the committed seed; only the optional Postgres full-text arm needs a database.
+the committed seed, except the full-text arms, which need `DATABASE_URL` and a running database.
+Production is full-text since `RANKING_VERSION` v1.3, so without a database its equivalence
+check is skipped and says so.
 
 ```bash
 python apps/api/scripts/evaluate_retrieval.py --per-query
@@ -15,6 +17,7 @@ python apps/api/scripts/evaluate_retrieval.py --per-query
 | `results-baseline.md` | The pipeline as it first shipped, measured before anything changed. |
 | `results-variants.md` | Documents, filtering, and ordering variants that led to `RANKING_VERSION` v1.2. |
 | `results-v1.2.md` | The v1.2 pipeline, the pre-v1.2 pipeline for comparison, and candidate retrievers. |
+| `results-v1.3.md` | The shipped full-text pipeline, checked against the real service, beside the other retrievers. |
 
 ## How relevance is defined
 
@@ -36,8 +39,9 @@ Queries are grouped by the kind of gap they test:
 
 ## Integrity checks built into the harness
 
-- **Production equivalence.** The v1.2 configurations are run through the real
-  `SemanticSearchService` for every query and candidate limit. If the harness's pipeline and the
+- **Production equivalence.** The production configurations (full-text and its lexical fallback)
+  are run through the real `SemanticSearchService`, with full-text scored by the real repository
+  SQL, for every query and candidate limit. If the harness's pipeline and the
   service disagree on a single result, the script exits instead of reporting.
 - **A faithful baseline.** The pre-v1.2 configurations are rebuilt from a frozen copy of the v2.2
   document builder. Their numbers reproduce `results-variants.md` exactly.
@@ -71,4 +75,6 @@ understand those queries. Postgres full-text removes stopwords, which is one rea
 score is lower than plain token overlap.
 
 Latency is pipeline time in this process. For the full-text arm it includes a round trip to the
-local database. None of it is API latency.
+local database. None of it is API latency. On Windows with Docker, connect with `127.0.0.1`
+rather than `localhost`: sending the ~16 KB of documents over `localhost` measured about 44 ms
+per call against 4 ms on `127.0.0.1`, and the committed results use `127.0.0.1`.

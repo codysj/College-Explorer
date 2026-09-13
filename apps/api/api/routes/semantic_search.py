@@ -25,7 +25,10 @@ def get_semantic_search_service(
     "/semantic-search",
     response_model=SemanticSearchResponse,
     summary="Semantic school search",
-    description="Retrieves semantic candidates, applies structured constraints, and re-ranks with deterministic scoring.",
+    description=(
+        "Filters schools, retrieves the best matches with Postgres full-text search, applies hard "
+        "constraints and deterministic fit scoring, and orders by relevance with fit breaking ties."
+    ),
     dependencies=[Depends(RateLimit("semantic_search"))],
 )
 def semantic_search(

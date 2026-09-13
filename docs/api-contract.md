@@ -1,6 +1,6 @@
 # API Contract
 
-V2.8 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, pgvector-backed semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, cost/value calculation, sensitivity analysis, shareable decision reports, analytics/ranking evaluation, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison/report workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
+V2.8 implements process health, DB readiness, structured school search, full school profiles, deterministic rankings, Postgres full-text semantic search with deterministic fallback, similar-school discovery, acceptance decision mode, cost/value calculation, sensitivity analysis, shareable decision reports, analytics/ranking evaluation, Redis cache-aside for read-heavy API responses, CORS configuration for the browser frontend, a frontend-only local preference profile, and browser-local saved-school/comparison/report workflows. Backend preference persistence and authenticated saved schools/comparisons are not implemented yet.
 
 ## Implemented Endpoints
 
@@ -205,7 +205,7 @@ Hard constraints:
 
 ### `POST /semantic-search`
 
-Natural-language school search. Structured filters are applied first, inside the candidate query, so a filter cannot empty the page by excluding every nearest candidate. The endpoint then retrieves vector candidates when embeddings exist, or falls back to deterministic lexical matching when they do not. The deterministic ranking engine removes schools that violate hard constraints and scores the rest, and the page is ordered by query relevance with the fit order breaking ties (`RANKING_VERSION` v1.2). Relevance never overrides a hard constraint or changes a fit score. For ordering by preference fit alone, use `POST /rankings`.
+Natural-language school search. Structured filters are applied first, inside the candidate query, so a filter cannot empty the page by excluding every nearest candidate. The endpoint then scores every remaining school with Postgres full-text search (`RANKING_VERSION` v1.3) and keeps the best `candidate_limit`, falling back to deterministic token overlap if the full-text query fails. The deterministic ranking engine removes schools that violate hard constraints and scores the rest, and the page is ordered by query relevance with the fit order breaking ties. Relevance never overrides a hard constraint or changes a fit score. For ordering by preference fit alone, use `POST /rankings`.
 
 Request body:
 
@@ -242,16 +242,16 @@ Request fields:
 | `query` | string | Required natural-language query, 3 to 240 chars. |
 | `filters` | object | Optional `SearchRequest` fields from `GET /schools/search`, applied before candidate retrieval; page/page_size control the final response page. |
 | `preferences` | object | Optional deterministic ranking preferences. Hard constraints remove schools before ordering, and fit breaks ties between equally relevant schools. |
-| `candidate_limit` | integer | Optional vector/fallback candidate count, `1` to `200`, defaults to `50`. |
+| `candidate_limit` | integer | Optional count of best-matching schools passed to ranking, `1` to `200`, defaults to `50`. |
 
 Response `200`:
 
 ```json
 {
-  "ranking_version": "v1.0",
-  "embedding_model": "local-hash-embedding-v1",
+  "ranking_version": "v1.3",
+  "embedding_model": "postgres-fulltext-english",
   "embedding_type": "school_search_document",
-  "retrieval_mode": "deterministic_fallback",
+  "retrieval_mode": "fulltext",
   "results": [
     {
       "school_id": 2,
@@ -284,7 +284,7 @@ Response `200`:
 }
 ```
 
-`retrieval_mode` is `pgvector` when stored vectors are used and `deterministic_fallback` when embeddings are missing or unavailable. `match_reasons` may include `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
+`retrieval_mode` is `fulltext` normally and `deterministic_fallback` when the full-text query fails. `embedding_model` keeps its name for compatibility but reports the retriever: `postgres-fulltext-english` or `lexical-token-overlap`. `semantic_score` is in `[0, 1)`: `ts_rank_cd / (ts_rank_cd + 1)` for full-text, the share of query tokens found for the fallback. It orders results within one response and is not comparable across retrievers. `match_reasons` may include `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
 
 ### `GET /schools/{id}/similar`
 
@@ -944,7 +944,7 @@ Decision reports read `acceptance_offers`, join candidate school rows through th
 
 Analytics event writes go through the analytics repository. Analytics aggregation reads recent events and computes V2.8 metrics in the analytics service. Route handlers do not write SQL directly.
 
-Semantic search uses `school_embeddings` for pgvector retrieval when embeddings are present. Structured filters go into the candidate query itself, through the same `_apply_filters` that structured search uses, before the nearest-neighbour `LIMIT`. The ranking service then applies hard constraints and computes fit, and the semantic service orders the page by relevance with fit breaking ties.
+Semantic search reads school document rows through the same `_apply_filters` that structured search uses, builds each document in the service, and scores them in one parameterized statement (`SchoolRepository.get_fulltext_scores`: `unnest` over bound id and text arrays, `ts_rank_cd` against `websearch_to_tsquery('english', ...)`). Only then is `candidate_limit` applied. Documents are sent with each query, so there is no stored text to refresh; that cost is linear in corpus size and is the point at which to store a generated `tsvector` with a GIN index. The ranking service then applies hard constraints and computes fit, and the semantic service orders the page by relevance with fit breaking ties.
 
 Similar-school discovery uses the same generated embedding documents. It compares candidates to a source school, excludes the source school, applies variant constraints, deduplicates name/city/state matches, and returns a deterministic similarity score plus ranking reasons.
 
@@ -957,7 +957,7 @@ Caching is transparent to clients and does not change request or response contra
 | Search | Resource name, all filters, sort, direction, page, page size, `CACHE_KEY_VERSION` | 300 seconds |
 | School profile | Resource name, `school_id`, `CACHE_KEY_VERSION` | 3600 seconds |
 | Ranking | Resource name, full request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
-| Semantic search | Resource name, normalized query, filters, preferences, embedding type/model, candidate limit, `RANKING_VERSION`, `DOCUMENT_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Semantic search | Resource name, normalized query, filters, preferences, retriever, embedding type, candidate limit, `RANKING_VERSION`, `DOCUMENT_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Similar schools | Resource name, school id, variant request, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Sensitivity analysis | Resource name, request body, normalized profile snapshot, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 

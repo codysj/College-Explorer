@@ -11,7 +11,7 @@ from schemas.schools import SchoolSearchResult
 from services.cache import CacheService, NullCacheBackend
 
 
-RANKING_VERSION = "v1.2"
+RANKING_VERSION = "v1.3"
 CATEGORY_KEYS = (
     "academic",
     "cost",

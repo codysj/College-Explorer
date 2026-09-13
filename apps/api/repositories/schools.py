@@ -1,24 +1,14 @@
 from time import perf_counter
 
-from sqlalchemy import Float, Select, bindparam, cast, func, select, text
-from sqlalchemy.types import UserDefinedType
+from sqlalchemy import Select, func, select, text
 from sqlalchemy.orm import Session
 
 from core.logging import get_logger
-from models.school import School, SchoolAcademics, SchoolCampusLife, SchoolCosts, SchoolEmbedding, SchoolOutcomes
+from models.school import School, SchoolAcademics, SchoolCampusLife, SchoolCosts, SchoolOutcomes
 from repositories.base import BaseRepository
 from schemas.schools import SchoolSearchResult, SearchRequest
 
 logger = get_logger(__name__)
-
-
-class PgVector(UserDefinedType):
-    """Renders a bound parameter as CAST(:value AS vector) so pgvector operators apply."""
-
-    cache_ok = True
-
-    def get_col_spec(self, **kw: object) -> str:
-        return "vector"
 
 
 class SchoolRepository(BaseRepository[School]):
@@ -268,6 +258,27 @@ class SchoolRepository(BaseRepository[School]):
         rows = self.db.execute(query).mappings().all()
         return [dict(row) for row in rows]
 
+    def get_fulltext_scores(self, tsquery_text: str, documents: dict[int, str]) -> dict[int, float]:
+        """Postgres full-text relevance of each document to the query, in [0, 1).
+
+        Normalization 32 maps ts_rank_cd to rank / (rank + 1): the same order, bounded for display.
+        """
+        # ponytail: documents are sent with each query and parsed by to_tsvector per call, which
+        # is linear in corpus size and fine at a few hundred schools. Past that, store them in a
+        # table with a generated tsvector column and a GIN index.
+        statement = text(
+            """
+            SELECT t.school_id,
+                   ts_rank_cd(to_tsvector('english', t.document), websearch_to_tsquery('english', :query), 32) AS score
+            FROM unnest(CAST(:school_ids AS bigint[]), CAST(:documents AS text[])) AS t(school_id, document)
+            """
+        )
+        rows = self.db.execute(
+            statement,
+            {"query": tsquery_text, "school_ids": list(documents), "documents": list(documents.values())},
+        ).all()
+        return {int(school_id): float(score) for school_id, score in rows}
+
     def upsert_school_embedding(
         self,
         school_id: int,
@@ -301,66 +312,6 @@ class SchoolRepository(BaseRepository[School]):
                 "text_snapshot_hash": text_snapshot_hash,
             },
         )
-
-    def get_vector_candidate_rows(
-        self,
-        query_vector: list[float],
-        embedding_type: str,
-        embedding_model: str,
-        limit: int,
-        filters: SearchRequest | None = None,
-    ) -> list[dict[str, object]]:
-        vector_literal = "[" + ",".join(f"{value:.8f}" for value in query_vector) + "]"
-        distance = SchoolEmbedding.vector.op("<=>", return_type=Float)(
-            cast(bindparam("query_vector", vector_literal), PgVector())
-        )
-        query = (
-            select(
-                School.id.label("school_id"),
-                School.name,
-                School.city,
-                School.state,
-                School.region,
-                School.type,
-                School.setting,
-                School.undergraduate_enrollment.label("enrollment"),
-                School.acceptance_rate,
-                SchoolAcademics.top_majors,
-                SchoolAcademics.graduation_rate,
-                SchoolAcademics.retention_rate,
-                SchoolAcademics.student_faculty_ratio,
-                SchoolCosts.tuition_in_state,
-                SchoolCosts.tuition_out_state,
-                SchoolCosts.net_price,
-                SchoolCosts.average_aid,
-                SchoolCosts.debt_median,
-                SchoolOutcomes.median_earnings,
-                SchoolOutcomes.repayment_rate,
-                SchoolCampusLife.housing_available,
-                SchoolCampusLife.sports_division,
-                SchoolCampusLife.greek_life_rate,
-                SchoolCampusLife.culture_tags,
-                (1 - distance).label("semantic_score"),
-            )
-            .select_from(SchoolEmbedding)
-            .join(School, School.id == SchoolEmbedding.school_id)
-            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
-            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
-            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
-            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
-            .where(
-                SchoolEmbedding.embedding_type == embedding_type,
-                SchoolEmbedding.embedding_model == embedding_model,
-            )
-        )
-        if filters is not None:
-            # Filters apply inside the query, before the nearest-neighbour LIMIT. Filtering the
-            # nearest candidates afterwards emptied filtered searches whenever the matching
-            # schools were not among the nearest `limit` overall.
-            query = self._apply_filters(query, filters)
-        query = query.order_by(distance, School.id.asc()).limit(limit)
-        rows = self.db.execute(query).mappings().all()
-        return [dict(row) for row in rows]
 
     def get_similar_vector_candidate_rows(
         self,

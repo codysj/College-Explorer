@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     app_version: str = "0.3.0"
     debug: bool = False
     database_url: str = Field(
-        default="postgresql+psycopg://college:college@localhost:5432/college_exploration",
+        default="postgresql+psycopg://college:college@127.0.0.1:5432/college_exploration",
         validation_alias="DATABASE_URL",
     )
     redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")

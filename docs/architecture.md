@@ -7,7 +7,7 @@ This document captures the current V1 architecture for the College Exploration P
 - `apps/web`: Next.js frontend for onboarding, search, school profiles, comparison, cost/value estimates, sensitivity analysis, accepted-school decision workflows, printable decision reports, and internal analytics.
 - `apps/api`: FastAPI backend for typed REST endpoints, validation, search, ranking, comparison, cost/value calculation, sensitivity analysis, decision report generation, analytics, and data access.
 - PostgreSQL: canonical structured college data and user-owned decision state. The V1.2 schema exists under `apps/api/alembic`.
-- pgvector: V2.2 semantic school retrieval over generated structured school search documents.
+- pgvector: similar-school retrieval over generated school search documents. Semantic search moved to Postgres full-text in `RANKING_VERSION` v1.3.
 - Redis: cache-aside layer for repeated read-heavy search, profile, and ranking responses.
 - `data/raw`: raw source snapshots, usually large and not committed.
 - `data/processed`: cleaned local development data.
@@ -23,7 +23,7 @@ flowchart LR
     fastapi["FastAPI API<br/>apps/api"]
     postgres["PostgreSQL<br/>canonical structured data"]
     redis["Redis<br/>cache-aside"]
-    pgvector["pgvector<br/>semantic school search"]
+    pgvector["pgvector<br/>similar schools"]
     actions["GitHub Actions"]
     frontendHost["Vercel / equivalent"]
     apiHost["AWS App Runner / ECS Fargate"]
@@ -106,20 +106,20 @@ Profile responses keep missing values as `null`, list missing dot-paths in `data
 - `services/ranking_service.py` owns deterministic category scoring, normalized weights, hard constraints, confidence, reason codes, tradeoffs, and stable ordering.
 - `repositories/schools.py` fetches all V1 ranking inputs with one left-joined query across core, academic, cost, outcome, and campus-life tables.
 
-Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: they produce neutral category fit and lower confidence rather than zero-valued penalties. The ranking version is currently `v1.2`.
+Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: they produce neutral category fit and lower confidence rather than zero-valued penalties. The ranking version is currently `v1.3`.
 
-`POST /semantic-search` adds hybrid retrieval (V2.2, reworked in `RANKING_VERSION` v1.2):
+`POST /semantic-search` adds hybrid retrieval (V2.2, reworked in `RANKING_VERSION` v1.2 and v1.3):
 
 - `services/semantic_search.py` builds deterministic school search documents (`DOCUMENT_VERSION` v3.0) from name, city, full state name, region, type and setting, majors, culture tags, and the spelled-out athletics division. Raw numbers and any text that would repeat across every school are left out.
-- `scripts/refresh_embeddings.py` writes versioned embeddings to `school_embeddings` using the local deterministic provider unless a future provider is wired in.
-- Structured filters are applied inside the candidate query, reusing `SchoolRepository._apply_filters`, before the nearest-neighbour limit. The repository retrieves pgvector candidates when vectors are available; otherwise the service uses a deterministic lexical fallback over documents filtered the same way.
+- Structured filters are applied in the document query, reusing `SchoolRepository._apply_filters`. `SchoolRepository.get_fulltext_scores` then scores every admitted document with Postgres full-text search in one statement, and the service keeps the best `candidate_limit`. If that query fails, the service scores the same documents by token overlap instead.
+- Documents travel with each query rather than being stored, so there is nothing to refresh when they change. The cost is linear in corpus size; past a few hundred schools, store a generated `tsvector` column with a GIN index.
 - The ranking engine removes hard-constraint violations and computes fit. The page is then ordered by query relevance, with the fit order breaking ties, so relevance never overrides a constraint or changes a score.
 - Responses expose semantic match reason tags such as `major_match`, `location_match`, `setting_match`, `cost_value_match`, `outcomes_match`, and `campus_culture_match`.
 - `scripts/evaluate_retrieval.py` measures retrieval offline against the labeled queries in `data/evaluation/`, and refuses to report unless its production configurations reproduce the real service.
 
 `GET /schools/{id}/similar` adds V2.3 profile-page discovery:
 
-- `services/similar_schools.py` retrieves semantically similar candidates with pgvector when embeddings exist and falls back to deterministic lexical similarity over the same search documents.
+- `services/similar_schools.py` retrieves semantically similar candidates with pgvector when embeddings exist (written by `scripts/refresh_embeddings.py` with the local deterministic hash provider) and falls back to deterministic lexical similarity over the same search documents.
 - The source school is always excluded, duplicate name/city/state candidates are removed, and structured constraints are applied before response assembly.
 - Variants are deterministic: `cheaper` biases and filters toward lower net price, `less_selective` toward higher acceptance rate, `smaller` toward lower enrollment, `stronger_outcomes` toward stronger graduation or earnings, and `closer_to_home` toward the supplied `home_state`.
 - The service reuses ranking code for fit score, top reasons, and tradeoffs, but final similarity also includes explicit source-school similarity and variant scores.

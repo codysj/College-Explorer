@@ -29,7 +29,9 @@ SEED_PATH = Path(__file__).resolve().parents[3] / "data" / "seed" / "schools_see
 # instead of claiming a preference mismatch. Scores and order are byte-identical to v1.0.
 # v1.2 reviewed: semantic search now orders its final page by query relevance, with fit
 # breaking ties. The deterministic engine pinned here is unchanged, so these orders are too.
-SNAPSHOT_RANKING_VERSION = "v1.2"
+# v1.3 reviewed: semantic search retrieves with Postgres full-text instead of hash vectors.
+# The engine is again untouched; these orders stand.
+SNAPSHOT_RANKING_VERSION = "v1.3"
 
 
 class SeedRepository:
