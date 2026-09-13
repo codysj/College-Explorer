@@ -45,3 +45,6 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+
+# Downloaded embedding models for local retrieval evaluation (tens of MB; fetched on demand)
+data/models/

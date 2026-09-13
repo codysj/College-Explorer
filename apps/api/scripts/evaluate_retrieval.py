@@ -1,22 +1,28 @@
 """Offline retrieval evaluation for semantic search (V3.6).
 
-Measures the semantic search pipeline as it runs in production today against a labeled
-query set (data/evaluation/retrieval_queries.json) whose relevance is defined by explicit
-attribute predicates. The labels were written before any retrieval change.
+Measures semantic search against a labeled query set (data/evaluation/retrieval_queries.json)
+whose relevance is defined by explicit attribute predicates. The labels were committed before
+any retrieval change.
 
-Runs entirely in-process against the committed seed: no Postgres, no network. The pgvector
-query is reproduced exactly - cosine similarity, nearest first, school id as tiebreak, then
-LIMIT candidate_limit - and the real SemanticSearchService then applies its filters and its
-deterministic re-rank, so end-to-end numbers reflect the code that ships.
+Runs entirely in-process against the committed seed: no Postgres, no network. Each
+configuration is a pipeline of four choices - retriever, document text, where hard filters
+apply, and how the final page is ordered. The two production configurations are checked
+against the real SemanticSearchService for every query and candidate limit, and the script
+refuses to report if they diverge, so every other configuration is a like-for-like change to
+code that actually ships.
 
 It separates three things that a single score would blur:
   pool recall        share of relevant schools that survive retrieval and filtering
   retriever P@10     precision of the pool in similarity order - the retriever alone
-  end-to-end P@10    precision of what a student actually sees after the fit re-rank
+  end-to-end P@10    precision of the page a student sees after final ordering
 
-Precision is normalised by min(10, relevant count), so a query with three relevant schools
-can still reach 1.0. Latency is in-process only and excludes the database and network, so it
-is not API latency.
+Precision is normalised by min(10, relevant count), so a query with three relevant schools can
+still reach 1.0. "Mean fit" is the average deterministic fit score of that page. Ranking runs
+with an empty preference profile plus any filter-derived preferences, so it measures general
+desirability rather than personal fit - it is there to show what respecting relevance costs.
+
+Latency is in-process pipeline time only, excluding the database and network. It is not API
+latency.
 
 Usage:
     python apps/api/scripts/evaluate_retrieval.py
@@ -32,6 +38,7 @@ import statistics
 import sys
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 API_ROOT = Path(__file__).resolve().parents[1]
@@ -42,24 +49,127 @@ from ingestion.college_data import load_seed_rows  # noqa: E402
 from schemas.preferences import Preference  # noqa: E402
 from schemas.schools import SearchRequest  # noqa: E402
 from schemas.semantic_search import SemanticSearchRequest  # noqa: E402
+from services.ranking_service import RankingService  # noqa: E402
 from services.semantic_search import (  # noqa: E402
     LocalHashEmbeddingProvider,
     SemanticSearchService,
     build_search_document,
-    lexical_fallback_rows,
+    join_values,
+    merged_preferences,
     row_matches_filters,
+    tokenize,
 )
 
 QUERIES_PATH = REPO_ROOT / "data" / "evaluation" / "retrieval_queries.json"
 SEED_PATH = REPO_ROOT / "data" / "seed" / "schools_seed.csv"
 TOP_K = 10
 
+STATE_NAMES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "District of Columbia",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois",
+    "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana",
+    "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
+    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
+    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York",
+    "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon",
+    "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota",
+    "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia",
+    "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+}
+DIVISION_WORDS = {"DI": "NCAA Division I", "DII": "NCAA Division II", "DIII": "NCAA Division III", "NAIA": "NAIA"}
+
+
+def standard_document(row: dict[str, object]) -> str:
+    return build_search_document(row).text
+
+
+def clean_document(row: dict[str, object]) -> str:
+    """Candidate document: coded values spelled out, shared boilerplate removed.
+
+    Production documents repeat identical labels in every school's text - "majors programs:",
+    "in-state tuition", "cost value affordability:", "campus culture:" - plus a source line,
+    so query words such as programs, in, state, cost, value, or campus match all 92 schools
+    equally. States appear only as two-letter abbreviations, so "Florida" matches nothing,
+    while abbreviations such as IN and OR also collide with common query words. Athletics
+    appears as a code such as DIII. Raw numbers are dropped: text retrieval cannot compare
+    them, and structured filters already do.
+    """
+    division = row.get("sports_division")
+    lines = [
+        row.get("name"),
+        f"{row.get('city')}, {STATE_NAMES.get(str(row.get('state')), '')}, {row.get('region')}",
+        f"{row.get('type')} {row.get('setting')}",
+        join_values(row.get("top_majors")),
+        join_values(row.get("culture_tags")),
+        DIVISION_WORDS.get(str(division), "") if division else "",
+    ]
+    return "\n".join(str(line) for line in lines if line)
+
+
+DOCUMENTS = {"standard": standard_document, "clean": clean_document}
+
+
+@dataclass(frozen=True)
+class Config:
+    name: str
+    retriever: str  # "hash" or "lexical"
+    document: str  # "standard" or "clean"
+    filtering: str  # "post" (production: filter the nearest candidates) or "pre" (filter first)
+    ordering: str  # "fit" (production), "relevance", or "matched_then_fit"
+    production: bool = False
+
+
+CONFIGS = [
+    Config("hash (production)", "hash", "standard", "post", "fit", production=True),
+    Config("lexical (production fallback)", "lexical", "standard", "post", "fit", production=True),
+    Config("hash + clean docs", "hash", "clean", "post", "fit"),
+    Config("lexical + clean docs", "lexical", "clean", "post", "fit"),
+    Config("lexical + clean + filter first", "lexical", "clean", "pre", "fit"),
+    # Order by how well a school matches the query, with fit breaking ties.
+    Config("lexical + clean + filter first + relevance order", "lexical", "clean", "pre", "relevance"),
+    # Keep fit as the order, but only among schools that match the query at all.
+    Config("lexical + clean + filter first + matched then fit", "lexical", "clean", "pre", "matched_then_fit"),
+]
+
+
+def cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
+    return dot / norm if norm else 0.0
+
+
+class Scorer:
+    """Precomputes document text, hash vectors, and token sets once per document variant."""
+
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self.provider = LocalHashEmbeddingProvider()
+        self.vectors: dict[str, dict[int, list[float]]] = {}
+        self.tokens: dict[str, dict[int, set[str]]] = {}
+        for variant, build in DOCUMENTS.items():
+            texts = {int(row["school_id"]): build(row) for row in rows}
+            self.vectors[variant] = {school_id: self.provider.embed(text) for school_id, text in texts.items()}
+            self.tokens[variant] = {school_id: set(tokenize(text)) for school_id, text in texts.items()}
+
+    def score(self, retriever: str, document: str, query: str, school_ids: list[int]) -> dict[int, float]:
+        if retriever == "hash":
+            query_vector = self.provider.embed(query)
+            return {school_id: cosine(query_vector, self.vectors[document][school_id]) for school_id in school_ids}
+        # Same formula and rounding as production's lexical_fallback_rows().
+        query_tokens = set(tokenize(query))
+        return {
+            school_id: round(len(query_tokens & self.tokens[document][school_id]) / max(len(query_tokens), 1), 4)
+            for school_id in school_ids
+        }
+
 
 class OfflineRepository:
     """Stands in for SchoolRepository so the real service runs without Postgres.
 
-    `vectors` mirrors the school_embeddings table. With no vectors the vector query returns
-    nothing, which is exactly the condition that sends production onto the lexical fallback.
+    Reproduces the pgvector query: cosine similarity, nearest first, school id as tiebreak,
+    LIMIT candidate_limit. With no vectors it returns nothing, which is exactly the condition
+    that sends production onto the lexical fallback. Rows are keyed by unitid rather than the
+    database serial id, so exact score ties could order differently than in Postgres.
     """
 
     def __init__(self, rows: list[dict[str, object]], vectors: dict[int, list[float]] | None) -> None:
@@ -70,11 +180,7 @@ class OfflineRepository:
         return self.rows
 
     def get_vector_candidate_rows(
-        self,
-        query_vector: list[float],
-        embedding_type: str,
-        embedding_model: str,
-        limit: int,
+        self, query_vector: list[float], embedding_type: str, embedding_model: str, limit: int
     ) -> list[dict[str, object]]:
         if not self.vectors:
             return []
@@ -83,15 +189,8 @@ class OfflineRepository:
             candidate = dict(row)
             candidate["semantic_score"] = cosine(query_vector, self.vectors[int(row["school_id"])])
             scored.append(candidate)
-        # The SQL orders by cosine distance ascending, then school id: nearest first.
         scored.sort(key=lambda candidate: (-float(candidate["semantic_score"]), int(candidate["school_id"])))
         return scored[:limit]
-
-
-def cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
-    return dot / norm if norm else 0.0
 
 
 def size_band(enrollment: object) -> str | None:
@@ -122,87 +221,114 @@ def is_relevant(row: dict[str, object], rule: dict[str, object]) -> bool:
     return all(checks[key](value) for key, value in rule.items())
 
 
+def build_request(spec: dict, limit: int) -> SemanticSearchRequest:
+    filters = SearchRequest(**spec.get("filters", {}), page=1, page_size=TOP_K)
+    return SemanticSearchRequest(query=spec["query"], filters=filters, preferences=Preference(), candidate_limit=limit)
+
+
+def run_pipeline(
+    config: Config,
+    scorer: Scorer,
+    ranking: RankingService,
+    rows_by_id: dict[int, dict[str, object]],
+    request: SemanticSearchRequest,
+) -> tuple[list[int], list[int], dict[int, float], dict[int, float]]:
+    """Returns the pool in similarity order, the final page, fit scores, and similarity scores."""
+    filters = request.filters
+    all_ids = sorted(rows_by_id)
+    candidates = (
+        [school_id for school_id in all_ids if row_matches_filters(rows_by_id[school_id], filters)]
+        if config.filtering == "pre"
+        else all_ids
+    )
+    scores = scorer.score(config.retriever, config.document, request.query, candidates)
+    nearest = sorted(candidates, key=lambda school_id: (-scores[school_id], school_id))[: request.candidate_limit]
+    pool = (
+        nearest
+        if config.filtering == "pre"
+        else [school_id for school_id in nearest if row_matches_filters(rows_by_id[school_id], filters)]
+    )
+
+    ranked = ranking.rank_rows([rows_by_id[school_id] for school_id in pool], merged_preferences(request))
+    fit_order = [int(item.row["school_id"]) for item in ranked]
+    fit = {int(item.row["school_id"]): item.fit_score for item in ranked}
+
+    if config.ordering == "fit":
+        final = fit_order
+    elif config.ordering == "relevance":
+        position = {school_id: index for index, school_id in enumerate(fit_order)}
+        final = sorted(fit_order, key=lambda school_id: (-scores[school_id], position[school_id]))
+    elif config.ordering == "matched_then_fit":
+        final = [s for s in fit_order if scores[s] > 0] + [s for s in fit_order if scores[s] <= 0]
+    else:
+        raise SystemExit(f"unknown ordering {config.ordering!r}")
+    return pool, final[:TOP_K], fit, scores
+
+
+def verify_production_equivalence(rows, scorer, ranking, rows_by_id, queries, limits) -> int:
+    """Fail loudly unless the production configurations reproduce the real service exactly."""
+    services = {
+        "hash": SemanticSearchService(
+            OfflineRepository(rows, scorer.vectors["standard"]), embedding_provider=scorer.provider
+        ),
+        "lexical": SemanticSearchService(OfflineRepository(rows, None), embedding_provider=scorer.provider),
+    }
+    checked = 0
+    for config in (c for c in CONFIGS if c.production):
+        for limit in limits:
+            for spec in queries:
+                request = build_request(spec, limit)
+                _, final, _, _ = run_pipeline(config, scorer, ranking, rows_by_id, request)
+                actual = [result.school_id for result in services[config.retriever].search(request).results]
+                if final != actual:
+                    raise SystemExit(
+                        f"harness diverges from production for {config.name!r}, limit {limit}, "
+                        f"query {spec['id']!r}: harness {final} vs service {actual}"
+                    )
+                checked += 1
+    return checked
+
+
 def precision(ids: list[int], relevant: set[int]) -> float:
     return len(set(ids[:TOP_K]) & relevant) / min(TOP_K, len(relevant))
 
 
-def build_arms(rows: list[dict[str, object]]) -> dict[str, tuple[SemanticSearchService, dict[int, list[float]] | None]]:
-    provider = LocalHashEmbeddingProvider()
-    hash_vectors = {int(row["school_id"]): provider.embed(build_search_document(row).text) for row in rows}
-    return {
-        # Production today: pgvector over 64-bucket hash embeddings.
-        "hash": (SemanticSearchService(OfflineRepository(rows, hash_vectors), embedding_provider=provider), hash_vectors),
-        # Production's fallback when the vector query returns nothing: token-set overlap.
-        "lexical": (SemanticSearchService(OfflineRepository(rows, None), embedding_provider=provider), None),
-    }
-
-
-def prefiltered_pool(
-    arm: str,
-    rows: list[dict[str, object]],
-    filters: SearchRequest,
-    query: str,
-    limit: int,
-    vectors: dict[int, list[float]] | None,
-) -> list[int]:
-    """The proposed fix: apply hard filters before ranking by similarity, not after."""
-    eligible = [row for row in rows if row_matches_filters(row, filters)]
-    if arm == "hash" and vectors:
-        query_vector = LocalHashEmbeddingProvider().embed(query)
-        ordered = sorted(
-            eligible,
-            key=lambda row: (-cosine(query_vector, vectors[int(row["school_id"])]), int(row["school_id"])),
-        )
-    else:
-        ordered = lexical_fallback_rows(eligible, query, len(eligible))
-    return [int(row["school_id"]) for row in ordered[:limit]]
-
-
 def evaluate(rows, queries, limits, repeats):
-    arms = build_arms(rows)
-    results = []  # one dict per (arm, limit, query)
-    for arm, (service, vectors) in arms.items():
+    rows_by_id = {int(row["school_id"]): row for row in rows}
+    scorer = Scorer(rows)
+    ranking = RankingService(OfflineRepository(rows, None))
+
+    checked = verify_production_equivalence(rows, scorer, ranking, rows_by_id, queries, limits)
+    print(f"production equivalence: {checked} query runs match the real SemanticSearchService exactly")
+
+    results = []
+    for config in CONFIGS:
         for limit in limits:
             for spec in queries:
-                filters = SearchRequest(**spec.get("filters", {}), page=1, page_size=TOP_K)
-                request = SemanticSearchRequest(
-                    query=spec["query"], filters=filters, preferences=Preference(), candidate_limit=limit
-                )
+                request = build_request(spec, limit)
                 relevant = {
-                    int(row["school_id"])
-                    for row in rows
-                    if row_matches_filters(row, filters) and is_relevant(row, spec["relevant_if"])
+                    school_id
+                    for school_id, row in rows_by_id.items()
+                    if row_matches_filters(row, request.filters) and is_relevant(row, spec["relevant_if"])
                 }
-
                 timings = []
                 for _ in range(repeats):
                     started = time.perf_counter()
-                    response = service.search(request)
+                    pool, final, fit, _ = run_pipeline(config, scorer, ranking, rows_by_id, request)
                     timings.append(time.perf_counter() - started)
-
-                # The same retrieval and filtering search() performs, exposed to separate the
-                # retriever's contribution from the re-rank's.
-                candidates, mode = service._retrieve_candidates(request)
-                pool = [int(row["school_id"]) for row in candidates if row_matches_filters(row, filters)]
-                final = [result.school_id for result in response.results]
-                prefiltered = prefiltered_pool(arm, rows, filters, spec["query"], limit, vectors)
-
                 results.append(
                     {
-                        "arm": arm,
+                        "config": config.name,
                         "limit": limit,
                         "id": spec["id"],
                         "category": spec["category"],
                         "relevant": len(relevant),
-                        "mode": mode,
                         "pool_size": len(pool),
                         "pool_recall": len(set(pool) & relevant) / len(relevant),
-                        "prefiltered_recall": len(set(prefiltered) & relevant) / len(relevant),
                         "retriever_p10": precision(pool, relevant),
-                        "prefiltered_p10": precision(prefiltered, relevant),
                         "end_to_end_p10": precision(final, relevant),
                         "empty": not final,
-                        "prefiltered_empty": not prefiltered,
+                        "mean_fit": statistics.fmean(fit[s] for s in final) if final else float("nan"),
                         "timings": timings,
                     }
                 )
@@ -210,7 +336,7 @@ def evaluate(rows, queries, limits, repeats):
 
 
 def mean(values):
-    values = list(values)
+    values = [value for value in values if not (isinstance(value, float) and math.isnan(value))]
     return statistics.fmean(values) if values else float("nan")
 
 
@@ -219,40 +345,47 @@ def percentile(values, share):
     return ordered[min(len(ordered) - 1, max(0, math.ceil(share * len(ordered)) - 1))]
 
 
-def report(results, per_query):
-    print("\n## Overall\n")
-    print("| arm | candidate_limit | pool recall | retriever P@10 | end-to-end P@10 | filtered: empty (post) | filtered: empty (pre) | filtered: recall post -> pre | in-process p50 / p95 ms |")
-    print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+def report(results, limits, per_query):
     groups = defaultdict(list)
     for result in results:
-        groups[(result["arm"], result["limit"])].append(result)
-    for (arm, limit), rows in groups.items():
-        filtered = [row for row in rows if row["category"] == "filtered"]
-        timings = [t * 1000 for row in rows for t in row["timings"]]
+        groups[(result["config"], result["limit"])].append(result)
+
+    print("\n## Overall\n")
+    print(
+        "| configuration | limit | pool recall | retriever P@10 | end-to-end P@10 "
+        "| filtered queries empty | mean fit (page) | in-process p50 / p95 ms |"
+    )
+    print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for (name, limit), group in groups.items():
+        filtered = [row for row in group if row["category"] == "filtered"]
+        timings = [t * 1000 for row in group for t in row["timings"]]
         print(
-            f"| {arm} | {limit} | {mean(r['pool_recall'] for r in rows):.2f} | {mean(r['retriever_p10'] for r in rows):.2f} "
-            f"| {mean(r['end_to_end_p10'] for r in rows):.2f} "
-            f"| {sum(r['empty'] for r in filtered)}/{len(filtered)} | {sum(r['prefiltered_empty'] for r in filtered)}/{len(filtered)} "
-            f"| {mean(r['pool_recall'] for r in filtered):.2f} -> {mean(r['prefiltered_recall'] for r in filtered):.2f} "
+            f"| {name} | {limit} | {mean(r['pool_recall'] for r in group):.2f} "
+            f"| {mean(r['retriever_p10'] for r in group):.2f} | {mean(r['end_to_end_p10'] for r in group):.2f} "
+            f"| {sum(r['empty'] for r in filtered)}/{len(filtered)} | {mean(r['mean_fit'] for r in group):.1f} "
             f"| {percentile(timings, 0.5):.2f} / {percentile(timings, 0.95):.2f} |"
         )
 
-    print("\n## Retriever P@10 by query category\n")
+    focus = max(limits)
     categories = sorted({result["category"] for result in results})
-    print("| arm | candidate_limit | " + " | ".join(categories) + " |")
-    print("| --- | ---: | " + " | ".join("---:" for _ in categories) + " |")
-    for (arm, limit), rows in groups.items():
-        cells = [f"{mean(r['retriever_p10'] for r in rows if r['category'] == c):.2f}" for c in categories]
-        print(f"| {arm} | {limit} | " + " | ".join(cells) + " |")
+    print(f"\n## End-to-end P@10 by query category, candidate limit {focus}\n")
+    print("| configuration | " + " | ".join(categories) + " |")
+    print("| --- | " + " | ".join("---:" for _ in categories) + " |")
+    for (name, limit), group in groups.items():
+        if limit != focus:
+            continue
+        cells = [f"{mean(r['end_to_end_p10'] for r in group if r['category'] == c):.2f}" for c in categories]
+        print(f"| {name} | " + " | ".join(cells) + " |")
 
     if per_query:
         print("\n## Per query\n")
-        print("| arm | limit | query | category | relevant | pool | pool recall | retriever P@10 | end-to-end P@10 | empty |")
+        print("| configuration | limit | query | category | relevant | pool | pool recall | retriever P@10 | end-to-end P@10 | empty |")
         print("| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |")
         for r in results:
             print(
-                f"| {r['arm']} | {r['limit']} | {r['id']} | {r['category']} | {r['relevant']} | {r['pool_size']} "
-                f"| {r['pool_recall']:.2f} | {r['retriever_p10']:.2f} | {r['end_to_end_p10']:.2f} | {'yes' if r['empty'] else ''} |"
+                f"| {r['config']} | {r['limit']} | {r['id']} | {r['category']} | {r['relevant']} | {r['pool_size']} "
+                f"| {r['pool_recall']:.2f} | {r['retriever_p10']:.2f} | {r['end_to_end_p10']:.2f} "
+                f"| {'yes' if r['empty'] else ''} |"
             )
 
 
@@ -264,23 +397,21 @@ def main() -> None:
     args = parser.parse_args()
 
     rows = load_seed_rows(SEED_PATH)
-    spec = json.loads(QUERIES_PATH.read_text(encoding="utf-8"))
-    queries = spec["queries"]
+    queries = json.loads(QUERIES_PATH.read_text(encoding="utf-8"))["queries"]
 
     # Every query must have at least one relevant school, or its precision is undefined and a
     # typo in a predicate would silently score as a retrieval failure.
     for query in queries:
         filters = SearchRequest(**query.get("filters", {}))
-        count = sum(1 for row in rows if row_matches_filters(row, filters) and is_relevant(row, query["relevant_if"]))
-        if count == 0:
+        if not any(row_matches_filters(row, filters) and is_relevant(row, query["relevant_if"]) for row in rows):
             raise SystemExit(f"query {query['id']!r} has no relevant schools; check its predicate")
 
-    print(f"{len(queries)} queries over {len(rows)} schools; candidate limits {args.candidate_limits}")
     counts = defaultdict(int)
     for query in queries:
         counts[query["category"]] += 1
+    print(f"{len(queries)} queries over {len(rows)} schools; candidate limits {args.candidate_limits}")
     print("queries per category:", dict(sorted(counts.items())))
-    report(evaluate(rows, queries, args.candidate_limits, args.repeats), args.per_query)
+    report(evaluate(rows, queries, args.candidate_limits, args.repeats), args.candidate_limits, args.per_query)
 
 
 if __name__ == "__main__":
