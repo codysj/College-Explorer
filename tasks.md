@@ -99,7 +99,7 @@ scope decisions live in `docs/roadmap.md` — read it before starting any V3 tas
 
 ### Phase 2 - Engineering substance
 
-- [ ] V3.6 Retrieval evaluation: hash vs Postgres full-text vs sentence embeddings vs hybrid; constraints applied during retrieval
+- [~] V3.6 Retrieval evaluation: hash vs Postgres full-text vs sentence embeddings vs hybrid; constraints applied during retrieval
 - [ ] V3.7 Measured performance under load and failure (cold/warm/Redis-down, query plans, one real optimization)
 - [ ] V3.8 Trustworthy data refresh (API mode, schema-change detection, validation + anomaly diff, data-version cache invalidation)
 
@@ -217,21 +217,33 @@ report versioning, formal threat model.
   RANKING_VERSION stays v1.1. 96 backend and 14 Playwright tests pass. Not yet reloaded into
   local Postgres because Docker Desktop was stopped.
 
+- 2026-09-12: V3.6 started with measurement. Committed 35 labeled queries in six gap
+  categories, with relevance defined by attribute predicates, before any retrieval change.
+  `evaluate_retrieval.py` runs the real semantic search service offline against the seed.
+  Baseline at the production default candidate limit of 50: the fit re-rank discards more
+  than half of retrieval's precision (hash 0.60 to 0.35, lexical 0.66 to 0.30), because
+  `search()` orders the pool by fit and uses the semantic score only for display; filtering
+  after retrieval empties filtered queries (5 of 6 for hash and 6 of 6 for lexical at limit
+  10, 2 of 6 for lexical at 50), while filtering first empties none; and the 64-bucket hash
+  loses to plain token overlap everywhere except world-knowledge queries, where both fail.
+  Also fixed the fetcher never requesting `school.carnegie_basic`, so the research tag had
+  appeared on no school; it now appears on 75. Data version `scorecard-2023.3`.
+
 ## Planned Next Steps
 
 Updated 2026-09-12. Ordered by dependency.
 
-### 1. Retrieval comparison (V3.6) - next
-- Label ~30 realistic queries against the real corpus with relevant schools, before any
-  retrieval code, so the labels cannot be tuned to a method.
-- Compare four arms: the current 64-bucket hash, Postgres full-text, sentence embeddings,
-  and hybrid lexical plus vector feeding the existing deterministic re-rank.
-- Apply hard constraints during retrieval rather than filtering the survivors, so a tight
-  filter cannot empty the result set.
-- Report precision@10, empty-result rate, constraint adherence, and p95 latency per arm,
-  including the arms that lose. Keep the simplest arm that wins.
-- Needs Docker running for the full-text arm, and a decision on the embedding model (a
-  local model versus a hosted API).
+### 1. Retrieval comparison (V3.6) - in progress
+- Done: labeled query set, offline harness, recorded baseline
+  (`data/evaluation/results-baseline.md`).
+- Next, measurable offline with no new dependency: filter before retrieval; stop the
+  re-rank discarding relevance; documents without the shared section labels and boilerplate
+  line, and with full state names.
+- Then the arms that need something from the operator: Postgres full-text (Docker running)
+  and sentence embeddings (a model choice, and approval before any download).
+- Changing how semantic search orders its final page changes what students see, so the
+  measured options go to the operator before production behaviour changes.
+- Keep the simplest arm that wins, and publish the ones that lose.
 
 ### 2. Measured performance (V3.7)
 - A repeatable workload over the four heaviest endpoints; cold-cache, warm-cache, and
