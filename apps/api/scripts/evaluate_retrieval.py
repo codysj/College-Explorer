@@ -4,25 +4,30 @@ Measures semantic search against a labeled query set (data/evaluation/retrieval_
 whose relevance is defined by explicit attribute predicates. The labels were committed before
 any retrieval change.
 
-Runs entirely in-process against the committed seed: no Postgres, no network. Each
-configuration is a pipeline of four choices - retriever, document text, where hard filters
-apply, and how the final page is ordered. The two production configurations are checked
-against the real SemanticSearchService for every query and candidate limit, and the script
-refuses to report if they diverge, so every other configuration is a like-for-like change to
-code that actually ships.
+Each configuration is a pipeline of four choices - retriever, document text, where hard
+filters apply, and how the final page is ordered. Two groups anchor the comparison:
 
-It separates three things that a single score would blur:
+  before v1.2    the pipeline that shipped until RANKING_VERSION v1.2, rebuilt from a frozen
+                 copy of the v2.2 document format. Its numbers should reproduce
+                 data/evaluation/results-variants.md, which is the check that the copy is faithful.
+  v1.2           the pipeline that ships now. It is compared against the real
+                 SemanticSearchService for every query and candidate limit, and the script
+                 refuses to report if they diverge.
+
+Candidate retrievers are measured on the v1.2 pipeline so only the retriever varies:
+model2vec static embeddings (needs the model under data/models), Postgres full-text search
+(needs DATABASE_URL and a running database), and reciprocal-rank-fusion hybrids of them.
+
+Metrics:
   pool recall        share of relevant schools that survive retrieval and filtering
   retriever P@10     precision of the pool in similarity order - the retriever alone
-  end-to-end P@10    precision of the page a student sees after final ordering
+  end-to-end P@10    precision of the page a student sees
+  mean fit           average deterministic fit score of that page
 
-Precision is normalised by min(10, relevant count), so a query with three relevant schools can
-still reach 1.0. "Mean fit" is the average deterministic fit score of that page. Ranking runs
-with an empty preference profile plus any filter-derived preferences, so it measures general
-desirability rather than personal fit - it is there to show what respecting relevance costs.
-
-Latency is in-process pipeline time only, excluding the database and network. It is not API
-latency.
+Precision is normalised by min(10, relevant count). That rewards pulling a whole tied group
+into the top ten, so a state name alone can win a query - read the category table with
+data/evaluation/README.md. Latency is pipeline time in this process; for the full-text arm it
+includes a round trip to the local database. Neither is API latency.
 
 Usage:
     python apps/api/scripts/evaluate_retrieval.py
@@ -34,11 +39,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import statistics
 import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 API_ROOT = Path(__file__).resolve().parents[1]
@@ -49,8 +56,9 @@ from ingestion.college_data import load_seed_rows  # noqa: E402
 from schemas.preferences import Preference  # noqa: E402
 from schemas.schools import SearchRequest  # noqa: E402
 from schemas.semantic_search import SemanticSearchRequest  # noqa: E402
-from services.ranking_service import RankingService  # noqa: E402
+from services.ranking_service import RANKING_VERSION, RankingService  # noqa: E402
 from services.semantic_search import (  # noqa: E402
+    DOCUMENT_VERSION,
     LocalHashEmbeddingProvider,
     SemanticSearchService,
     build_search_document,
@@ -62,74 +70,87 @@ from services.semantic_search import (  # noqa: E402
 
 QUERIES_PATH = REPO_ROOT / "data" / "evaluation" / "retrieval_queries.json"
 SEED_PATH = REPO_ROOT / "data" / "seed" / "schools_seed.csv"
+DEFAULT_MODEL2VEC_PATH = REPO_ROOT / "data" / "models" / "potion-base-8M"
 TOP_K = 10
+RRF_K = 60  # The conventional reciprocal-rank-fusion constant; not tuned to this query set.
+# Each hybrid fuses the rank order of its component retrievers.
+RRF_COMPONENTS = {"rrf": ("lexical", "model2vec"), "rrf_fts": ("fts", "model2vec")}
 
-STATE_NAMES = {
-    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
-    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "District of Columbia",
-    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois",
-    "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana",
-    "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
-    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
-    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York",
-    "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon",
-    "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota",
-    "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia",
-    "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
-}
-DIVISION_WORDS = {"DI": "NCAA Division I", "DII": "NCAA Division II", "DIII": "NCAA Division III", "NAIA": "NAIA"}
+FTS_SQL = """
+    SELECT t.id, ts_rank_cd(to_tsvector('english', t.doc), websearch_to_tsquery('english', %(query)s)) AS score
+    FROM unnest(%(ids)s::bigint[], %(docs)s::text[]) AS t(id, doc)
+"""
 
 
-def standard_document(row: dict[str, object]) -> str:
-    return build_search_document(row).text
+def legacy_rate_text(value: object) -> str:
+    if isinstance(value, Decimal):
+        return f"{float(value):.2f}"
+    return str(value)
 
 
-def clean_document(row: dict[str, object]) -> str:
-    """Candidate document: coded values spelled out, shared boilerplate removed.
-
-    Production documents repeat identical labels in every school's text - "majors programs:",
-    "in-state tuition", "cost value affordability:", "campus culture:" - plus a source line,
-    so query words such as programs, in, state, cost, value, or campus match all 92 schools
-    equally. States appear only as two-letter abbreviations, so "Florida" matches nothing,
-    while abbreviations such as IN and OR also collide with common query words. Athletics
-    appears as a code such as DIII. Raw numbers are dropped: text retrieval cannot compare
-    them, and structured filters already do.
-    """
-    division = row.get("sports_division")
-    lines = [
-        row.get("name"),
-        f"{row.get('city')}, {STATE_NAMES.get(str(row.get('state')), '')}, {row.get('region')}",
-        f"{row.get('type')} {row.get('setting')}",
-        join_values(row.get("top_majors")),
-        join_values(row.get("culture_tags")),
-        DIVISION_WORDS.get(str(division), "") if division else "",
+def legacy_document(row: dict[str, object]) -> str:
+    """Frozen copy of the v2.2 build_search_document(), kept only for the before/after comparison."""
+    costs = [
+        f"{label} {row[key]}"
+        for label, key in (
+            ("in-state tuition", "tuition_in_state"),
+            ("out-of-state tuition", "tuition_out_state"),
+            ("net price", "net_price"),
+            ("average aid", "average_aid"),
+            ("median debt", "debt_median"),
+        )
+        if row.get(key) is not None
     ]
-    return "\n".join(str(line) for line in lines if line)
+    outcomes = []
+    if row.get("graduation_rate") is not None:
+        outcomes.append(f"graduation rate {legacy_rate_text(row['graduation_rate'])}")
+    if row.get("retention_rate") is not None:
+        outcomes.append(f"retention rate {legacy_rate_text(row['retention_rate'])}")
+    if row.get("median_earnings") is not None:
+        outcomes.append(f"median earnings {row['median_earnings']}")
+    if row.get("repayment_rate") is not None:
+        outcomes.append(f"repayment rate {legacy_rate_text(row['repayment_rate'])}")
+    campus = [
+        f"housing {row.get('housing_available')}",
+        f"sports {row.get('sports_division')}",
+        f"greek life {legacy_rate_text(row.get('greek_life_rate'))}",
+        f"culture tags {join_values(row.get('culture_tags'))}",
+    ]
+    fields = [
+        f"name: {row.get('name')}",
+        f"location: {row.get('city')}, {row.get('state')} {row.get('region')}",
+        f"type setting: {row.get('type')} {row.get('setting')}",
+        f"majors programs: {join_values(row.get('top_majors'))}",
+        "cost value affordability: " + ", ".join(costs),
+        "cost outcomes career value: " + ", ".join(outcomes),
+        "campus culture: " + ", ".join(value for value in campus if not value.endswith("None")),
+        f"source attributes: {row.get('source_name')} {row.get('source_year')} {row.get('data_version')} v2.2",
+    ]
+    return "\n".join(field for field in fields if field.strip())
 
 
-DOCUMENTS = {"standard": standard_document, "clean": clean_document}
+DOCUMENTS = {"legacy": legacy_document, "v3": lambda row: build_search_document(row).text}
 
 
 @dataclass(frozen=True)
 class Config:
     name: str
-    retriever: str  # "hash" or "lexical"
-    document: str  # "standard" or "clean"
-    filtering: str  # "post" (production: filter the nearest candidates) or "pre" (filter first)
-    ordering: str  # "fit" (production), "relevance", or "matched_then_fit"
+    retriever: str  # hash, lexical, model2vec, fts, or a key of RRF_COMPONENTS
+    document: str  # legacy or v3
+    filtering: str  # post: filter the nearest candidates; pre: filter first
+    ordering: str  # fit: fit order only; relevance: relevance first, fit breaks ties
     production: bool = False
 
 
 CONFIGS = [
-    Config("hash (production)", "hash", "standard", "post", "fit", production=True),
-    Config("lexical (production fallback)", "lexical", "standard", "post", "fit", production=True),
-    Config("hash + clean docs", "hash", "clean", "post", "fit"),
-    Config("lexical + clean docs", "lexical", "clean", "post", "fit"),
-    Config("lexical + clean + filter first", "lexical", "clean", "pre", "fit"),
-    # Order by how well a school matches the query, with fit breaking ties.
-    Config("lexical + clean + filter first + relevance order", "lexical", "clean", "pre", "relevance"),
-    # Keep fit as the order, but only among schools that match the query at all.
-    Config("lexical + clean + filter first + matched then fit", "lexical", "clean", "pre", "matched_then_fit"),
+    Config("before v1.2: hash", "hash", "legacy", "post", "fit"),
+    Config("before v1.2: lexical fallback", "lexical", "legacy", "post", "fit"),
+    Config("v1.2 production: hash", "hash", "v3", "pre", "relevance", production=True),
+    Config("v1.2 production: lexical fallback", "lexical", "v3", "pre", "relevance", production=True),
+    Config("model2vec potion-base-8M", "model2vec", "v3", "pre", "relevance"),
+    Config("postgres full-text", "fts", "v3", "pre", "relevance"),
+    Config("hybrid: lexical + model2vec (RRF)", "rrf", "v3", "pre", "relevance"),
+    Config("hybrid: full-text + model2vec (RRF)", "rrf_fts", "v3", "pre", "relevance"),
 ]
 
 
@@ -140,35 +161,98 @@ def cosine(a: list[float], b: list[float]) -> float:
 
 
 class Scorer:
-    """Precomputes document text, hash vectors, and token sets once per document variant."""
+    """Precomputes document text, vectors, and token sets, and scores a query per retriever."""
 
-    def __init__(self, rows: list[dict[str, object]]) -> None:
+    def __init__(self, rows: list[dict[str, object]], model2vec_path: Path | None, database_url: str | None) -> None:
         self.provider = LocalHashEmbeddingProvider()
-        self.vectors: dict[str, dict[int, list[float]]] = {}
-        self.tokens: dict[str, dict[int, set[str]]] = {}
-        for variant, build in DOCUMENTS.items():
-            texts = {int(row["school_id"]): build(row) for row in rows}
-            self.vectors[variant] = {school_id: self.provider.embed(text) for school_id, text in texts.items()}
-            self.tokens[variant] = {school_id: set(tokenize(text)) for school_id, text in texts.items()}
+        self.texts = {variant: {int(row["school_id"]): build(row) for row in rows} for variant, build in DOCUMENTS.items()}
+        self.vectors = {
+            variant: {school_id: self.provider.embed(text) for school_id, text in texts.items()}
+            for variant, texts in self.texts.items()
+        }
+        self.tokens = {
+            variant: {school_id: set(tokenize(text)) for school_id, text in texts.items()}
+            for variant, texts in self.texts.items()
+        }
+        self.unavailable: dict[str, str] = {}
+
+        self.model = None
+        if model2vec_path is None or not model2vec_path.exists():
+            self.unavailable["model2vec"] = f"no model at {model2vec_path}"
+        else:
+            # Guarantees the model loads from the local files and never reaches the network.
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            from model2vec import StaticModel
+
+            self.model = StaticModel.from_pretrained(str(model2vec_path))
+            ids = sorted(self.texts["v3"])
+            self.model_index = {school_id: index for index, school_id in enumerate(ids)}
+            self.model_matrix = self.model.encode([self.texts["v3"][school_id] for school_id in ids])
+
+        self.db = None
+        if not database_url:
+            self.unavailable["fts"] = "DATABASE_URL not set"
+        else:
+            try:
+                import psycopg
+
+                self.db = psycopg.connect(
+                    database_url.replace("postgresql+psycopg://", "postgresql://", 1), connect_timeout=3, autocommit=True
+                )
+            except Exception as error:  # noqa: BLE001 - any connection failure just skips the arm
+                self.unavailable["fts"] = f"database unavailable ({type(error).__name__})"
+        for hybrid, components in RRF_COMPONENTS.items():
+            missing = [component for component in components if component in self.unavailable]
+            if missing:
+                self.unavailable[hybrid] = f"needs {', '.join(missing)}"
 
     def score(self, retriever: str, document: str, query: str, school_ids: list[int]) -> dict[int, float]:
+        if not school_ids:
+            return {}
         if retriever == "hash":
             query_vector = self.provider.embed(query)
-            return {school_id: cosine(query_vector, self.vectors[document][school_id]) for school_id in school_ids}
-        # Same formula and rounding as production's lexical_fallback_rows().
-        query_tokens = set(tokenize(query))
-        return {
-            school_id: round(len(query_tokens & self.tokens[document][school_id]) / max(len(query_tokens), 1), 4)
-            for school_id in school_ids
-        }
+            return {s: cosine(query_vector, self.vectors[document][s]) for s in school_ids}
+        if retriever == "lexical":
+            # Same formula and rounding as production's lexical_fallback_rows().
+            query_tokens = set(tokenize(query))
+            return {
+                s: round(len(query_tokens & self.tokens[document][s]) / max(len(query_tokens), 1), 4) for s in school_ids
+            }
+        if retriever == "model2vec":
+            query_vector = self.model.encode([query])[0]
+            matrix = self.model_matrix[[self.model_index[s] for s in school_ids]]
+            return {s: float(value) for s, value in zip(school_ids, matrix @ query_vector)}
+        if retriever == "fts":
+            # Tokens are alphanumeric, so joining them with "or" cannot inject tsquery syntax,
+            # and the query, ids, and documents are all bound parameters.
+            with self.db.cursor() as cursor:
+                cursor.execute(
+                    FTS_SQL,
+                    {
+                        "query": " or ".join(tokenize(query)),
+                        "ids": school_ids,
+                        "docs": [self.texts[document][s] for s in school_ids],
+                    },
+                )
+                return {int(school_id): float(score) for school_id, score in cursor.fetchall()}
+        if retriever in RRF_COMPONENTS:
+            fused = {s: 0.0 for s in school_ids}
+            for component in RRF_COMPONENTS[retriever]:
+                component_scores = self.score(component, document, query, school_ids)
+                ordered = sorted(school_ids, key=lambda s: (-component_scores[s], s))
+                for rank, s in enumerate(ordered, start=1):
+                    fused[s] += 1.0 / (RRF_K + rank)
+            return fused
+        raise SystemExit(f"unknown retriever {retriever!r}")
 
 
 class OfflineRepository:
     """Stands in for SchoolRepository so the real service runs without Postgres.
 
-    Reproduces the pgvector query: cosine similarity, nearest first, school id as tiebreak,
-    LIMIT candidate_limit. With no vectors it returns nothing, which is exactly the condition
-    that sends production onto the lexical fallback. Rows are keyed by unitid rather than the
+    Filters apply before the candidate limit, as the SQL does, using row_matches_filters as the
+    in-memory mirror of _apply_filters. Vector retrieval reproduces the pgvector query: cosine
+    similarity, nearest first, school id as tiebreak. With no vectors it returns nothing, which
+    sends the service onto its lexical fallback. Rows are keyed by unitid rather than the
     database serial id, so exact score ties could order differently than in Postgres.
     """
 
@@ -176,19 +260,23 @@ class OfflineRepository:
         self.rows = rows
         self.vectors = vectors
 
-    def get_semantic_document_rows(self) -> list[dict[str, object]]:
-        return self.rows
+    def get_semantic_document_rows(self, filters: SearchRequest | None = None) -> list[dict[str, object]]:
+        return [row for row in self.rows if filters is None or row_matches_filters(row, filters)]
 
     def get_vector_candidate_rows(
-        self, query_vector: list[float], embedding_type: str, embedding_model: str, limit: int
+        self,
+        query_vector: list[float],
+        embedding_type: str,
+        embedding_model: str,
+        limit: int,
+        filters: SearchRequest | None = None,
     ) -> list[dict[str, object]]:
         if not self.vectors:
             return []
-        scored = []
-        for row in self.rows:
-            candidate = dict(row)
-            candidate["semantic_score"] = cosine(query_vector, self.vectors[int(row["school_id"])])
-            scored.append(candidate)
+        scored = [
+            {**row, "semantic_score": cosine(query_vector, self.vectors[int(row["school_id"])])}
+            for row in self.get_semantic_document_rows(filters)
+        ]
         scored.sort(key=lambda candidate: (-float(candidate["semantic_score"]), int(candidate["school_id"])))
         return scored[:limit]
 
@@ -232,45 +320,33 @@ def run_pipeline(
     ranking: RankingService,
     rows_by_id: dict[int, dict[str, object]],
     request: SemanticSearchRequest,
-) -> tuple[list[int], list[int], dict[int, float], dict[int, float]]:
-    """Returns the pool in similarity order, the final page, fit scores, and similarity scores."""
+) -> tuple[list[int], list[int], dict[int, float]]:
+    """Returns the pool in similarity order, the final page, and fit scores."""
     filters = request.filters
     all_ids = sorted(rows_by_id)
-    candidates = (
-        [school_id for school_id in all_ids if row_matches_filters(rows_by_id[school_id], filters)]
-        if config.filtering == "pre"
-        else all_ids
-    )
+    eligible = [s for s in all_ids if row_matches_filters(rows_by_id[s], filters)]
+    candidates = eligible if config.filtering == "pre" else all_ids
     scores = scorer.score(config.retriever, config.document, request.query, candidates)
-    nearest = sorted(candidates, key=lambda school_id: (-scores[school_id], school_id))[: request.candidate_limit]
-    pool = (
-        nearest
-        if config.filtering == "pre"
-        else [school_id for school_id in nearest if row_matches_filters(rows_by_id[school_id], filters)]
-    )
+    nearest = sorted(candidates, key=lambda s: (-scores[s], s))[: request.candidate_limit]
+    pool = nearest if config.filtering == "pre" else [s for s in nearest if row_matches_filters(rows_by_id[s], filters)]
 
-    ranked = ranking.rank_rows([rows_by_id[school_id] for school_id in pool], merged_preferences(request))
+    ranked = ranking.rank_rows([rows_by_id[s] for s in pool], merged_preferences(request))
     fit_order = [int(item.row["school_id"]) for item in ranked]
     fit = {int(item.row["school_id"]): item.fit_score for item in ranked}
-
     if config.ordering == "fit":
         final = fit_order
     elif config.ordering == "relevance":
-        position = {school_id: index for index, school_id in enumerate(fit_order)}
-        final = sorted(fit_order, key=lambda school_id: (-scores[school_id], position[school_id]))
-    elif config.ordering == "matched_then_fit":
-        final = [s for s in fit_order if scores[s] > 0] + [s for s in fit_order if scores[s] <= 0]
+        position = {s: index for index, s in enumerate(fit_order)}
+        final = sorted(fit_order, key=lambda s: (-scores[s], position[s]))
     else:
         raise SystemExit(f"unknown ordering {config.ordering!r}")
-    return pool, final[:TOP_K], fit, scores
+    return pool, final[:TOP_K], fit
 
 
 def verify_production_equivalence(rows, scorer, ranking, rows_by_id, queries, limits) -> int:
-    """Fail loudly unless the production configurations reproduce the real service exactly."""
+    """Fail loudly unless the v1.2 configurations reproduce the real service exactly."""
     services = {
-        "hash": SemanticSearchService(
-            OfflineRepository(rows, scorer.vectors["standard"]), embedding_provider=scorer.provider
-        ),
+        "hash": SemanticSearchService(OfflineRepository(rows, scorer.vectors["v3"]), embedding_provider=scorer.provider),
         "lexical": SemanticSearchService(OfflineRepository(rows, None), embedding_provider=scorer.provider),
     }
     checked = 0
@@ -278,7 +354,7 @@ def verify_production_equivalence(rows, scorer, ranking, rows_by_id, queries, li
         for limit in limits:
             for spec in queries:
                 request = build_request(spec, limit)
-                _, final, _, _ = run_pipeline(config, scorer, ranking, rows_by_id, request)
+                _, final, _ = run_pipeline(config, scorer, ranking, rows_by_id, request)
                 actual = [result.school_id for result in services[config.retriever].search(request).results]
                 if final != actual:
                     raise SystemExit(
@@ -293,9 +369,8 @@ def precision(ids: list[int], relevant: set[int]) -> float:
     return len(set(ids[:TOP_K]) & relevant) / min(TOP_K, len(relevant))
 
 
-def evaluate(rows, queries, limits, repeats):
+def evaluate(rows, queries, limits, repeats, scorer):
     rows_by_id = {int(row["school_id"]): row for row in rows}
-    scorer = Scorer(rows)
     ranking = RankingService(OfflineRepository(rows, None))
 
     checked = verify_production_equivalence(rows, scorer, ranking, rows_by_id, queries, limits)
@@ -303,18 +378,21 @@ def evaluate(rows, queries, limits, repeats):
 
     results = []
     for config in CONFIGS:
+        if config.retriever in scorer.unavailable:
+            print(f"skipped {config.name!r}: {scorer.unavailable[config.retriever]}")
+            continue
         for limit in limits:
             for spec in queries:
                 request = build_request(spec, limit)
                 relevant = {
-                    school_id
-                    for school_id, row in rows_by_id.items()
+                    s
+                    for s, row in rows_by_id.items()
                     if row_matches_filters(row, request.filters) and is_relevant(row, spec["relevant_if"])
                 }
                 timings = []
                 for _ in range(repeats):
                     started = time.perf_counter()
-                    pool, final, fit, _ = run_pipeline(config, scorer, ranking, rows_by_id, request)
+                    pool, final, fit = run_pipeline(config, scorer, ranking, rows_by_id, request)
                     timings.append(time.perf_counter() - started)
                 results.append(
                     {
@@ -353,7 +431,7 @@ def report(results, limits, per_query):
     print("\n## Overall\n")
     print(
         "| configuration | limit | pool recall | retriever P@10 | end-to-end P@10 "
-        "| filtered queries empty | mean fit (page) | in-process p50 / p95 ms |"
+        "| filtered queries empty | mean fit (page) | p50 / p95 ms |"
     )
     print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
     for (name, limit), group in groups.items():
@@ -394,8 +472,13 @@ def main() -> None:
     parser.add_argument("--candidate-limits", type=int, nargs="+", default=[10, 25, 50])
     parser.add_argument("--repeats", type=int, default=5, help="timed runs per query")
     parser.add_argument("--per-query", action="store_true")
+    parser.add_argument("--model2vec-path", type=Path, default=DEFAULT_MODEL2VEC_PATH)
+    parser.add_argument("--no-fts", action="store_true", help="skip the Postgres full-text arm")
     args = parser.parse_args()
 
+    from dotenv import load_dotenv
+
+    load_dotenv(REPO_ROOT / ".env", override=False)
     rows = load_seed_rows(SEED_PATH)
     queries = json.loads(QUERIES_PATH.read_text(encoding="utf-8"))["queries"]
 
@@ -406,12 +489,16 @@ def main() -> None:
         if not any(row_matches_filters(row, filters) and is_relevant(row, query["relevant_if"]) for row in rows):
             raise SystemExit(f"query {query['id']!r} has no relevant schools; check its predicate")
 
+    scorer = Scorer(rows, args.model2vec_path, None if args.no_fts else os.environ.get("DATABASE_URL"))
     counts = defaultdict(int)
     for query in queries:
         counts[query["category"]] += 1
-    print(f"{len(queries)} queries over {len(rows)} schools; candidate limits {args.candidate_limits}")
+    print(
+        f"{len(queries)} queries over {len(rows)} schools; candidate limits {args.candidate_limits}; "
+        f"RANKING_VERSION {RANKING_VERSION}, document {DOCUMENT_VERSION}"
+    )
     print("queries per category:", dict(sorted(counts.items())))
-    report(evaluate(rows, queries, args.candidate_limits, args.repeats), args.candidate_limits, args.per_query)
+    report(evaluate(rows, queries, args.candidate_limits, args.repeats, scorer), args.candidate_limits, args.per_query)
 
 
 if __name__ == "__main__":
