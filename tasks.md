@@ -93,7 +93,7 @@ scope decisions live in `docs/roadmap.md` — read it before starting any V3 tas
 
 ### Phase 1 - Make it real and public
 
-- [ ] V3.3 Public deployment (Vercel + Fly/Render + Neon pgvector + Upstash)
+- [~] V3.3 Public deployment (Vercel + AWS Lambda + Neon + Upstash) - config committed, not yet deployed
 - [ ] V3.4 Shareable read-only decision report links
 - [x] V3.5 Lock exposed surfaces: gate `/analytics`, rate-limit expensive POST endpoints, CI dependency audit
 
@@ -283,8 +283,12 @@ Updated 2026-09-12. Ordered by dependency.
   any V3.7 latency to the code.
 
 ### 3. Public deployment (V3.3)
-- Vercel (web), Fly.io or Render (API), Neon (Postgres + pgvector), Upstash (Redis).
-- Needs accounts from the operator; configuration is scriptable from there.
+- Vercel (web), AWS Lambda (API, `infra/aws/template.yaml`), Neon (Postgres + pgvector),
+  Upstash (Redis, optional). Runbook in `docs/deployment.md`.
+- Committed: Lambda Web Adapter in the API image, SAM template with function URL, log retention,
+  cost alert, and optional concurrency cap. Not yet built as an image or deployed.
+- Needs from the operator: Neon, Upstash, AWS, and Vercel accounts, and AWS credentials for
+  `sam deploy`. Credentials and billing stay with the operator.
 - Set `ANALYTICS_API_TOKEN` and `APP_ENV=production` so the analytics gate closes.
 
 ### 4. Re-record demo media (V3.12)

@@ -107,10 +107,10 @@ flowchart LR
     redis["Redis<br/>cache-aside"]
     pgvector["pgvector<br/>semantic retrieval"]
     gha["GitHub Actions<br/>lint, typecheck, build, tests"]
-    vercel["Vercel or equivalent<br/>frontend host"]
-    aws["AWS App Runner / ECS Fargate<br/>API container"]
-    rds["Managed PostgreSQL<br/>RDS or equivalent"]
-    elasticache["Managed Redis<br/>ElastiCache or equivalent"]
+    vercel["Vercel<br/>frontend host"]
+    aws["AWS Lambda<br/>API container image, function URL"]
+    rds["Neon<br/>serverless PostgreSQL"]
+    elasticache["Upstash<br/>serverless Redis"]
 
     user --> web
     web -->|"typed HTTP API"| api
@@ -138,7 +138,7 @@ See [docs/architecture.md](docs/architecture.md) for the deeper notes.
 | **Backend** | FastAPI, Pydantic, SQLAlchemy, Alembic, pytest |
 | **Data** | PostgreSQL 16 with pgvector, deterministic CSV seed data, public-snapshot ingestion CLI |
 | **Cache** | Redis 7 (cache-aside with versioned keys + TTLs) |
-| **DevOps** | Docker Compose, GitHub Actions CI, Vercel / AWS deployment notes |
+| **DevOps** | Docker Compose, GitHub Actions CI, Vercel + AWS Lambda (SAM) deployment |
 | **Recommendation** | Deterministic ingestion, pgvector semantic retrieval, explainable similar-school discovery |
 
 ## 🚀 Getting Started

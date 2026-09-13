@@ -28,6 +28,9 @@ test-results/
 # Environment / secrets
 .env
 .env.local
+# SAM build output, and saved deploy arguments, which can include parameter values
+.aws-sam/
+samconfig.toml
 
 # macOS
 .DS_Store

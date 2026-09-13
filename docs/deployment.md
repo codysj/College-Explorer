@@ -1,6 +1,6 @@
 # Deployment
 
-V1.13 makes the repository deployment-ready with Dockerfiles, Docker Compose service wiring, documented environment variables, CORS configuration, and CI validation. No public production environment has been verified yet.
+The repository runs locally through Docker Compose and deploys publicly (V3.3) to Vercel, AWS Lambda, Neon, and Upstash. The production configuration is committed, but no public deployment has been verified yet. Check each step of the runbook below off on the first deploy.
 
 ## Local Environments
 
@@ -30,6 +30,8 @@ npm run dev
 
 Startup order: PostgreSQL and Redis first, migrations second, seed data third, API fourth, frontend last.
 
+On Windows, point `DATABASE_URL` at `127.0.0.1` rather than `localhost`. Over `localhost` the connection goes through Docker's IPv6 port proxy, and semantic search's larger statements measured about ten times slower.
+
 ### Full Docker local startup
 
 Use this path to validate container packaging:
@@ -55,75 +57,110 @@ docker compose exec api python scripts/seed_database.py --reset
 
 | Variable | Environment | Required in production | Notes |
 | --- | --- | --- | --- |
-| `APP_ENV` | API | Yes | Use values such as `production`, `staging`, or `development`. |
-| `DATABASE_URL` | API, migrations, seed script | Yes | SQLAlchemy URL for PostgreSQL. Use secret storage. |
-| `NEXT_PUBLIC_API_BASE_URL` | Web | Yes | Public browser-facing URL for the FastAPI service. |
+| `APP_ENV` | API | Yes | `production` on Lambda (set by the template). |
+| `DATABASE_URL` | API, migrations, seed script | Yes | SQLAlchemy URL: `postgresql+psycopg://...`. Use secret storage. |
+| `NEXT_PUBLIC_API_BASE_URL` | Web | Yes | Public browser-facing API URL. Read at build time. |
 | `CORS_ORIGINS` | API | Yes | Comma-separated frontend origins. Keep narrow in production. |
-| `REDIS_URL` | API | Recommended | Managed Redis URL for cache-aside reads. |
-| `REDIS_ENABLED` | API | No | Set `false` if Redis is not available. |
+| `REDIS_URL` | API | Recommended | Redis URL for caching and rate limiting. |
+| `REDIS_ENABLED` | API | No | `false` when Redis is not available. |
+| `ANALYTICS_API_TOKEN` | API | No | Without it, `/analytics/summary` is closed outside development. |
 | `CACHE_KEY_VERSION` | API | No | Bump to invalidate cache namespace. |
 | `CACHE_SEARCH_TTL_SECONDS` | API | No | Defaults to `300`. |
 | `CACHE_PROFILE_TTL_SECONDS` | API | No | Defaults to `3600`. |
 | `CACHE_RANKING_TTL_SECONDS` | API | No | Defaults to `300`. |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | Docker local | No | Local container defaults only. Do not reuse local password in production. |
 
-Secrets must come from provider environment settings, AWS Secrets Manager, Vercel environment variables, or equivalent secret storage. Do not commit `.env`.
+Secrets come from provider environment settings (Lambda, Vercel) and are never committed. `.env` and `samconfig.toml` are gitignored.
 
-## Frontend Deployment
+## Production: Vercel + AWS Lambda + Neon + Upstash
 
-Recommended target: Vercel or an equivalent Next.js host.
+Sized to cost about nothing at demo traffic. As of 2026-09-12:
 
-Configuration:
+| Piece | Service | What keeps it free |
+| --- | --- | --- |
+| Web | Vercel Hobby | Free for personal projects. |
+| API | AWS Lambda, container image, function URL | Always-free allowance: 1M requests and 400,000 GB-seconds a month. The image in ECR costs a few cents a month. |
+| PostgreSQL | Neon free plan | Scales to zero when idle. Supports pgvector. |
+| Redis (optional) | Upstash free plan | Pay-per-request with a free daily allowance. |
 
-- Root directory: `apps/web`.
-- Install command: `npm ci`.
-- Build command: `npm run build`.
-- Output: Next.js managed output on Vercel, or standalone output from `apps/web/Dockerfile`.
-- Required environment variable: `NEXT_PUBLIC_API_BASE_URL=https://<api-host>`.
+Put everything in one region: AWS `us-east-1`, Neon's AWS US East 1, and Upstash `us-east-1`.
 
-The frontend does not need direct database or Redis credentials.
+Two costs to avoid on AWS: NAT gateways and public IPv4 addresses. Neither is used here, because the function reaches Neon and Upstash over the internet without a VPC.
 
-## Backend Deployment
+### 1. Database (Neon)
 
-Recommended target: AWS App Runner or ECS/Fargate using `apps/api/Dockerfile`.
+1. Create a project in AWS US East 1 with Postgres 16, which matches local development.
+2. Copy the direct (non-pooled) connection string. Change the scheme to `postgresql+psycopg://` and keep `sslmode=require`. At this demo's concurrency the pooler adds nothing.
+3. Load the schema and data from your machine:
 
-Container behavior:
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg://USER:PASSWORD@HOST/neondb?sslmode=require"
+cd apps/api
+alembic upgrade head
+python scripts/seed_database.py
+python scripts/refresh_embeddings.py
+Remove-Item Env:DATABASE_URL
+```
 
-- Exposes port `8000`.
-- Runs `uvicorn main:app --host 0.0.0.0 --port 8000` by default.
-- Uses `DATABASE_URL`, Redis variables, and CORS variables from the environment.
+`refresh_embeddings.py` writes the vectors that similar-school discovery reads. Semantic search needs nothing stored.
 
-Deployment startup should run migrations before the API receives traffic. Options:
+### 2. Redis (Upstash, optional)
 
-- App Runner/ECS pre-deploy step that executes `alembic upgrade head`.
-- One-off ECS task using the same API image.
-- CI/CD migration job after database backup and before service rollout.
+Create a Redis database in `us-east-1` and copy its `rediss://` URL. Without Redis the API still works: caching is off, and rate limiting fails open. In that case the Lambda concurrency limit is the only cap on abuse.
 
-Do not run `python scripts/seed_database.py --reset` against production data.
+### 3. API (AWS Lambda)
 
-## PostgreSQL
+Prerequisites:
 
-Local: Docker Compose `postgres` service.
+- An AWS account.
+- AWS CLI v2 and the AWS SAM CLI.
+- Docker running.
+- Deploy credentials from IAM Identity Center (`aws configure sso`) or an IAM user. Never root access keys.
 
-Production-like target: AWS RDS PostgreSQL or equivalent managed PostgreSQL with the `vector` extension available before running V2.2 migrations.
+```powershell
+sam build --template-file infra/aws/template.yaml
+sam deploy --guided --resolve-image-repos
+```
 
-Required setup:
+The guided deploy asks for a stack name (for example `college-exploration-api`), the region, and these parameters:
 
-- Create a database and application user.
-- Store credentials in secret management.
-- Set `DATABASE_URL` for the API and migration job.
-- Run Alembic migrations.
-- Load only approved seed/demo data in non-production environments.
+| Parameter | Value |
+| --- | --- |
+| `DatabaseUrl` | The Neon URL from step 1. |
+| `RedisUrl` | The Upstash URL, or empty. |
+| `CorsOrigins` | The Vercel production URL from step 4. Deploy once with a placeholder, then update. |
+| `AnalyticsApiToken` | Empty unless you want `/analytics` reachable. |
+| `BudgetEmail` | Where the cost alert goes. |
+| `MonthlyBudgetUsd` | `1` is the default. The alert covers the whole account, not only this stack. |
+| `ReservedConcurrency` | `0` on new accounts. Their 10-execution quota already caps the function, and Lambda refuses reservations there. On a 1,000-execution account, use `5`. |
 
-pgvector is planned for V2 semantic retrieval and is not required for V1.13.
+Allow SAM to create the image repository and save the arguments. The stack output `ApiUrl` is the public API URL.
 
-## Redis
+To redeploy after code changes, run `sam build --template-file infra/aws/template.yaml`, then `sam deploy`. Both reuse the saved arguments. Every deploy pushes a new image to the SAM-managed ECR repository, so delete old images now and then.
 
-Local: Docker Compose `redis` service.
+How the image runs on Lambda: `apps/api/Dockerfile` copies in the AWS Lambda Web Adapter. On Lambda the adapter starts the normal `uvicorn` server and forwards function URL requests to it, and it waits on `/health` before sending traffic. Outside Lambda the adapter does nothing, so Docker Compose uses the identical image. Migrations are not run on start. Run them from your machine, as in step 1, before deploying code that needs them.
 
-Production-like target: AWS ElastiCache Redis or equivalent managed Redis.
+### 4. Web (Vercel)
 
-Redis is optional for correctness. If Redis is unavailable or `REDIS_ENABLED=false`, the API logs fallback behavior and serves reads from PostgreSQL.
+1. Import the repository and set the root directory to `apps/web`. The Next.js defaults (`npm ci`, `npm run build`) apply.
+2. Set `NEXT_PUBLIC_API_BASE_URL` to the `ApiUrl` output; a trailing slash is fine. The value is compiled in at build time, so redeploy the web app after changing it.
+3. Put the Vercel production URL (`https://<project>.vercel.app`) into `CorsOrigins` and run `sam deploy` again. Preview deployments get other hostnames and are blocked by CORS, which is intended.
+
+### 5. Verify
+
+- `curl.exe <ApiUrl>health` returns `"environment": "production"`, and `curl.exe <ApiUrl>ready` returns `"database": "ok"`.
+- Complete the journey (onboarding, search, a profile, compare, decision report) on a phone.
+- The AWS Budgets console lists the budget.
+- Leave everything idle for 10 minutes, then check that Neon reports the compute as idle. If it stays active, the idle Lambda containers are holding their pooled connections open, which spends Neon's free compute hours. Switch `db/session.py` to `NullPool` and redeploy.
+- Measure the first request after 15 idle minutes (cold start) and a warm request. Record both numbers here; do not estimate them.
+
+## Production Safety Rules
+
+- Keep `CORS_ORIGINS` narrow; do not use wildcard CORS for production.
+- Do not commit secrets or real student data.
+- Do not reset or reseed production databases.
+- Treat missing school data as unknown, not zero.
+- Do not claim uptime, p95 latency, cache hit rate, user counts, or database reduction until measured in the deployed environment.
 
 ## CI
 
@@ -137,19 +174,11 @@ GitHub Actions currently validates:
 - Backend dependency install and `pytest`.
 - Docker Compose syntax with `docker compose config`.
 
-Future deployment automation can add image build/push and provider-specific deploy steps after a real hosting target is selected.
-
-## Production Safety Rules
-
-- Keep `CORS_ORIGINS` narrow; do not use wildcard CORS for production.
-- Do not commit secrets or real student data.
-- Do not reset or reseed production databases.
-- Treat missing school data as unknown, not zero.
-- Do not claim uptime, p95 latency, cache hit rate, user counts, or database reduction until measured in the deployed environment.
+Deploys are manual (`sam deploy`, Vercel's Git integration). A CI deploy job would also be the place to stamp the commit onto `/health`.
 
 ## Current Limitations
 
-- No public hosted frontend/backend URL has been verified.
-- No TLS, DNS, custom domain, or cloud IAM configuration is committed.
-- No production observability stack exists yet.
+- No public deployment has been verified; the runbook above has not been run end to end.
+- No custom domain; the API is served from the Lambda function URL hostname.
+- No production observability beyond CloudWatch logs (14-day retention).
 - No load testing or production latency baseline exists yet.

@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  College Exploration API on AWS Lambda: the apps/api container image behind a public function
+  URL, with log retention and an account-wide cost alert. Runbook: docs/deployment.md.
+
+Parameters:
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: Neon connection string, postgresql+psycopg://...?sslmode=require
+  RedisUrl:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Upstash rediss:// URL. Empty disables caching and rate limiting (both fail open).
+  CorsOrigins:
+    Type: String
+    Description: Comma-separated frontend origins, e.g. https://college-exploration.vercel.app
+  AnalyticsApiToken:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Token for /analytics/summary. Empty keeps that endpoint closed in production.
+  BudgetEmail:
+    Type: String
+    Description: Address that receives the monthly cost alert.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 1
+  ReservedConcurrency:
+    Type: Number
+    Default: 0
+    Description: >
+      Cap on concurrent executions; 0 sets none. Accounts with the default 10-execution quota
+      cannot reserve any (Lambda keeps 100 unreserved), and that quota already caps the function.
+
+Conditions:
+  HasRedis: !Not [!Equals [!Ref RedisUrl, ""]]
+  CapConcurrency: !Not [!Equals [!Ref ReservedConcurrency, "0"]]
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures: [x86_64]
+      MemorySize: 512
+      Timeout: 15
+      ReservedConcurrentExecutions: !If [CapConcurrency, !Ref ReservedConcurrency, !Ref AWS::NoValue]
+      # ponytail: secrets are plain function environment variables (encrypted at rest, readable by
+      # anyone with console access to this function). Secrets Manager costs $0.40 per secret a
+      # month; move to it when anyone besides the owner can open the account.
+      Environment:
+        Variables:
+          APP_ENV: production
+          DATABASE_URL: !Ref DatabaseUrl
+          REDIS_URL: !Ref RedisUrl
+          REDIS_ENABLED: !If [HasRedis, "true", "false"]
+          CORS_ORIGINS: !Ref CorsOrigins
+          ANALYTICS_API_TOKEN: !Ref AnalyticsApiToken
+      # SAM adds the resource policy a public URL needs (InvokeFunctionUrl and InvokeFunction).
+      # CORS is left to FastAPI's middleware; setting it here too would duplicate the headers.
+      FunctionUrlConfig:
+        AuthType: NONE
+    Metadata:
+      DockerContext: ../..
+      Dockerfile: apps/api/Dockerfile
+      DockerTag: api
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ApiFunction}
+      RetentionInDays: 14
+
+  CostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub ${AWS::StackName}-monthly-cost
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+
+Outputs:
+  ApiUrl:
+    Description: Public API base URL. Set it as NEXT_PUBLIC_API_BASE_URL in Vercel.
+    Value: !GetAtt ApiFunctionUrl.FunctionUrl

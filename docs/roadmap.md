@@ -118,11 +118,17 @@ The README says no public deployment has been verified. For work meant to demons
 polish, a live URL is the highest-multiplier item on this list: it converts every other
 claim from "documented" to "verifiable."
 
-- Web → Vercel. API → Fly.io or Render. Postgres → Neon or Supabase (both support
-  pgvector). Redis → Upstash. Usable free tiers throughout; near-zero cost at demo traffic.
+- Web → Vercel. API → AWS Lambda: the existing API image with the Lambda Web Adapter, a
+  public function URL, and a SAM template in `infra/aws`. Postgres → Neon (free, pgvector).
+  Redis → Upstash (free, optional). About $0 a month at demo traffic.
+- Why Lambda (decided 2026-09-12): the original product ran on AWS, and Lambda's always-free
+  allowance keeps that claim true without paying for an always-on server. Railway and Render
+  were more convenient but did not fit $0: Railway has no ongoing free tier, and Render's free
+  Postgres expires after 30 days.
 - Seed the production database from the real ingestion output.
-- Health checks, a real build stamp on `/health`, and a documented cold-start expectation
-  for a free-tier API.
+- Health checks, a cost alert, and a cold-start figure measured after the first deploy.
+- Deferred: a build stamp on `/health`. It needs a deploy pipeline to supply the commit, and
+  deploys are manual until then.
 
 **Done when:** a stranger with the URL completes the journey on a phone.
 

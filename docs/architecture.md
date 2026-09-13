@@ -25,10 +25,10 @@ flowchart LR
     redis["Redis<br/>cache-aside"]
     pgvector["pgvector<br/>similar schools"]
     actions["GitHub Actions"]
-    frontendHost["Vercel / equivalent"]
-    apiHost["AWS App Runner / ECS Fargate"]
-    managedPostgres["Managed PostgreSQL"]
-    managedRedis["Managed Redis"]
+    frontendHost["Vercel"]
+    apiHost["AWS Lambda<br/>container image, function URL"]
+    managedPostgres["Neon PostgreSQL"]
+    managedRedis["Upstash Redis"]
 
     browser --> next
     next -->|"HTTP JSON"| fastapi
@@ -210,7 +210,7 @@ V2.8 adds `/analytics` as an internal demo surface. It reads `GET /analytics/sum
 
 ## Deployment Shape
 
-V1.13 adds production-oriented Dockerfiles for the frontend and backend plus Docker Compose wiring for local full-stack validation. The documented deployment target is Vercel or equivalent for `apps/web`, AWS App Runner or ECS/Fargate for `apps/api`, managed PostgreSQL for the database, and managed Redis for cache-aside reads.
+V1.13 adds production-oriented Dockerfiles for the frontend and backend plus Docker Compose wiring for local full-stack validation. The V3.3 deployment target is Vercel for `apps/web`, AWS Lambda for `apps/api` (the same container image, run by the Lambda Web Adapter behind a function URL, defined in `infra/aws/template.yaml`), Neon for PostgreSQL, and Upstash for optional cache-aside Redis. It is sized to cost about nothing at demo traffic; see `docs/deployment.md`.
 
 GitHub Actions validates frontend lint/typecheck/build, Playwright smoke tests, backend tests, and Docker Compose syntax. It does not currently deploy to a public environment.
 
