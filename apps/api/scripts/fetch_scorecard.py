@@ -185,9 +185,16 @@ def is_campus(result: dict) -> bool:
     return result.get("school.online_only") != 1
 
 
+# Every Scorecard field the script reads, including ones that are not raw CSV columns:
+# is_campus() reads online_only and culture_tags() reads carnegie_basic. Leaving one out
+# fails silently - carnegie_basic was once missing, so no school ever received the
+# very-high-research tag, while the self-check passed on a hand-built sample.
+REQUESTED_FIELDS = ["id", "school.online_only", "school.carnegie_basic", *FIELD_MAP.values(), *PROGRAM_FIELDS]
+
+
 def fetch_slice(api_key: str, sort: str, limit: int, timeout: int, extra: dict[str, str]) -> list[dict]:
     """Fetch `limit` schools for one selection slice, paging 100 at a time."""
-    fields = ["id", "school.online_only", *FIELD_MAP.values(), *PROGRAM_FIELDS]
+    fields = REQUESTED_FIELDS
     collected: list[dict] = []
     page = 0
     while len(collected) < limit:

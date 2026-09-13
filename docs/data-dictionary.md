@@ -246,6 +246,10 @@ would look like a real data regression, so a partial snapshot is never produced.
 `top_majors` is derived from `latest.academics.program_percentage.*`, taking the three
 largest program shares. `culture_tags` is derived only from reported structural fields
 (ownership, locale, enrollment band, research classification) — no invented descriptors.
+The research tag (`very-high-research`, Carnegie Basic 15) was silently absent from every
+school until data version `scorecard-2023.3`: the fetcher read `school.carnegie_basic` but
+never requested it from the API. It now appears on 75 of the 92 schools, and every field the
+fetcher reads is listed in one `REQUESTED_FIELDS` constant.
 
 ## Placeholder vs. Real Data
 
