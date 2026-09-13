@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "notes": [
+    "Labeled query set for the V3.6 retrieval comparison, written before any retrieval change so the labels cannot be tuned to a method.",
+    "Relevance is defined by explicit attribute predicates over the seed corpus, not by hand-picked result lists, so every label is reproducible and auditable. A query's relevant set is every school that satisfies its relevant_if predicate and passes its filters.",
+    "Predicate keys: unitid_in, state_in, region_in, type, setting_in, size_in (S under 5,000 undergraduates, M under 20,000, L otherwise), major_any (any listed major among the school's top three), division_in, max_net_price, max_acceptance, max_ratio. All keys must hold. A missing value fails its check rather than passing it.",
+    "Categories name the kind of gap a query tests: exact_vocabulary (the words appear in the documents), state_name (a state spelled out, where documents carry only the abbreviation), synonym (same meaning, different words), world_knowledge (facts not in the documents), structured_only (numeric reasoning over fields documents do not express searchably), filtered (a short topical query plus a hard filter)."
+  ],
+  "queries": [
+    {"id": "tx-engineering", "category": "state_name", "query": "engineering schools in Texas", "relevant_if": {"state_in": ["TX"], "major_any": ["Engineering"]}},
+    {"id": "ca-computer-science", "category": "state_name", "query": "computer science in California", "relevant_if": {"state_in": ["CA"], "major_any": ["Computer Science"]}},
+    {"id": "fl-business", "category": "state_name", "query": "business programs in Florida", "relevant_if": {"state_in": ["FL"], "major_any": ["Business"]}},
+    {"id": "ma-private", "category": "state_name", "query": "private universities in Massachusetts", "relevant_if": {"state_in": ["MA"], "type": "Private"}},
+    {"id": "tx-health", "category": "state_name", "query": "health professions programs in Texas", "relevant_if": {"state_in": ["TX"], "major_any": ["Health Professions"]}},
+    {"id": "ga-psychology", "category": "state_name", "query": "psychology programs in Georgia", "relevant_if": {"state_in": ["GA"], "major_any": ["Psychology"]}},
+
+    {"id": "midwest-public", "category": "exact_vocabulary", "query": "public universities in the Midwest", "relevant_if": {"region_in": ["Midwest"], "type": "Public"}},
+    {"id": "south-suburban", "category": "exact_vocabulary", "query": "suburban schools in the South", "relevant_if": {"region_in": ["South"], "setting_in": ["Suburban"]}},
+    {"id": "small-private", "category": "exact_vocabulary", "query": "small private colleges", "relevant_if": {"size_in": ["S"], "type": "Private"}},
+    {"id": "town-setting", "category": "exact_vocabulary", "query": "schools in a town setting", "relevant_if": {"setting_in": ["Town"]}},
+    {"id": "northeast-mathematics", "category": "exact_vocabulary", "query": "mathematics programs in the Northeast", "relevant_if": {"region_in": ["Northeast"], "major_any": ["Mathematics"]}},
+    {"id": "agriculture", "category": "exact_vocabulary", "query": "agriculture programs", "relevant_if": {"major_any": ["Agriculture"]}},
+    {"id": "legal-studies", "category": "exact_vocabulary", "query": "legal studies programs", "relevant_if": {"major_any": ["Legal Studies"]}},
+    {"id": "education", "category": "exact_vocabulary", "query": "education programs", "relevant_if": {"major_any": ["Education"]}},
+    {"id": "criminal-justice", "category": "exact_vocabulary", "query": "criminal justice programs", "relevant_if": {"major_any": ["Criminal Justice"]}},
+    {"id": "performing-arts", "category": "exact_vocabulary", "query": "visual and performing arts programs", "relevant_if": {"major_any": ["Visual and Performing Arts"]}},
+
+    {"id": "division-three", "category": "synonym", "query": "Division III universities", "relevant_if": {"division_in": ["DIII"]}},
+    {"id": "division-two", "category": "synonym", "query": "Division II schools", "relevant_if": {"division_in": ["DII"]}},
+    {"id": "fl-nursing", "category": "synonym", "query": "nursing school in Florida", "relevant_if": {"state_in": ["FL"], "major_any": ["Health Professions"]}},
+    {"id": "oh-big-state", "category": "synonym", "query": "big state university in Ohio", "relevant_if": {"state_in": ["OH"], "type": "Public", "size_in": ["L"]}},
+    {"id": "ga-tech-focused", "category": "synonym", "query": "tech-focused school in Georgia", "relevant_if": {"state_in": ["GA"], "major_any": ["Computer Science", "Engineering"]}},
+    {"id": "midwest-coding", "category": "synonym", "query": "coding programs in the Midwest", "relevant_if": {"region_in": ["Midwest"], "major_any": ["Computer Science"]}},
+    {"id": "film-theater", "category": "synonym", "query": "film and theater programs", "relevant_if": {"major_any": ["Visual and Performing Arts"]}},
+
+    {"id": "bay-area-cs", "category": "world_knowledge", "query": "CS degree in the Bay Area", "relevant_if": {"unitid_in": [110635, 243744]}},
+    {"id": "hbcu", "category": "world_knowledge", "query": "historically black university", "relevant_if": {"unitid_in": [133650, 160621]}},
+    {"id": "ivy-league", "category": "world_knowledge", "query": "Ivy League schools", "relevant_if": {"unitid_in": [217156, 190150, 190415, 182670, 166027, 215062, 186131, 130794]}},
+
+    {"id": "tx-cheap-public", "category": "structured_only", "query": "cheap public school in Texas", "relevant_if": {"state_in": ["TX"], "type": "Public", "max_net_price": 15000}},
+    {"id": "small-classes", "category": "structured_only", "query": "schools with small class sizes", "relevant_if": {"max_ratio": 7}},
+    {"id": "south-selective-private", "category": "structured_only", "query": "highly selective private university in the South", "relevant_if": {"region_in": ["South"], "type": "Private", "max_acceptance": 0.14}},
+
+    {"id": "filter-or-engineering", "category": "filtered", "query": "engineering", "filters": {"state": "OR"}, "relevant_if": {"major_any": ["Engineering"]}},
+    {"id": "filter-wa-computer-science", "category": "filtered", "query": "computer science", "filters": {"state": "WA"}, "relevant_if": {"major_any": ["Computer Science"]}},
+    {"id": "filter-ut-business", "category": "filtered", "query": "business", "filters": {"state": "UT"}, "relevant_if": {"major_any": ["Business"]}},
+    {"id": "filter-dc-social-sciences", "category": "filtered", "query": "social sciences", "filters": {"state": "DC"}, "relevant_if": {"major_any": ["Social Sciences"]}},
+    {"id": "filter-ms-health", "category": "filtered", "query": "health professions", "filters": {"state": "MS"}, "relevant_if": {"major_any": ["Health Professions"]}},
+    {"id": "filter-private-affordable-business", "category": "filtered", "query": "business", "filters": {"type": "Private", "max_net_price": 15000}, "relevant_if": {"major_any": ["Business"]}}
+  ]
+}

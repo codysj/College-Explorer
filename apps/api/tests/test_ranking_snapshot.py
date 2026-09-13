@@ -13,12 +13,11 @@ RANKING_VERSION if the scoring itself moved.
 Reads the CSV rather than the database so it runs in CI with no Postgres.
 """
 
-import csv
 from pathlib import Path
 
 import pytest
 
-from ingestion.college_data import bool_value, float_value, int_value, list_value, text_value
+from ingestion.college_data import load_seed_rows as load_seed_file
 from schemas.preferences import Preference
 from services.ranking_service import RANKING_VERSION, RankingService
 
@@ -42,42 +41,9 @@ class SeedRepository:
 
 
 def load_seed_rows() -> list[dict[str, object]]:
-    with SEED_PATH.open(newline="", encoding="utf-8-sig") as file:
-        raw_rows = list(csv.DictReader(file))
-
-    rows: list[dict[str, object]] = []
-    for raw in raw_rows:
-        rows.append(
-            {
-                # unitid, not the database serial id: it is stable across reseeds, which
-                # matters because it is the engine's final tiebreaker.
-                "school_id": int_value(raw["unitid"]),
-                "name": text_value(raw["name"]),
-                "city": text_value(raw["city"]),
-                "state": text_value(raw["state"]),
-                "region": text_value(raw["region"]),
-                "type": text_value(raw["type"]),
-                "setting": text_value(raw["setting"]),
-                "enrollment": int_value(raw["undergraduate_enrollment"]),
-                "acceptance_rate": float_value(raw["acceptance_rate"]),
-                "top_majors": list_value(raw["top_majors"]),
-                "graduation_rate": float_value(raw["graduation_rate"]),
-                "retention_rate": float_value(raw["retention_rate"]),
-                "student_faculty_ratio": float_value(raw["student_faculty_ratio"]),
-                "tuition_in_state": int_value(raw["tuition_in_state"]),
-                "tuition_out_state": int_value(raw["tuition_out_state"]),
-                "net_price": int_value(raw["net_price"]),
-                "average_aid": int_value(raw["average_aid"]),
-                "debt_median": int_value(raw["debt_median"]),
-                "median_earnings": int_value(raw["median_earnings"]),
-                "repayment_rate": float_value(raw["repayment_rate"]),
-                "housing_available": bool_value(raw["housing_available"]),
-                "sports_division": text_value(raw["sports_division"]),
-                "greek_life_rate": float_value(raw["greek_life_rate"]),
-                "culture_tags": list_value(raw["culture_tags"]),
-            }
-        )
-    return rows
+    # Shared with the offline retrieval evaluation; keyed by unitid, which is stable
+    # across reseeds and is the ranking engine's final tiebreaker.
+    return load_seed_file(SEED_PATH)
 
 
 @pytest.fixture(scope="module")
