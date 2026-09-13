@@ -229,26 +229,44 @@ report versioning, formal threat model.
   Also fixed the fetcher never requesting `school.carnegie_basic`, so the research tag had
   appeared on no school; it now appears on 75. Data version `scorecard-2023.3`.
 
+- 2026-09-12: Semantic search v1.2 (`RANKING_VERSION` v1.2, `DOCUMENT_VERSION` v3.0), chosen by
+  the operator from measured options. Filters apply inside the candidate query before the
+  nearest-neighbour limit, reusing `_apply_filters`; the page is ordered by relevance with fit
+  breaking ties; documents drop text shared by every school and spell out states and athletics
+  divisions. End-to-end P@10 at the default limit rose from 0.35 to 0.77 on the same hash
+  retriever, and no filtered query returns an empty page at any limit. With no filter, the
+  rebuilt vector query returns results identical to the old raw SQL. Similar-school top fives
+  changed (2 to 4 of 5 differ for five sampled schools); they have no labeled evaluation yet.
+  Retriever comparison at limit 50: hash 0.77, lexical 0.86, model2vec 0.86, Postgres full-text
+  0.86, full-text + model2vec hybrid 0.89, lexical + model2vec hybrid 0.91. Differences among the
+  last five come down to one to three queries on a 35-query set, and fusion can score below its
+  best component on single queries. model2vec, installed for evaluation only, is the only
+  retriever above zero on world-knowledge queries. 99 backend tests pass.
+
 ## Planned Next Steps
 
 Updated 2026-09-12. Ordered by dependency.
 
-### 1. Retrieval comparison (V3.6) - in progress
-- Done: labeled query set, offline harness, recorded baseline
-  (`data/evaluation/results-baseline.md`).
-- Next, measurable offline with no new dependency: filter before retrieval; stop the
-  re-rank discarding relevance; documents without the shared section labels and boilerplate
-  line, and with full state names.
-- Then the arms that need something from the operator: Postgres full-text (Docker running)
-  and sentence embeddings (a model choice, and approval before any download).
-- Changing how semantic search orders its final page changes what students see, so the
-  measured options go to the operator before production behaviour changes.
-- Keep the simplest arm that wins, and publish the ones that lose.
+### 1. Retrieval comparison (V3.6) - retriever decision pending
+- Done: labeled queries, offline harness with a production-equivalence check, the v1.2
+  pipeline, and six retrievers compared (`data/evaluation/results-v1.2.md`).
+- Open decision: which retriever replaces the hash, the weakest measured arm. Full-text needs
+  search document text stored in the database with a generated `tsvector` and a GIN index.
+  model2vec needs the `vector(64)` column widened or a second column, plus the model in the
+  API image.
+- Fold into that change: treat relevance scores equal to four decimals as ties. pgvector stores
+  32-bit floats, so hash scores that differ by about 1e-9 can order differently live than in the
+  64-bit offline harness (verified on "small private colleges").
+- Similar schools has no labeled evaluation; add one before claiming its results improved.
 
 ### 2. Measured performance (V3.7)
 - A repeatable workload over the four heaviest endpoints; cold-cache, warm-cache, and
   Redis-down scenarios; committed query plans; one optimization with before and after
   numbers. Needs Docker running.
+- Known from V3.6: the IVFFlat index on `school_embeddings` was created on an empty table with
+  16 lists, and at 92 rows the planner ignores it and sorts every row exactly. If a larger corpus
+  makes the planner start using it, `ivfflat.probes = 1` over centroids trained on nothing would
+  silently return wrong neighbours. Rebuild or drop it as part of V3.7.
 
 ### 3. Public deployment (V3.3)
 - Vercel (web), Fly.io or Render (API), Neon (Postgres + pgvector), Upstash (Redis).
