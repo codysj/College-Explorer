@@ -8,7 +8,7 @@ def test_health_endpoint(client: TestClient) -> None:
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["service"] == "College Exploration API"
-    assert payload["environment"] == "development"
+    assert "environment" not in payload, "deployment details are not published"
     assert "timestamp" in payload
 
 

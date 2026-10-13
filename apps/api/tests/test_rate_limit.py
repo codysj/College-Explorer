@@ -87,7 +87,8 @@ def test_request_over_the_limit_is_rejected_with_retry_after(settings: Settings)
         assert int(response.headers["Retry-After"]) > 0
 
 
-def test_limit_is_per_client_not_global(settings: Settings) -> None:
+def test_limit_is_per_client_not_global(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "college-api")  # proxy headers are trusted on Lambda only
     cache = CountingCache()
     for client in make_client(cache, settings):
         for _ in range(3):
@@ -144,7 +145,21 @@ def test_analytics_summary_requires_a_matching_token() -> None:
         assert client.get("/gated", headers={"X-Analytics-Token": "s3cret"}).status_code == 200
 
 
-def test_client_identifier_ignores_client_supplied_forwarded_hops() -> None:
+def test_proxy_headers_are_ignored_off_lambda(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With no platform proxy in front, a client could write any forwarding header it likes."""
+    monkeypatch.delenv("AWS_LAMBDA_FUNCTION_NAME", raising=False)
+
+    class FakeRequest:
+        def __init__(self, headers: dict[str, str]) -> None:
+            self.headers = headers
+            self.client = type("C", (), {"host": "9.9.9.9"})()
+
+    assert client_identifier(FakeRequest({"x-forwarded-for": "1.1.1.1"})) == client_identifier(FakeRequest({}))
+    assert client_identifier(FakeRequest({"x-amzn-request-context": '{"http": {"sourceIp": "5.5.5.5"}}'})) == client_identifier(FakeRequest({}))
+
+
+def test_client_identifier_ignores_client_supplied_forwarded_hops(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "college-api")
     class FakeRequest:
         def __init__(self, headers: dict[str, str], host: str | None) -> None:
             self.headers = headers

@@ -113,7 +113,7 @@ cd apps/web && npm run lint && npm run typecheck && npm run test:e2e
 python apps/api/scripts/evaluate_retrieval.py --per-query # retrieval evaluation
 ```
 
-CI runs all of it on every push, against a real pgvector Postgres: migrations, an `alembic
+CI runs all of it on every pull request and push to main, against a real pgvector Postgres: migrations, an `alembic
 check` that models match migrations, the seed, unit and integration tests, OpenAPI and type
 drift checks, a Playwright suite including a full student journey, both Docker image builds,
 a lint of the AWS SAM template, and dependency audits.

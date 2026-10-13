@@ -40,7 +40,7 @@ class School(Base):
     imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     academics: Mapped[SchoolAcademics | None] = relationship(back_populates="school")
     costs: Mapped[SchoolCosts | None] = relationship(back_populates="school")

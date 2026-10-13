@@ -70,7 +70,7 @@ function buildBiggestTradeoff(schools: SchoolProfile[]) {
     return `${highestGrad.name} leads on graduation rate, while ${mostAccessible.name} is the most accessible by acceptance rate.`;
   }
 
-  return "The selected schools are close on the currently available V1 comparison signals.";
+  return "The selected schools are close on every reported measure.";
 }
 
 function buildTradeoffs(schools: SchoolProfile[]) {

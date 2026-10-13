@@ -87,7 +87,7 @@ scope decisions live in `docs/roadmap.md` — read it before starting any V3 tas
 - [x] V3.2 One end-to-end test covering onboarding -> ranked -> shortlist -> compare -> report
   - `apps/web/tests/journey.spec.ts` crosses the whole journey with no seeded state, plus a
     dead-end check that every stage offers a way forward. Runs in CI via the existing
-    `npm run test:e2e` step. The root `tests/e2e/` directory is vestigial and unwired:
+    `npm run test:e2e` step. The root `tests/e2e/` directory was vestigial and has since been removed;
     playwright.config.ts points at `apps/web/tests`.
   - `apps/api/tests/test_ranking_snapshot.py` pins ranked order against the real corpus.
 

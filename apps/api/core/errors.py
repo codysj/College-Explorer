@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_500_INTERNAL_SERVER_ERROR
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT, HTTP_500_INTERNAL_SERVER_ERROR
 
 from core.logging import get_logger
 from schemas.errors import ErrorDetail, ErrorResponse
@@ -36,7 +36,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         extra={"path": request.url.path, "errors": exc.errors()},
     )
     return _error_response(
-        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=HTTP_422_UNPROCESSABLE_CONTENT,
         code="validation_error",
         message="Request validation failed.",
     )

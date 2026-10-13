@@ -282,3 +282,34 @@ def test_research_priority_uses_the_carnegie_tag(seed_rows: list[dict[str, objec
     research = Preference(weights={"career": 1}, constraints={"career_priorities": ["research"]})
     reasons = {code for row in seed_rows for code in service.score_school(row, research).top_reasons}
     assert "career_priority_match" in reasons
+
+
+# Mirror careerOptions and campusOptions in preference-quiz.tsx, lowercased as the API receives them.
+CAREER_OPTIONS = ["high earnings", "graduate school", "internships", "research", "public service", "local jobs"]
+CAMPUS_OPTIONS = ["residential", "commuter-friendly", "athletics", "greek life", "diverse community", "small classes"]
+# The options the quiz tells students are matched with data; every other option must be unknown.
+SCORED_CAREER = {"research"}
+SCORED_CAMPUS = {"residential", "athletics", "small classes"}
+
+
+@pytest.mark.parametrize("option", CAREER_OPTIONS)
+def test_each_career_option_is_scored_or_explicitly_unknown(seed_rows: list[dict[str, object]], option: str) -> None:
+    """An option must either discriminate on real data or be left out: never a silent zero."""
+    from services.ranking_service import normalized_list, priority_tag_score
+
+    scores = {priority_tag_score([option], normalized_list(row["culture_tags"])) for row in seed_rows}
+    if option in SCORED_CAREER:
+        assert 100.0 in scores, f"{option} never matches a school"
+    else:
+        assert scores == {None}, f"{option} has no data behind it and must stay unknown"
+
+
+@pytest.mark.parametrize("option", CAMPUS_OPTIONS)
+def test_each_campus_option_is_scored_or_explicitly_unknown(seed_rows: list[dict[str, object]], option: str) -> None:
+    from services.ranking_service import campus_preference_match, normalized_list
+
+    answers = {campus_preference_match(option, row, normalized_list(row["culture_tags"])) for row in seed_rows}
+    if option in SCORED_CAMPUS:
+        assert True in answers, f"{option} never matches a school"
+    else:
+        assert answers == {None}, f"{option} has no data behind it and must stay unknown"

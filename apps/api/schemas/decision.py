@@ -140,8 +140,6 @@ class DecisionReportResponse(ApiModel):
     generated_at: datetime
     disclaimer: str
     methodology_note: str
-    printable_report_path: str
-    share_url_path: str
     decision_confidence: Literal["low", "medium", "high"]
     confidence_flags: list[str]
     schools: list[DecisionSchoolSummary]

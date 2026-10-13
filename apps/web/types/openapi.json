@@ -1519,10 +1519,6 @@
             "title": "Methodology Note",
             "type": "string"
           },
-          "printable_report_path": {
-            "title": "Printable Report Path",
-            "type": "string"
-          },
           "ranking_version": {
             "title": "Ranking Version",
             "type": "string"
@@ -1549,10 +1545,6 @@
             "title": "Sensitivity Highlights",
             "type": "array"
           },
-          "share_url_path": {
-            "title": "Share Url Path",
-            "type": "string"
-          },
           "strongest_career_upside": {
             "$ref": "#/components/schemas/DecisionRecommendation"
           },
@@ -1571,8 +1563,6 @@
           "generated_at",
           "disclaimer",
           "methodology_note",
-          "printable_report_path",
-          "share_url_path",
           "decision_confidence",
           "confidence_flags",
           "schools",
@@ -1758,17 +1748,12 @@
       },
       "HealthResponse": {
         "example": {
-          "environment": "development",
           "service": "College Exploration API",
           "status": "ok",
           "timestamp": "2026-05-09T12:00:00Z",
           "version": "0.3.0"
         },
         "properties": {
-          "environment": {
-            "title": "Environment",
-            "type": "string"
-          },
           "service": {
             "title": "Service",
             "type": "string"
@@ -1791,7 +1776,6 @@
         "required": [
           "status",
           "service",
-          "environment",
           "version",
           "timestamp"
         ],
@@ -4158,6 +4142,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [

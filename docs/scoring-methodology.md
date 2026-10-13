@@ -124,7 +124,7 @@ the query's tokens joined with `or` into `websearch_to_tsquery('english', ...)`,
 `ts_rank_cd` normalized to `rank / (rank + 1)`, over every school the filters admit. Full-text
 stems words and drops stopwords, which the hash could not.
 
-End-to-end P@10 at candidate limit 50 (`data/evaluation/results-v1.3.md`):
+End-to-end P@10 at candidate limit 50 (`data/evaluation/results-v1.3.md`, pre-2023.4 data; see `data/evaluation/README.md` for current numbers with intervals and a held-out set):
 
 | Retriever | End-to-end P@10 | Deployed |
 | --- | ---: | --- |
@@ -341,7 +341,7 @@ Sensitivity outputs are deterministic:
 | Confidence impacts | Changes in `confidence_score` caused by emphasizing categories with different data coverage. |
 | Tradeoff explanations | Deterministic templates based on rank deltas and category drivers. |
 
-Sensitivity analysis does not alter stored rankings, does not smooth or randomize results, and does not generate opaque confidence. Missing data continues to lower category confidence while neutral category scores avoid treating unknowns as zero.
+Sensitivity analysis does not alter stored rankings, does not smooth or randomize results, and does not generate opaque confidence. Missing data continues to lower category confidence, and a category with no data is left out of fit rather than scored.
 
 ## Ranking Evaluation
 
@@ -374,7 +374,7 @@ Confidence is separate from fit. Each category tracks how much of its scoring si
 
 Examples:
 
-- A school with missing cost data is not assigned a zero cost score. It receives neutral cost fit and low cost confidence.
+- A school with no cost data gets no cost score at all: the category drops out of its fit and its confidence falls.
 - A school with known outcomes but no matching career-priority tags can still score on career outcomes, but confidence reflects only the available components.
 - A high fit score with lower confidence should be shown as promising but data-limited, not as more certain than the source data supports.
 

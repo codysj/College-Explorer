@@ -20,7 +20,7 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(String(120))
     auth_provider: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     preferences: Mapped[list[UserPreference]] = relationship(back_populates="user")
     saved_schools: Mapped[list[SavedSchool]] = relationship(back_populates="user")
@@ -40,7 +40,7 @@ class UserPreference(Base):
     weights: Mapped[dict[str, JsonScalar]] = mapped_column(JSON, default=dict)
     constraints: Mapped[dict[str, JsonScalar]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user: Mapped[User] = relationship(back_populates="preferences")
 
@@ -59,6 +59,6 @@ class SavedSchool(Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     notes: Mapped[str | None] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user: Mapped[User] = relationship(back_populates="saved_schools")

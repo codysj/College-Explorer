@@ -106,7 +106,7 @@ Profile responses keep missing values as `null`, list missing dot-paths in `data
 - `services/ranking_service.py` owns deterministic category scoring, normalized weights, hard constraints, confidence, reason codes, tradeoffs, and stable ordering.
 - `repositories/schools.py` fetches all V1 ranking inputs with one left-joined query across core, academic, cost, outcome, and campus-life tables.
 
-Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: they produce neutral category fit and lower confidence rather than zero-valued penalties. The ranking version is currently `v1.3`.
+Ranking is computed in memory for V1 scale after the repository query. Missing values remain unknown: a component with no data is left out, a category with no data is left out of fit (the other weights renormalize) and of `category_scores`, and confidence drops instead. The ranking version is currently `v1.4`.
 
 `POST /semantic-search` adds hybrid retrieval (V2.2, reworked in `RANKING_VERSION` v1.2 and v1.3):
 

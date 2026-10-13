@@ -1,22 +1,11 @@
 "use client";
 
 import { apiFetch } from "@/lib/api-client";
+import type { components } from "@/types/api.gen";
 import type { AnalyticsSummaryResponse } from "@/types/api";
 
-type AnalyticsEventName =
-  | "search_performed"
-  | "semantic_search_performed"
-  | "school_profile_viewed"
-  | "school_saved"
-  | "school_compared"
-  | "onboarding_completed"
-  | "ranking_generated"
-  | "sensitivity_adjusted"
-  | "decision_report_generated";
-
 type AnalyticsEventPayload = {
-  user_id?: number | null;
-  event_name: AnalyticsEventName;
+  event_name: components["schemas"]["AnalyticsEventCreate"]["event_name"];
   entity_type?: string | null;
   entity_id?: number | null;
   metadata?: Record<string, unknown>;
@@ -42,7 +31,6 @@ const sensitiveKeys = new Set([
 export function trackAnalyticsEvent(payload: AnalyticsEventPayload) {
   if (typeof window === "undefined") return;
   const body = {
-    user_id: payload.user_id ?? null,
     event_name: payload.event_name,
     entity_type: payload.entity_type ?? null,
     entity_id: payload.entity_id ?? null,

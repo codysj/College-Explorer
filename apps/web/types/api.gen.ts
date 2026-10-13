@@ -692,8 +692,6 @@ export interface components {
             major_tradeoffs: string[];
             /** Methodology Note */
             methodology_note: string;
-            /** Printable Report Path */
-            printable_report_path: string;
             /** Ranking Version */
             ranking_version: string;
             /** Report Title */
@@ -704,8 +702,6 @@ export interface components {
             schools: components["schemas"]["DecisionSchoolSummary"][];
             /** Sensitivity Highlights */
             sensitivity_highlights: components["schemas"]["DecisionSensitivityHighlight"][];
-            /** Share Url Path */
-            share_url_path: string;
             strongest_career_upside: components["schemas"]["DecisionRecommendation"];
             /** Unresolved Questions */
             unresolved_questions: components["schemas"]["DecisionConcernRow"][];
@@ -763,7 +759,6 @@ export interface components {
         /**
          * HealthResponse
          * @example {
-         *       "environment": "development",
          *       "service": "College Exploration API",
          *       "status": "ok",
          *       "timestamp": "2026-05-09T12:00:00Z",
@@ -771,8 +766,6 @@ export interface components {
          *     }
          */
         HealthResponse: {
-            /** Environment */
-            environment: string;
             /** Service */
             service: string;
             /**
@@ -1589,6 +1582,10 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */

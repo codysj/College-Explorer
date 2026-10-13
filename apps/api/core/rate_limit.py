@@ -17,6 +17,7 @@ across workers instead of being per-process.
 import hashlib
 import hmac
 import json
+import os
 import time
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -33,10 +34,13 @@ def client_identifier(request: Request) -> str:
     """Client identity for bucketing, hashed to a fixed length for the Redis key.
 
     The left-most X-Forwarded-For hop is whatever the client typed, so keying on it would
-    give an attacker a fresh bucket per request. Prefer the source IP the platform
+    give an attacker a fresh bucket per request. On Lambda, prefer the source IP the platform
     observed: Lambda Web Adapter forwards the function URL request context, which carries
-    it. Otherwise use the right-most hop, the one our own proxy appended, then the socket.
+    it, and AWS appends the real client to X-Forwarded-For. Anywhere else no proxy rewrites
+    those headers, so a client could forge them, and only the socket address is used.
     """
+    if not os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        return _digest(request.client.host if request.client else "unknown")
     context = request.headers.get("x-amzn-request-context")
     if context:
         try:

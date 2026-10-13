@@ -117,9 +117,12 @@ class RankingService:
             "campus": self.score_campus_lifestyle_fit(row, preferences),
             "admissions_realism": self.score_admissions_realism(row, preferences),
         }
+        # A category with no data has no score to report: a placeholder 50 here would reach
+        # clients, comparisons, and decision reports as if it were measured.
         category_scores = {
             key: round(value.score, 2)
             for key, value in categories.items()
+            if value.confidence > 0
         }
         # A category with no data at all is left out and the remaining weights renormalized.
         # Scoring it a neutral 50 sat well below the corpus mean (~75), so missing data

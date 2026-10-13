@@ -11,7 +11,6 @@ class HealthResponse(ApiModel):
             "example": {
                 "status": "ok",
                 "service": "College Exploration API",
-                "environment": "development",
                 "version": "0.3.0",
                 "timestamp": "2026-05-09T12:00:00Z",
             }
@@ -20,7 +19,6 @@ class HealthResponse(ApiModel):
 
     status: Literal["ok"]
     service: str
-    environment: str
     version: str
     timestamp: datetime
 

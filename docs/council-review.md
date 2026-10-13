@@ -140,6 +140,25 @@ judgment call that is not the code's to make).
   changed nothing. Found while recapturing the README media against the real stack; the
   journey test now asserts every answer reaches the ranking request.
 
+## Verification pass
+
+A fresh reviewer re-checked every item above against the code after the fixes landed and
+found the following, all resolved:
+
+- [x] V1 CI's `pip-audit --strict` (never actually run by the old placeholder job) would have
+  failed: `fastapi<0.116` held Starlette at 0.46.2, with seven advisories. FastAPI is now
+  0.143 with a `starlette>=1.3.1` floor; the audit is clean and every test passes.
+- [x] V2 No-data categories still reported a placeholder 50 in `category_scores`, reaching
+  comparisons and decision reports; they are now omitted.
+- [x] V3 Proxy headers are trusted only on Lambda; self-hosted, the socket address is used.
+- [x] V4 `/health` no longer publishes the environment; `updated_at` columns set `onupdate`.
+- [x] V5 Removed dead report fields (`share_url_path`, `printable_report_path`), the client
+  `user_id` on analytics events, 14 unused type aliases, and remaining developer copy.
+- [x] V6 Every quiz career and campus option is tested to be either scored on real data or
+  explicitly unknown.
+- [x] V7 Stale docs (current-version references, "neutral 50" wording, a stale agent
+  command) corrected.
+
 ## Deliberately not done
 
 - `useSyncExternalStore` rewrite of the saved/compare store, server-rendering the profile

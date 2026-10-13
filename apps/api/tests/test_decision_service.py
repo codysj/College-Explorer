@@ -153,5 +153,4 @@ def test_decision_endpoints_return_report(client: TestClient) -> None:
 
     assert report.status_code == 200
     assert report.json()["best_value"]["school_id"] == 2
-    assert report.json()["printable_report_path"] == "/decision/report"
     assert report.json()["cost_value_comparison"]

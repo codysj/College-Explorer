@@ -23,7 +23,7 @@ from services.sensitivity import scenario_preferences, scenario_weights
 DECISION_REPORT_VERSION = "v2.7"
 DISCLAIMER = (
     "This report is decision-support only. It is not admissions advice, financial advice, or a guarantee of outcomes. "
-    "Estimates are based on available public data, local seed data, and user-entered offer assumptions."
+    "Estimates are based on federal College Scorecard and IPEDS data and the offer details you entered."
 )
 METHODOLOGY_NOTE = (
     "Rankings, category scores, cost/value labels, sensitivity highlights, confidence, reasons, and tradeoffs come from fixed, published rules (deterministic code, no AI-generated text). "
@@ -70,8 +70,6 @@ class DecisionService:
             generated_at=datetime.now(UTC),
             disclaimer=DISCLAIMER,
             methodology_note=METHODOLOGY_NOTE,
-            printable_report_path="/decision/report",
-            share_url_path="/decision/report",
             decision_confidence=decision_confidence(confidence_flags, summaries),
             confidence_flags=confidence_flags,
             schools=summaries,

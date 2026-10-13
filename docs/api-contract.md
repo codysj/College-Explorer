@@ -205,7 +205,7 @@ Hard constraints:
 
 ### `POST /semantic-search`
 
-Natural-language school search. Structured filters are applied first, inside the candidate query, so a filter cannot empty the page by excluding every nearest candidate. The endpoint then scores every remaining school with Postgres full-text search (`RANKING_VERSION` v1.3) and keeps the best `candidate_limit`, falling back to deterministic token overlap if the full-text query fails. The deterministic ranking engine removes schools that violate hard constraints and scores the rest, and the page is ordered by query relevance with the fit order breaking ties. Relevance never overrides a hard constraint or changes a fit score. For ordering by preference fit alone, use `POST /rankings`.
+Natural-language school search. Structured filters are applied first, inside the candidate query, so a filter cannot empty the page by excluding every nearest candidate. The endpoint then scores every remaining school with Postgres full-text search (since `RANKING_VERSION` v1.3) and keeps the best `candidate_limit`, falling back to deterministic token overlap if the full-text query fails. The deterministic ranking engine removes schools that violate hard constraints and scores the rest, and the page is ordered by query relevance with the fit order breaking ties. Relevance never overrides a hard constraint or changes a fit score. For ordering by preference fit alone, use `POST /rankings`.
 
 Request body:
 
@@ -248,7 +248,7 @@ Response `200`:
 
 ```json
 {
-  "ranking_version": "v1.3",
+  "ranking_version": "v1.4",
   "embedding_model": "postgres-fulltext-english",
   "embedding_type": "school_search_document",
   "retrieval_mode": "fulltext",
