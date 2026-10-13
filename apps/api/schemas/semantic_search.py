@@ -1,10 +1,11 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from schemas.base import ApiModel
 from schemas.preferences import Preference
 from schemas.schools import SchoolSearchResult, SearchRequest
 
 
-class SemanticSearchRequest(BaseModel):
+class SemanticSearchRequest(ApiModel):
     query: str = Field(min_length=3, max_length=240)
     filters: SearchRequest = Field(default_factory=SearchRequest)
     preferences: Preference = Field(default_factory=Preference)
@@ -16,7 +17,7 @@ class SemanticSearchResult(SchoolSearchResult):
     match_reasons: list[str] = Field(default_factory=list)
 
 
-class SemanticSearchResponse(BaseModel):
+class SemanticSearchResponse(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {

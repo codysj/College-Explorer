@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Calculator, ClipboardList, ExternalLink, FileText, Save, ShieldCheck, Sparkles, Trophy } from "lucide-react";
+import { AlertCircle, Calculator, ClipboardList, ExternalLink, FileText, ShieldCheck, Sparkles, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,27 +8,24 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { trackAnalyticsEvent } from "@/lib/analytics";
 import {
-  buildLocalCostCalculator,
   defaultCostAssumption,
   requestCostCalculator,
   type CostCalculatorDraft,
 } from "@/lib/cost-calculator";
 import {
-  buildLocalDecisionReport,
   defaultOfferForSchool,
   getDecisionCandidates,
   mergeOffersWithCandidates,
   readDecisionOffers,
   requestDecisionReport,
-  syncDecisionOffer,
   writeDecisionOffers,
   writeDecisionReport,
   type DecisionOfferDraft,
 } from "@/lib/decision";
 import { getVisibleSavedSchools, useSchoolActionState, type SavedSchoolEntry } from "@/lib/school-actions";
 import type { CostCalculatorResponse, DecisionReportResponse } from "@/types/api";
+import { formatCurrency, formatPercent } from "@/lib/format";
 
 export function AcceptedSchoolsWorkspace() {
   const { savedSchools, updateSavedStatus } = useSchoolActionState();
@@ -39,7 +36,8 @@ export function AcceptedSchoolsWorkspace() {
   const [costAssumptions, setCostAssumptions] = useState<CostCalculatorDraft[]>([]);
   const [costReport, setCostReport] = useState<CostCalculatorResponse | null>(null);
   const [familyBudget, setFamilyBudget] = useState<number | null>(null);
-  const [saveState, setSaveState] = useState<string>("Local");
+  const [busy, setBusy] = useState<"report" | "costs" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalStateReady(true);
@@ -51,15 +49,7 @@ export function AcceptedSchoolsWorkspace() {
 
   useEffect(() => {
     writeDecisionOffers(offers);
-    if (candidates.length === 0) {
-      setReport(null);
-      return;
-    }
-    const candidateById = new Map(candidates.map((school) => [school.school_id, school]));
-    const nextReport = buildLocalDecisionReport(candidates.filter((school) => candidateById.has(school.school_id)), offers);
-    setReport(nextReport);
-    writeDecisionReport(nextReport);
-  }, [candidates, offers]);
+  }, [offers]);
 
   useEffect(() => {
     setCostAssumptions((current) => {
@@ -72,15 +62,13 @@ export function AcceptedSchoolsWorkspace() {
     });
   }, [candidates, offers]);
 
+  // Results describe the inputs they were computed from; editing an input makes them stale.
   useEffect(() => {
-    if (candidates.length === 0) {
-      setCostReport(null);
-      return;
-    }
-    setCostReport(buildLocalCostCalculator(candidates, costAssumptions, costAssumptions[0]?.school_id, familyBudget));
-  }, [candidates, costAssumptions, familyBudget]);
+    setCostReport(null);
+  }, [costAssumptions, familyBudget]);
 
   const updateOffer = (school: SavedSchoolEntry, patch: Partial<DecisionOfferDraft>) => {
+    setReport(null);
     setOffers((current) => {
       const next = current.some((offer) => offer.school_id === school.school_id)
         ? current.map((offer) => offer.school_id === school.school_id ? { ...offer, ...patch } : offer)
@@ -102,51 +90,31 @@ export function AcceptedSchoolsWorkspace() {
     if (patch.status) updateSavedStatus(school.school_id, patch.status);
   };
 
-  const saveOffer = async (offer: DecisionOfferDraft) => {
-    setSaveState("Saving");
-    try {
-      await syncDecisionOffer(offer);
-      setSaveState("Saved to API");
-    } catch {
-      setSaveState("Saved locally");
-    }
-  };
-
+  // Scores come only from the API. When it is unreachable the student sees that, rather
+  // than a browser-side imitation of the ranking engine.
   const generateReport = async () => {
-    setSaveState("Generating");
+    setBusy("report");
+    setError(null);
     try {
       const payload = await requestDecisionReport(offers);
       setReport(payload);
       writeDecisionReport(payload);
-      setSaveState("API report");
     } catch {
-      const fallback = buildLocalDecisionReport(candidates, offers);
-      setReport(fallback);
-      writeDecisionReport(fallback);
-      trackAnalyticsEvent({
-        event_name: "decision_report_generated",
-        entity_type: "decision_report",
-        metadata: {
-          source: "local_fallback",
-          ranking_version: fallback.ranking_version,
-          report_version: fallback.report_version,
-          school_count: fallback.schools.length,
-          decision_confidence: fallback.decision_confidence,
-        },
-      });
-      setSaveState("Local report");
+      setError("We couldn't build your summary right now. Check your connection and try again.");
+    } finally {
+      setBusy(null);
     }
   };
 
   const calculateCosts = async () => {
-    setSaveState("Calculating");
+    setBusy("costs");
+    setError(null);
     try {
-      const payload = await requestCostCalculator(costAssumptions, costAssumptions[0]?.school_id, familyBudget);
-      setCostReport(payload);
-      setSaveState("API calculator");
+      setCostReport(await requestCostCalculator(costAssumptions, costAssumptions[0]?.school_id, familyBudget));
     } catch {
-      setCostReport(buildLocalCostCalculator(candidates, costAssumptions, costAssumptions[0]?.school_id, familyBudget));
-      setSaveState("Local calculator");
+      setError("We couldn't calculate costs right now. Check your connection and try again.");
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -165,22 +133,37 @@ export function AcceptedSchoolsWorkspace() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Badge variant={report?.decision_confidence === "high" ? "default" : "muted"}>
-            Confidence: {report?.decision_confidence ?? "pending"}
-          </Badge>
-          <Badge variant="muted">{saveState}</Badge>
-          <Button type="button" onClick={generateReport}>
+          {report ? (
+            <Badge variant={report.decision_confidence === "high" ? "default" : "muted"}>
+              Confidence: {report.decision_confidence}
+            </Badge>
+          ) : null}
+          <Button type="button" disabled={busy !== null || candidates.length === 0} onClick={generateReport}>
             <FileText className="h-4 w-4" aria-hidden="true" />
-            Generate summary
+            {busy === "report" ? "Building summary..." : "Generate summary"}
           </Button>
-          <Button asChild variant="secondary">
-            <Link href="/decision/report">
+          {report ? (
+            <Button asChild variant="secondary">
+              <Link href="/decision/report">
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                Open report
+              </Link>
+            </Button>
+          ) : (
+            <Button type="button" variant="secondary" disabled title="Generate a summary first">
               <ExternalLink className="h-4 w-4" aria-hidden="true" />
               Open report
-            </Link>
-          </Button>
+            </Button>
+          )}
         </div>
       </header>
+
+      {error ? (
+        <div role="alert" className="mb-6 flex items-start gap-3 rounded-lg border border-border bg-white p-4 text-sm shadow-soft">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+          <p className="text-foreground">{error}</p>
+        </div>
+      ) : null}
 
       {localStateReady && candidates.length === 0 ? (
         <EmptyState
@@ -212,7 +195,6 @@ export function AcceptedSchoolsWorkspace() {
                   key={school.school_id}
                   offer={offer}
                   school={school}
-                  onSave={saveOffer}
                   onUpdate={(patch) => updateOffer(school, patch)}
                 />
               );
@@ -325,12 +307,10 @@ function CostValueCalculator({
 
 function OfferCard({
   offer,
-  onSave,
   onUpdate,
   school,
 }: {
   offer: DecisionOfferDraft;
-  onSave: (offer: DecisionOfferDraft) => void;
   onUpdate: (patch: Partial<DecisionOfferDraft>) => void;
   school: SavedSchoolEntry;
 }) {
@@ -379,10 +359,7 @@ function OfferCard({
             <span>Graduation: {formatPercent(school.graduation_rate)}</span>
             <span>Earnings: {formatCurrency(school.median_earnings ?? null)}</span>
           </div>
-          <Button type="button" variant="secondary" onClick={() => onSave(offer)}>
-            <Save className="h-4 w-4" aria-hidden="true" />
-            Save offer
-          </Button>
+          <p className="text-xs text-muted-foreground">Saved in this browser only.</p>
         </div>
       </CardContent>
     </Card>
@@ -390,7 +367,14 @@ function OfferCard({
 }
 
 function DecisionSummaryPanel({ report }: { report: DecisionReportResponse | null }) {
-  if (!report) return null;
+  if (!report) {
+    return (
+      <aside className="rounded-lg border border-dashed border-border bg-white p-5 text-sm leading-6 text-muted-foreground">
+        Enter what you know about each offer, then choose <strong className="text-foreground">Generate summary</strong> to
+        see best fit, best value, career upside, and the biggest open questions side by side.
+      </aside>
+    );
+  }
   const recommendations = [
     report.best_overall_fit,
     report.best_value,
@@ -460,7 +444,7 @@ function DecisionSummaryPanel({ report }: { report: DecisionReportResponse | nul
               <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                 <span>Fit {Math.round(school.fit_score)}</span>
                 <span>Cost {formatCurrency(school.estimated_yearly_cost ?? school.net_price)}</span>
-                <span>Career {Math.round(school.category_scores.career ?? 50)}</span>
+                <span>Career {school.category_scores.career == null ? "Unknown" : Math.round(school.category_scores.career)}</span>
               </div>
             </div>
           ))}
@@ -499,10 +483,3 @@ function TextArea({ label, onChange, value }: { label: string; onChange: (value:
   );
 }
 
-function formatCurrency(value: number | null) {
-  return value === null ? "Unknown" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
-}
-
-function formatPercent(value: number | null | undefined) {
-  return value === null || value === undefined ? "Unknown" : `${Math.round(value * 100)}%`;
-}

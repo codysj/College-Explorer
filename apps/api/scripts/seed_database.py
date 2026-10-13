@@ -4,11 +4,16 @@ import os
 from pathlib import Path
 
 import psycopg
+from dotenv import load_dotenv
 
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SEED_PATH = ROOT / "data" / "seed" / "schools_seed.csv"
-DEFAULT_DATABASE_URL = "postgresql://college:college@localhost:5432/college_exploration"
+DEFAULT_DATABASE_URL = "postgresql://college:college@127.0.0.1:5432/college_exploration"
+
+# Read the same .env that alembic and the app read, so a seed cannot land in a different
+# database than the one just migrated. A real environment variable still wins.
+load_dotenv(ROOT / ".env", override=False)
 
 
 def nullable_int(value: str) -> int | None:
@@ -89,11 +94,12 @@ def seed_school(conn: psycopg.Connection, row: dict[str, str]) -> None:
         cur.execute(
             """
             INSERT INTO school_academics (
-                school_id, top_majors, graduation_rate, retention_rate, student_faculty_ratio
+                school_id, top_majors, majors_offered, graduation_rate, retention_rate, student_faculty_ratio
             )
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (school_id) DO UPDATE SET
                 top_majors = EXCLUDED.top_majors,
+                majors_offered = EXCLUDED.majors_offered,
                 graduation_rate = EXCLUDED.graduation_rate,
                 retention_rate = EXCLUDED.retention_rate,
                 student_faculty_ratio = EXCLUDED.student_faculty_ratio
@@ -101,6 +107,7 @@ def seed_school(conn: psycopg.Connection, row: dict[str, str]) -> None:
             (
                 school_id,
                 split_list(row["top_majors"]),
+                split_list(row.get("majors_offered", "")),
                 nullable_float(row["graduation_rate"]),
                 nullable_float(row["retention_rate"]),
                 nullable_float(row["student_faculty_ratio"]),
@@ -171,6 +178,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Load deterministic V1.2 seed data.")
     parser.add_argument("--seed-file", default=str(DEFAULT_SEED_PATH))
     parser.add_argument("--reset", action="store_true", help="Clear seeded school data before loading.")
+    parser.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="Load only when no schools exist yet. Safe to run on every container start.",
+    )
     args = parser.parse_args()
 
     database_url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
@@ -178,6 +190,9 @@ def main() -> None:
     seed_path = Path(args.seed_file)
 
     with psycopg.connect(database_url) as conn:
+        if args.if_empty and conn.execute("SELECT EXISTS (SELECT 1 FROM schools)").fetchone()[0]:
+            print("Schools already loaded; skipping seed.")
+            return
         if args.reset:
             with conn.cursor() as cur:
                 cur.execute(

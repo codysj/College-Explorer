@@ -10,7 +10,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SensitivityAnalysis } from "@/components/compare/sensitivity-analysis";
 import {
-  buildLocalCostCalculator,
   defaultCostAssumption,
   requestCostCalculator,
   type CostCalculatorDraft,
@@ -19,6 +18,7 @@ import { buildComparisonSummary } from "@/lib/comparison";
 import { useSchoolActionState } from "@/lib/school-actions";
 import { getSchoolProfiles } from "@/lib/schools";
 import type { CostCalculatorResponse, SchoolProfile } from "@/types/api";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -28,6 +28,7 @@ export function ComparisonWorkspace() {
   const [costAssumptions, setCostAssumptions] = useState<CostCalculatorDraft[]>([]);
   const [costReport, setCostReport] = useState<CostCalculatorResponse | null>(null);
   const [familyBudget, setFamilyBudget] = useState<number | null>(null);
+  const [costError, setCostError] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const selectedIds = useMemo(() => comparedSchools.map((school) => school.school_id), [comparedSchools]);
@@ -66,19 +67,17 @@ export function ComparisonWorkspace() {
     });
   }, [profiles]);
 
+  // Results describe the inputs they were computed from; editing an input makes them stale.
   useEffect(() => {
-    if (profiles.length < 2) {
-      setCostReport(null);
-      return;
-    }
-    setCostReport(buildLocalCostCalculator(profiles, costAssumptions, costAssumptions[0]?.school_id, familyBudget));
-  }, [profiles, costAssumptions, familyBudget]);
+    setCostReport(null);
+  }, [costAssumptions, familyBudget]);
 
   const calculateCosts = async () => {
+    setCostError(null);
     try {
       setCostReport(await requestCostCalculator(costAssumptions, costAssumptions[0]?.school_id, familyBudget));
     } catch {
-      setCostReport(buildLocalCostCalculator(profiles, costAssumptions, costAssumptions[0]?.school_id, familyBudget));
+      setCostError("We couldn't calculate costs right now. Check your connection and try again.");
     }
   };
 
@@ -95,7 +94,7 @@ export function ComparisonWorkspace() {
             Compare schools
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Review 2 to 5 selected schools using deterministic profile metrics and explicit unknowns.
+            Side by side, 2 to 5 schools. Anything a school does not report is shown as unknown, never as zero.
           </p>
         </div>
         <Badge variant={compareIds.size >= 2 ? "default" : "muted"}>
@@ -141,6 +140,7 @@ export function ComparisonWorkspace() {
             assumptions={costAssumptions}
             budget={familyBudget}
             costReport={costReport}
+            error={costError}
             onBudgetChange={setFamilyBudget}
             onCalculate={calculateCosts}
             onUpdate={(schoolId, patch) => {
@@ -162,6 +162,7 @@ function CostComparison({
   assumptions,
   budget,
   costReport,
+  error,
   onBudgetChange,
   onCalculate,
   onUpdate,
@@ -169,6 +170,7 @@ function CostComparison({
   assumptions: CostCalculatorDraft[];
   budget: number | null;
   costReport: CostCalculatorResponse | null;
+  error: string | null;
   onBudgetChange: (value: number | null) => void;
   onCalculate: () => void;
   onUpdate: (schoolId: number, patch: Partial<CostCalculatorDraft>) => void;
@@ -197,6 +199,7 @@ function CostComparison({
           </button>
         </div>
       </div>
+      {error ? <p role="alert" className="mt-4 rounded-md bg-muted p-3 text-sm text-foreground">{error}</p> : null}
       <div className="mt-5 overflow-x-auto">
         <table className="min-w-[920px] w-full border-collapse text-left text-sm">
           <thead>
@@ -409,29 +412,11 @@ function ComparisonSkeleton() {
   );
 }
 
-function formatCurrency(value: number | null) {
-  return value === null
-    ? "Unknown"
-    : new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      }).format(value);
-}
-
 function formatSignedCurrency(value: number | null) {
   if (value === null) return "Unknown";
   const formatted = formatCurrency(Math.abs(value));
   if (value === 0) return "$0";
   return value > 0 ? `+${formatted}` : `-${formatted}`;
-}
-
-function formatNumber(value: number | null) {
-  return value === null ? "Unknown" : new Intl.NumberFormat("en-US").format(value);
-}
-
-function formatPercent(value: number | null) {
-  return value === null ? "Unknown" : `${Math.round(value * 100)}%`;
 }
 
 function formatScore(value: number | null | undefined) {

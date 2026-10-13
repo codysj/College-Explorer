@@ -24,10 +24,13 @@ class FakeAnalyticsRepository:
             event(8, "onboarding_completed", "preference_profile", None, now, {"completion_percent": 100, "category_weights": {"academic": 0.3}}),
         ]
 
-    def create_event(self, user_id: int | None, event_name: str, entity_type: str | None, entity_id: int | None, metadata: dict[str, object]) -> dict[str, object]:
-        row = event(len(self.events) + 1, event_name, entity_type, entity_id, datetime.now(UTC), metadata, user_id)
-        self.events.append(row)
-        return row
+    def create_events(self, events: list[dict[str, object]]) -> list[dict[str, object]]:
+        rows = [
+            event(len(self.events) + offset, item["event_name"], item["entity_type"], item["entity_id"], datetime.now(UTC), item["metadata"], None)
+            for offset, item in enumerate(events, start=1)
+        ]
+        self.events.extend(rows)
+        return rows
 
     def list_events(self, lookback_days: int = 90, limit: int = 5000) -> list[dict[str, object]]:
         since = datetime.now(UTC) - timedelta(days=lookback_days)

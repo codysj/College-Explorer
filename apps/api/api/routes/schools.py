@@ -1,11 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from api.deps import get_cache_service, get_db
 from api.routes.analytics import get_analytics_service
 from core.logging import get_logger
+from core.rate_limit import RateLimit
 from repositories.schools import SchoolRepository
 from schemas.similar_schools import SimilarSchoolsRequest, SimilarSchoolsResponse
 from schemas.schools import SchoolProfileResponse, SearchRequest, SearchResponse
@@ -15,7 +16,8 @@ from schemas.analytics import AnalyticsEventCreate
 from services.similar_schools import SimilarSchoolsService
 from services.schools import SchoolService
 
-router = APIRouter(prefix="/schools", tags=["schools"])
+# Reads are cheap but search writes an analytics row, so a GET flood is still DB writes.
+router = APIRouter(prefix="/schools", tags=["schools"], dependencies=[Depends(RateLimit("read", limit=240))])
 logger = get_logger(__name__)
 
 
@@ -40,7 +42,7 @@ def get_similar_schools_service(
     description="Returns paginated school search cards using structured filters and deterministic sorting.",
 )
 def search_schools(
-    filters: Annotated[SearchRequest, Depends()],
+    filters: Annotated[SearchRequest, Query()],
     service: SchoolService = Depends(get_school_service),
     analytics: AnalyticsService = Depends(get_analytics_service),
 ) -> SearchResponse:

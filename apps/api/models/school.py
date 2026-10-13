@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Index, Integer, Numeric, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -13,8 +13,16 @@ from db.base import Base
 
 class School(Base):
     __tablename__ = "schools"
+    __table_args__ = (
+        Index("ix_schools_state", "state"),
+        Index("ix_schools_region", "region"),
+        Index("ix_schools_type", "type"),
+        Index("ix_schools_setting", "setting"),
+        Index("ix_schools_enrollment", "undergraduate_enrollment"),
+        Index("ix_schools_acceptance_rate", "acceptance_rate"),
+    )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     unitid: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     city: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -32,7 +40,7 @@ class School(Base):
     imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     academics: Mapped[SchoolAcademics | None] = relationship(back_populates="school")
     costs: Mapped[SchoolCosts | None] = relationship(back_populates="school")
@@ -43,9 +51,13 @@ class School(Base):
 
 class SchoolAcademics(Base):
     __tablename__ = "school_academics"
+    __table_args__ = (
+        Index("ix_school_academics_graduation_rate", "graduation_rate"),
+    )
 
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), primary_key=True)
     top_majors: Mapped[list[str]] = mapped_column(ARRAY(String(80)), default=list)
+    majors_offered: Mapped[list[str]] = mapped_column(ARRAY(String(80)), default=list)
     graduation_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     retention_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     student_faculty_ratio: Mapped[Decimal | None] = mapped_column(Numeric(4, 1))
@@ -56,6 +68,11 @@ class SchoolAcademics(Base):
 
 class SchoolCosts(Base):
     __tablename__ = "school_costs"
+    __table_args__ = (
+        Index("ix_school_costs_tuition_in_state", "tuition_in_state"),
+        Index("ix_school_costs_tuition_out_state", "tuition_out_state"),
+        Index("ix_school_costs_net_price", "net_price"),
+    )
 
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), primary_key=True)
     tuition_in_state: Mapped[int | None] = mapped_column(Integer)
@@ -94,6 +111,9 @@ class SchoolCampusLife(Base):
 
 class SchoolEmbedding(Base):
     __tablename__ = "school_embeddings"
+    __table_args__ = (
+        Index("ix_school_embeddings_type_model", "embedding_type", "embedding_model"),
+    )
 
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), primary_key=True)
     embedding_type: Mapped[str] = mapped_column(String(40), primary_key=True)

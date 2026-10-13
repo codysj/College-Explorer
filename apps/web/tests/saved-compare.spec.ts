@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { routeSearch, routeSensitivity, schools, toProfile } from "./fixtures";
+import { routeCostCalculator, routeDecisionReport, routeSearch, routeSensitivity, schools, toProfile } from "./fixtures";
 
 test("saves, updates, and removes schools from the dashboard", async ({ page }) => {
   await routeSearch(page);
@@ -52,9 +52,7 @@ test("renders the comparison workspace for selected schools", async ({ page }) =
       body: JSON.stringify(toProfile(school)),
     });
   });
-  await page.route("**/cost-calculator", async (route) => {
-    await route.abort();
-  });
+  await routeCostCalculator(page);
   await routeSensitivity(page);
 
   await page.goto("/compare");
@@ -87,18 +85,8 @@ test("edits accepted-school offers and generates a decision summary", async ({ p
     updated_at: new Date().toISOString(),
   })));
 
-  await page.route("**/decision/offers", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ id: 1, user_id: 1, school_name: "Test College 1", city: "Northbridge", state: "MA", ...(await route.request().postDataJSON()) }),
-    });
-  });
-  await page.route("**/decision/report", async (route) => {
-    await route.abort();
-  });
-  await page.route("**/cost-calculator", async (route) => {
-    await route.abort();
-  });
+  await routeDecisionReport(page);
+  await routeCostCalculator(page);
 
   await page.goto("/decision");
 
@@ -111,7 +99,6 @@ test("edits accepted-school offers and generates a decision summary", async ({ p
   await expect(page.getByLabel("Four-year total for Test College 1")).toContainText("$72,000");
   await expect(page.getByLabel("Unresolved concerns/questions").first()).toBeVisible();
   await page.getByLabel("Unresolved concerns/questions").first().fill("Confirm housing package");
-  await page.getByRole("button", { name: "Save offer" }).first().click();
   await page.getByRole("button", { name: "Generate summary" }).click();
 
   await expect(page.getByText("Decision summary")).toBeVisible();
@@ -126,4 +113,23 @@ test("edits accepted-school offers and generates a decision summary", async ({ p
   await expect(page.getByText("Sensitivity Highlights")).toBeVisible();
   await expect(page.getByText("Questions Still Worth Investigating")).toBeVisible();
   await expect(page.getByRole("button", { name: "Print" })).toBeVisible();
+});
+
+test("shows an error instead of inventing scores when the API is unreachable", async ({ page }) => {
+  await page.addInitScript((savedSchools) => {
+    window.localStorage.setItem("college-exploration.saved-schools.v1", JSON.stringify(savedSchools));
+  }, schools.slice(0, 2).map((school) => ({
+    ...school,
+    status: "accepted",
+    saved_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  })));
+  await page.route("**/decision/report", (route) => route.abort());
+
+  await page.goto("/decision");
+  await page.getByRole("button", { name: "Generate summary" }).click();
+
+  await expect(page.getByText("We couldn't build your summary")).toBeVisible();
+  await expect(page.getByText("Best overall fit")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open report" })).toBeDisabled();
 });

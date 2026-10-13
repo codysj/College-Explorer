@@ -69,10 +69,14 @@ FIELD_MAP = {
 }
 
 # Scorecard program_percentage buckets -> readable major names, for deriving top majors.
+# Every bucket Scorecard publishes, so "top three" is computed over all of them. Keys must
+# be exact field names: an unknown one is silently absent from every response, which is
+# how "biology" (the real field is "biological") once hid Biology from every school.
+# main() now refuses a fetch where any requested program field is absent everywhere.
 PROGRAM_LABELS = {
     "agriculture": "Agriculture",
     "architecture": "Architecture",
-    "biology": "Biology",
+    "biological": "Biology",
     "business_marketing": "Business",
     "communication": "Communications",
     "computer": "Computer Science",
@@ -85,7 +89,7 @@ PROGRAM_LABELS = {
     "language": "Languages",
     "legal": "Legal Studies",
     "mathematics": "Mathematics",
-    "parks_recreation": "Parks and Recreation",
+    "parks_recreation_fitness": "Parks and Recreation",
     "philosophy_religious": "Philosophy and Religion",
     "physical_science": "Physical Sciences",
     "psychology": "Psychology",
@@ -94,6 +98,20 @@ PROGRAM_LABELS = {
     "social_science": "Social Sciences",
     "theology_religious_vocation": "Theology",
     "visual_performing": "Visual and Performing Arts",
+    "resources": "Natural Resources",
+    "ethnic_cultural_gender": "Area and Gender Studies",
+    "multidiscipline": "Interdisciplinary Studies",
+    "family_consumer_science": "Family and Consumer Sciences",
+    "communications_technology": "Communications Technology",
+    "engineering_technology": "Engineering Technology",
+    "science_technology": "Science Technology",
+    "library": "Library Science",
+    "military": "Military Science",
+    "personal_culinary": "Culinary and Personal Services",
+    "construction": "Construction Trades",
+    "mechanic_repair_technology": "Mechanic and Repair Technology",
+    "precision_production": "Precision Production",
+    "transportation": "Transportation",
 }
 
 # Columns the pipeline accepts but no official source publishes. Left empty on purpose:
@@ -102,7 +120,7 @@ UNAVAILABLE_COLUMNS = ["greek_life_rate"]
 
 RAW_COLUMNS = [
     "UNITID", "INSTNM", "CITY", "STABBR", "CONTROL", "LOCALE", "UGDS", "ADM_RATE",
-    "LATITUDE", "LONGITUDE", "programs.cip_4_digit.title", "C150_4", "RET_FT4",
+    "LATITUDE", "LONGITUDE", "programs.cip_4_digit.title", "majors_offered", "C150_4", "RET_FT4",
     "STUFACR", "TUITIONFEE_IN", "TUITIONFEE_OUT", "NPT4_PUB", "NPT4_PRIV", "GRANT_AMT",
     "DEBT_MDN", "MD_EARN_WNE_P10", "RPY_3YR_RT", "housing_available", "sports_division",
     "greek_life_rate", "culture_tags",
@@ -312,14 +330,15 @@ def fetch_ipeds(unitids: list[int], timeout: int) -> dict[int, dict[str, str]]:
     return supplement
 
 
-def top_majors(result: dict, count: int = 3) -> list[str]:
+def top_majors(result: dict, count: int | None = 3) -> list[str]:
+    """Program families with graduates, largest share first; `count=None` keeps them all."""
     shares = []
     for key, label in PROGRAM_LABELS.items():
         value = result.get(f"latest.academics.program_percentage.{key}")
         if isinstance(value, (int, float)) and value > 0:
             shares.append((float(value), label))
     shares.sort(key=lambda item: (-item[0], item[1]))
-    return [label for _, label in shares[:count]]
+    return [label for _, label in (shares if count is None else shares[:count])]
 
 
 def culture_tags(result: dict) -> list[str]:
@@ -355,6 +374,8 @@ def to_raw_row(result: dict) -> dict[str, str]:
         value = result.get(field)
         row[column] = "" if value is None else str(value)
     row["programs.cip_4_digit.title"] = "|".join(top_majors(result))
+    # Every family with graduates: lets ranking tell "not offered" from "not in the top three".
+    row["majors_offered"] = "|".join(top_majors(result, count=None))
     row["culture_tags"] = "|".join(culture_tags(result))
     # STUFACR, GRANT_AMT, housing_available, and sports_division stay empty here: Scorecard
     # does not publish them, and main() fills them from fetch_ipeds().
@@ -408,6 +429,8 @@ def self_check() -> None:
     assert top_majors(sample) == ["Computer Science", "Social Sciences", "Engineering"], top_majors(sample)
     assert "Theology" not in top_majors(sample)
     assert top_majors({}) == []
+    assert top_majors(sample, count=None)[:3] == top_majors(sample), "the full list starts with the top three"
+    assert "Theology" not in top_majors(sample, count=None), "a zero share is not an offered major"
 
     # Tags come only from reported structural fields.
     tags = culture_tags(sample)
@@ -493,29 +516,8 @@ def self_check() -> None:
     print("self-check passed")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--api-key", help="api.data.gov key, or DEMO_KEY for a rate-limited trial")
-    parser.add_argument("--self-check", action="store_true", help="run offline transform checks and exit")
-    parser.add_argument("--per-slice", type=int, default=50, help="schools per selection slice (default 50)")
-    parser.add_argument(
-        "--output",
-        default="data/raw/college_snapshot.csv",
-        help="raw CSV path consumed by ingest_college_data.py",
-    )
-    parser.add_argument("--timeout", type=int, default=60)
-    args = parser.parse_args()
-
-    if args.self_check:
-        self_check()
-        return
-    if not args.api_key:
-        raise SystemExit("--api-key is required (get a free key at https://api.data.gov/signup)")
-    if args.per_slice < 1:
-        raise SystemExit("--per-slice must be at least 1")
-
-    print(f"Reporting years pinned per metric group: {REPORTING_YEARS}")
-
+def select_corpus(args: argparse.Namespace) -> dict[int, dict]:
+    """The documented selection rule: union of the most selective and the largest slices."""
     selective = fetch_slice(
         args.api_key,
         sort=f"{SORT_ADMISSION_RATE}:asc",
@@ -542,6 +544,72 @@ def main() -> None:
             merged.setdefault(int(unitid), result)
     if not merged:
         raise SystemExit("No schools returned - check the API key and filters.")
+    print(f"  {len(selective) + len(largest) - len(merged)} schools in both slices")
+    return merged
+
+
+def fetch_by_ids(api_key: str, unitids: list[int], timeout: int) -> list[dict]:
+    """Fetch specific schools by UNITID.
+
+    25 per request: with every requested field, 92 ids in one call returns a server 500
+    from Scorecard while 20 succeed.
+    """
+    results: list[dict] = []
+    for start in range(0, len(unitids), 25):
+        chunk = unitids[start : start + 25]
+        payload = request_page(
+            api_key,
+            {"id": ",".join(map(str, chunk)), "fields": ",".join(dict.fromkeys(REQUESTED_FIELDS)), "per_page": "100"},
+            timeout,
+        )
+        results.extend(payload.get("results") or [])
+    return results
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--api-key", help="api.data.gov key, or DEMO_KEY for a rate-limited trial")
+    parser.add_argument("--self-check", action="store_true", help="run offline transform checks and exit")
+    parser.add_argument("--per-slice", type=int, default=50, help="schools per selection slice (default 50)")
+    parser.add_argument(
+        "--output",
+        default="data/raw/college_snapshot.csv",
+        help="raw CSV path consumed by ingest_college_data.py",
+    )
+    parser.add_argument("--timeout", type=int, default=60)
+    parser.add_argument(
+        "--unitids-from",
+        help="refresh exactly the schools in this CSV (a UNITID or unitid column) instead of re-running selection",
+    )
+    args = parser.parse_args()
+
+    if args.self_check:
+        self_check()
+        return
+    if not args.api_key:
+        raise SystemExit("--api-key is required (get a free key at https://api.data.gov/signup)")
+    if args.per_slice < 1:
+        raise SystemExit("--per-slice must be at least 1")
+
+    print(f"Reporting years pinned per metric group: {REPORTING_YEARS}")
+
+    merged: dict[int, dict] = {}
+    if args.unitids_from:
+        # Same corpus, fresh fields. Re-running selection would sort on `latest.*` values that
+        # move between Scorecard releases, so a refresh could silently swap schools in or out.
+        with open(args.unitids_from, newline="", encoding="utf-8-sig") as file:
+            wanted = sorted({int(row.get("UNITID") or row["unitid"]) for row in csv.DictReader(file)})
+        for result in fetch_by_ids(args.api_key, wanted, args.timeout):
+            merged[int(result["id"])] = result
+        missing = sorted(set(wanted) - set(merged))
+        if missing:
+            raise SystemExit(f"Scorecard returned no record for UNITIDs {missing}; refusing a partial refresh.")
+    else:
+        merged = select_corpus(args)
+
+    absent = [field for field in PROGRAM_FIELDS if all(field not in result for result in merged.values())]
+    if absent:
+        raise SystemExit(f"Scorecard returned none of {absent}; check the field names in PROGRAM_LABELS.")
 
     unitids = sorted(merged)
     print(f"  IPEDS supplement for {len(unitids)} schools")
@@ -559,8 +627,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-    overlap = len(selective) + len(largest) - len(merged)
-    print(f"\nWrote {len(rows)} unique schools to {output} ({overlap} in both slices)")
+    print(f"\nWrote {len(rows)} schools to {output}")
     print("\nPopulated values per column:")
     for column, count in fill_report(rows):
         share = count / len(rows)
@@ -580,6 +647,7 @@ def main() -> None:
                     "online_only": "excluded",
                     "per_slice": args.per_slice,
                     "slices": ["most_selective_by_admission_rate", "largest_by_undergraduate_enrollment"],
+                    "refreshed_from": args.unitids_from,
                 },
                 "unavailable_columns": UNAVAILABLE_COLUMNS,
             },

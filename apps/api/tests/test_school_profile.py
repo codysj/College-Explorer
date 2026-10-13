@@ -274,6 +274,7 @@ def test_service_computes_confidence_from_profile_completeness() -> None:
     assert profile is not None
     assert profile.enrollment is None
     assert "enrollment" in profile.data_fields_missing
-    assert "outcomes.completion_rate" in profile.data_fields_missing
     assert "acceptance_rate" in profile.data_fields_missing
-    assert profile.data_confidence_score == 0.5862
+    # Never collected for any school, so not counted against this one.
+    assert "outcomes.completion_rate" not in profile.data_fields_missing
+    assert profile.data_confidence_score == round(1 - len(profile.data_fields_missing) / 23, 4)

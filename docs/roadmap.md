@@ -16,7 +16,7 @@ they are only visible from inside the code.
 | **All 50 schools are synthetic.** | `data/seed/schools_seed.csv`, 51 rows, unitids `900001+`, names like "Adams State College" in "Northbridge, MA". | Every screenshot, GIF, retrieval evaluation, and load test currently measures fiction. |
 | **Semantic search is a hash, not a semantic model.** | `LocalHashEmbeddingProvider` SHA-256s each token into one of 64 buckets (`apps/api/services/semantic_search.py:46-60`). | It is exact lexical matching with collisions — strictly worse than Postgres full-text, which is already installed. It is also unreferenced by the frontend. |
 
-Also relevant: `tests/e2e/` is empty, `/analytics` is an unauthenticated dashboard with an
+Also relevant at the time: `tests/e2e/` was empty (since removed), `/analytics` is an unauthenticated dashboard with an
 unauthenticated write endpoint, and `docs/performance.md` correctly disclaims every number.
 
 **Read of the feedback:** directionally right on all six points, but it assumes the V1/V2
@@ -101,7 +101,7 @@ tell them what to do next.
 
 *Maps to: old V3.6. Effort: half a day.*
 
-`tests/e2e/` is empty; `apps/web/tests/` holds five per-page smoke specs and nothing that
+`tests/e2e/` (since removed) was empty; `apps/web/tests/` held five per-page smoke specs and nothing that
 crosses pages. Add one Playwright test walking the full journey above, running in CI —
 that test is what licenses the claim that the journey works. Add a ranking snapshot test
 over the real corpus so future data refreshes cannot silently reorder results.

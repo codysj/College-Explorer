@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from schemas.base import ApiModel
 AnalyticsEventName = Literal[
     "search_performed",
     "semantic_search_performed",
@@ -21,11 +23,10 @@ JsonScalar: TypeAlias = str | int | float | bool | None
 JsonValue: TypeAlias = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
 
 
-class AnalyticsEventCreate(BaseModel):
+class AnalyticsEventCreate(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "user_id": 1,
                 "event_name": "school_saved",
                 "entity_type": "school",
                 "entity_id": 2,
@@ -39,7 +40,6 @@ class AnalyticsEventCreate(BaseModel):
         }
     )
 
-    user_id: int | None = Field(default=None, ge=1)
     event_name: AnalyticsEventName
     entity_type: str | None = Field(default=None, max_length=40)
     entity_id: int | None = Field(default=None, ge=1)
@@ -49,10 +49,12 @@ class AnalyticsEventCreate(BaseModel):
     def validate_metadata_size(self) -> "AnalyticsEventCreate":
         if len(self.metadata) > 40:
             raise ValueError("metadata may contain at most 40 keys")
+        if len(json.dumps(self.metadata, default=str)) > 4096:
+            raise ValueError("metadata may be at most 4 KB when serialized")
         return self
 
 
-class AnalyticsEventResponse(BaseModel):
+class AnalyticsEventResponse(ApiModel):
     id: int
     user_id: int | None
     event_name: AnalyticsEventName
@@ -62,36 +64,36 @@ class AnalyticsEventResponse(BaseModel):
     created_at: datetime | None = None
 
 
-class AnalyticsMetricCard(BaseModel):
+class AnalyticsMetricCard(ApiModel):
     label: str
     value: int | float | str
     detail: str
 
 
-class AnalyticsCountRow(BaseModel):
+class AnalyticsCountRow(ApiModel):
     key: str
     count: int
 
 
-class AnalyticsSchoolMetric(BaseModel):
+class AnalyticsSchoolMetric(ApiModel):
     school_id: int
     school_name: str
     count: int
 
 
-class AnalyticsRateRow(BaseModel):
+class AnalyticsRateRow(ApiModel):
     bucket: str
     numerator: int
     denominator: int
     rate: float
 
 
-class AnalyticsDistributionRow(BaseModel):
+class AnalyticsDistributionRow(ApiModel):
     bucket: str
     count: int
 
 
-class RankingEvaluationSummary(BaseModel):
+class RankingEvaluationSummary(ApiModel):
     save_rate_by_fit_bucket: list[AnalyticsRateRow]
     compare_rate_by_rank_position: list[AnalyticsRateRow]
     top_reason_code_frequency: list[AnalyticsCountRow]
@@ -101,7 +103,7 @@ class RankingEvaluationSummary(BaseModel):
     interpretation_notes: list[str]
 
 
-class AnalyticsSummaryResponse(BaseModel):
+class AnalyticsSummaryResponse(ApiModel):
     generated_at: datetime
     lookback_days: int
     event_counts: list[AnalyticsCountRow]

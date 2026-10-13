@@ -6,11 +6,16 @@ import re
 from dataclasses import dataclass
 from typing import Iterable, Protocol
 
+from sqlalchemy.exc import SQLAlchemyError
+
+from core.logging import get_logger
 from repositories.schools import SchoolRepository
 from schemas.preferences import Preference
 from schemas.semantic_search import SemanticSearchRequest, SemanticSearchResponse, SemanticSearchResult
 from services.cache import CacheService, NullCacheBackend
 from services.ranking_service import RANKING_VERSION, RankingService, RankedSchool, to_float, to_int
+
+logger = get_logger(__name__)
 
 
 EMBEDDING_TYPE = "school_search_document"
@@ -88,7 +93,7 @@ class SemanticSearchService:
         self.repository = repository
         self.cache = cache or CacheService(NullCacheBackend(), "v1", 300, 3600, 300)
         self.embedding_provider = embedding_provider or LocalHashEmbeddingProvider()
-        self.ranking_service = RankingService(repository, cache)
+        self.ranking_service = RankingService(repository, self.cache)
 
     def refresh_embeddings(self) -> int:
         rows = self.repository.get_semantic_document_rows()
@@ -146,7 +151,9 @@ class SemanticSearchService:
             total_results=total_results,
             has_next=end < total_results,
         )
-        self.cache.set_model(cache_key, response, self.cache.search_ttl_seconds)
+        if retrieval_mode != "deterministic_fallback":
+            # The fallback only runs when full-text failed; do not pin a degraded answer for the TTL.
+            self.cache.set_model(cache_key, response, self.cache.search_ttl_seconds)
         return response
 
     def _retrieve_candidates(self, request: SemanticSearchRequest) -> tuple[list[dict[str, object]], str, str]:
@@ -166,7 +173,8 @@ class SemanticSearchService:
             scores = self.repository.get_fulltext_scores(
                 tsquery_text, {int(row["school_id"]): build_search_document(row).text for row in rows}
             )
-        except Exception:
+        except SQLAlchemyError:
+            logger.warning("fulltext_query_failed", exc_info=True)
             return lexical_fallback_rows(rows, request.query, request.candidate_limit), "deterministic_fallback", LEXICAL_RETRIEVER
         scored = [{**row, "semantic_score": scores[int(row["school_id"])]} for row in rows]
         scored.sort(key=lambda row: (-float(row["semantic_score"]), int(row["school_id"])))

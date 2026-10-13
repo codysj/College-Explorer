@@ -1,7 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from schemas.base import ApiModel
 
 SchoolSort = Literal[
     "name",
@@ -13,7 +14,7 @@ SchoolSort = Literal[
 SortDirection = Literal["asc", "desc"]
 
 
-class SchoolSummary(BaseModel):
+class SchoolSummary(ApiModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -28,7 +29,7 @@ class SchoolSummary(BaseModel):
     acceptance_rate: float | None = None
 
 
-class SchoolProfile(BaseModel):
+class SchoolProfile(ApiModel):
     school: SchoolSummary
     top_majors: list[str] = Field(default_factory=list)
     graduation_rate: float | None = None
@@ -37,7 +38,7 @@ class SchoolProfile(BaseModel):
     campus_tags: list[str] = Field(default_factory=list)
 
 
-class SchoolProfileAcademics(BaseModel):
+class SchoolProfileAcademics(ApiModel):
     majors: list[str] | None = None
     popular_majors: list[str] | None = None
     graduation_rate: float | None = None
@@ -45,7 +46,7 @@ class SchoolProfileAcademics(BaseModel):
     student_faculty_ratio: float | None = None
 
 
-class SchoolProfileCost(BaseModel):
+class SchoolProfileCost(ApiModel):
     tuition_in_state: int | None = None
     tuition_out_state: int | None = None
     net_price: int | None = None
@@ -53,14 +54,14 @@ class SchoolProfileCost(BaseModel):
     debt_median: int | None = None
 
 
-class SchoolProfileOutcomes(BaseModel):
+class SchoolProfileOutcomes(ApiModel):
     median_earnings: int | None = None
     completion_rate: float | None = None
     repayment_rate: float | None = None
     outcome_percentiles: dict[str, float] | None = None
 
 
-class SchoolProfileCampusLife(BaseModel):
+class SchoolProfileCampusLife(ApiModel):
     sports: str | None = None
     greek_life: float | None = None
     housing: bool | None = None
@@ -69,7 +70,7 @@ class SchoolProfileCampusLife(BaseModel):
     culture_tags: list[str] | None = None
 
 
-class SchoolProfileResponse(BaseModel):
+class SchoolProfileResponse(ApiModel):
     school_id: int
     name: str
     city: str
@@ -96,7 +97,7 @@ class SchoolProfileResponse(BaseModel):
     similar_schools: list[dict[str, object]] = Field(default_factory=list)
 
 
-class SchoolSearchResult(BaseModel):
+class SchoolSearchResult(ApiModel):
     school_id: int
     name: str
     city: str
@@ -115,7 +116,7 @@ class SchoolSearchResult(BaseModel):
     ranking_version: str | None = None
 
 
-class SearchRequest(BaseModel):
+class SearchRequest(ApiModel):
     query: str | None = Field(default=None, max_length=120)
     state: str | None = Field(default=None, min_length=2, max_length=2)
     region: str | None = Field(default=None, max_length=32)
@@ -148,7 +149,7 @@ class SearchRequest(BaseModel):
         return self
 
 
-class SearchResponse(BaseModel):
+class SearchResponse(ApiModel):
     results: list[SchoolSearchResult] = Field(default_factory=list)
     page: int = 1
     page_size: int = 20

@@ -205,7 +205,7 @@ Hard constraints:
 
 ### `POST /semantic-search`
 
-Natural-language school search. Structured filters are applied first, inside the candidate query, so a filter cannot empty the page by excluding every nearest candidate. The endpoint then scores every remaining school with Postgres full-text search (`RANKING_VERSION` v1.3) and keeps the best `candidate_limit`, falling back to deterministic token overlap if the full-text query fails. The deterministic ranking engine removes schools that violate hard constraints and scores the rest, and the page is ordered by query relevance with the fit order breaking ties. Relevance never overrides a hard constraint or changes a fit score. For ordering by preference fit alone, use `POST /rankings`.
+Natural-language school search. Structured filters are applied first, inside the candidate query, so a filter cannot empty the page by excluding every nearest candidate. The endpoint then scores every remaining school with Postgres full-text search (since `RANKING_VERSION` v1.3) and keeps the best `candidate_limit`, falling back to deterministic token overlap if the full-text query fails. The deterministic ranking engine removes schools that violate hard constraints and scores the rest, and the page is ordered by query relevance with the fit order breaking ties. Relevance never overrides a hard constraint or changes a fit score. For ordering by preference fit alone, use `POST /rankings`.
 
 Request body:
 
@@ -248,7 +248,7 @@ Response `200`:
 
 ```json
 {
-  "ranking_version": "v1.3",
+  "ranking_version": "v1.4",
   "embedding_model": "postgres-fulltext-english",
   "embedding_type": "school_search_document",
   "retrieval_mode": "fulltext",
@@ -442,80 +442,25 @@ Missing data behavior:
 - `data_fields_missing` makes unknown values explicit for clients.
 - `data_confidence_score` measures data completeness only; it is not a ranking score, admissions signal, ROI estimate, or recommendation confidence.
 
-### `POST /decision/offers`
+### `POST /decision/report`
 
-Creates or updates one accepted/finalist offer. Until authentication exists, requests use explicit `user_id`, defaulting to local demo user `1`.
+Generates a deterministic accepted-school decision report from the offers in the request and ranking preferences. The report is a planning artifact, not admissions or financial advice.
+
+The API stores no offers. Until V3.9 authentication exists there is no identity to own
+server-side state, and a client-supplied `user_id` let any caller read any visitor's aid
+offers and notes, so the offer store endpoints (`POST`/`GET /decision/offers`) and report
+snapshots were removed. Offers live in the browser and travel with each request; free-text
+notes never leave the browser because the report does not use them.
 
 Request body:
-
-```json
-{
-  "user_id": 1,
-  "school_id": 2,
-  "status": "finalist",
-  "aid_offer": 12000,
-  "scholarships": 8000,
-  "estimated_yearly_cost": 24000,
-  "visit_notes": "Strong department visit; commute felt manageable.",
-  "unresolved_concerns": ["Confirm housing cost", "Compare internship access"],
-  "parent_priority_notes": "Keep debt below the family budget.",
-  "student_priority_notes": "Prefer urban campus and strong CS hiring."
-}
-```
-
-Rules:
-
-- `status` must be `accepted` or `finalist`.
-- Financial inputs must be nonnegative annual whole-dollar amounts.
-- The endpoint also aligns the saved-school status for the same user/school.
-
-Response `200` returns the stored offer plus school display fields.
-
-### `GET /decision/offers`
-
-Lists accepted/finalist offers for a user.
-
-Query parameters:
-
-| Name | Type | Rules |
-| --- | --- | --- |
-| `user_id` | integer | Optional, defaults to `1`, must be `>= 1`. |
-
-Response `200`:
 
 ```json
 {
   "offers": [
-    {
-      "id": 1,
-      "user_id": 1,
-      "school_id": 2,
-      "school_name": "Bayview Technical University",
-      "city": "New Haven",
-      "state": "CT",
-      "status": "finalist",
-      "aid_offer": 12000,
-      "scholarships": 8000,
-      "estimated_yearly_cost": 24000,
-      "visit_notes": "Strong department visit.",
-      "unresolved_concerns": ["Confirm housing cost"],
-      "parent_priority_notes": "Keep debt below budget.",
-      "student_priority_notes": "Prioritize internships."
-    }
-  ]
-}
-```
-
-### `POST /decision/report`
-
-Generates a deterministic accepted-school decision report from existing offers and ranking preferences. The report is a planning artifact, not admissions or financial advice.
-
-Request body:
-
-```json
-{
-  "user_id": 1,
-  "school_ids": [1, 2, 3],
+    {"school_id": 1, "status": "finalist", "aid_offer": 12000, "scholarships": 8000,
+     "estimated_yearly_cost": 24000, "unresolved_concerns": ["Confirm housing cost"]},
+    {"school_id": 2, "status": "accepted", "estimated_yearly_cost": 31000}
+  ],
   "preferences": {
     "intended_major": "Computer Science",
     "home_state": "CA",
@@ -527,8 +472,7 @@ Request body:
       "campus": 0.25
     }
   },
-  "max_annual_family_budget": 30000,
-  "save_snapshot": true
+  "max_annual_family_budget": 30000
 }
 ```
 
@@ -548,12 +492,12 @@ Response `200` includes:
 - `decision_confidence` and `confidence_flags`: explicit uncertainty indicators for missing financial data, incomplete preferences, missing outcomes, limited school data, or too few finalists.
 - `major_tradeoffs`: deterministic comparison sentences grounded in structured data and user-entered offers.
 - `methodology_note` and `disclaimer`: decision-support language that clarifies outputs are deterministic planning support, not admissions or financial advice.
-- `snapshot_id`: present when `save_snapshot=true`.
 
 Validation behavior:
 
-- `school_ids` must contain 1 to 8 positive ids when supplied.
-- The report uses accepted/finalist offers for the supplied `user_id`; if no accepted/finalist offers are available, the endpoint returns `422`.
+- `offers` must contain 1 to 8 entries with distinct `school_id`s; `status` is `accepted` or `finalist`.
+- Financial inputs are nonnegative whole-dollar yearly amounts up to 250,000; each unresolved concern is at most 300 characters, at most 12 per offer.
+- If none of the offered schools exist in the dataset the endpoint returns `422`.
 - Missing cost, outcomes, preference, or ranking data lowers confidence and creates flags rather than being treated as zero.
 
 ### `POST /cost-calculator`
@@ -571,7 +515,7 @@ Request body:
       "scholarships": 8000,
       "grants_aid": 6000,
       "annual_loan_amount": 5500,
-      "loan_interest_rate": 0.055,
+      "loan_interest_rate": 0.0639,
       "loan_term_years": 10
     },
     {
@@ -591,7 +535,7 @@ Rules:
 | --- | --- |
 | `schools` | Required, 1 to 8 unique schools. |
 | `tuition`, `estimated_net_price`, `scholarships`, `grants_aid`, `estimated_yearly_cost`, `annual_loan_amount` | Optional nonnegative annual dollar amounts. |
-| `loan_interest_rate` | Optional, defaults to `0.055`, must be `0` to `0.25`. |
+| `loan_interest_rate` | Optional, defaults to `0.0639` (federal undergraduate Direct Loan rate, 2025-26), must be `0` to `0.25`. |
 | `loan_term_years` | Optional, defaults to `10`, must be `1` to `30`. |
 | `baseline_school_id` | Optional; when supplied, it must be one of the requested schools. |
 | `max_annual_family_budget` | Optional nonnegative yearly budget used for affordability indicators. |
@@ -630,7 +574,7 @@ Response `200`:
         "grants_aid": null,
         "estimated_yearly_cost": 42500,
         "annual_loan_amount": 12000,
-        "loan_interest_rate": 0.055,
+        "loan_interest_rate": 0.0639,
         "loan_term_years": 10
       },
       "estimated_yearly_cost": 42500,
@@ -642,7 +586,7 @@ Response `200`:
         {
           "scenario": "base",
           "principal": 48000,
-          "interest_rate": 0.055,
+          "interest_rate": 0.0639,
           "term_years": 10,
           "estimated_monthly_payment": 521,
           "estimated_total_repaid": 62520,
@@ -670,7 +614,7 @@ Response `200`:
 
 Calculation rules:
 
-- Yearly cost uses entered `estimated_yearly_cost` first, then entered net price or tuition minus scholarships and grants/aid, then profile net price or tuition when available.
+- Yearly cost uses entered `estimated_yearly_cost` first, then entered net price, then entered tuition minus scholarships and grants/aid, then profile net price, then profile out-of-state tuition minus aid. Net price already reflects typical grant aid, so aid is never subtracted from it; aid entered against a net price adds the `aid_not_subtracted_from_net_price` warning. Scholarships plus grants cannot exceed entered tuition.
 - Four-year total is yearly cost multiplied by `4`; no inflation or year-by-year sensitivity is applied in V2.5.
 - Debt exposure uses entered annual loans multiplied by `4`; if loans are missing, observed median debt may be shown as a data indicator with a warning.
 - Repayment scenarios use standard amortization for lower debt, base debt, and higher debt. They are simple sensitivities, not personalized repayment advice.
@@ -818,7 +762,6 @@ Request body:
 
 ```json
 {
-  "user_id": 1,
   "event_name": "school_saved",
   "entity_type": "school",
   "entity_id": 2,
@@ -838,6 +781,7 @@ Privacy rules:
 - Raw search text, notes, emails, aid offers, scholarships, estimated yearly costs, loan amounts, and free-form preference narratives are dropped by the sanitizer.
 - Filter metadata is stored as enabled filter keys, not raw user query text.
 - Preference analytics may store normalized category weights, not major text, home state, or family budget.
+- Events carry no user identity. `metadata` is capped at 40 keys and 4 KB serialized.
 
 Response `200` returns the stored sanitized event.
 
@@ -872,17 +816,21 @@ A fixed-window, per-client limit applies to the endpoints that do real work:
 | `POST /semantic-search` | `semantic_search` | 60 / 60s |
 | `POST /sensitivity` | `sensitivity` | 60 / 60s |
 | `POST /cost-calculator` | `cost_calculator` | 60 / 60s |
-| `POST /decision/offers`, `POST /decision/report` | `decision` | 60 / 60s |
+| `POST /decision/report` | `decision` | 60 / 60s |
 | `POST /analytics/events` | `analytics_events` | 120 / 60s |
 | `GET /analytics/summary` | `analytics_summary` | 60 / 60s |
+| `GET /schools/*` (search, profile, similar) | `read` | 240 / 60s |
 
 Configured by `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS`, and
 `RATE_LIMIT_WINDOW_SECONDS`. Exceeding a limit returns **429** with a `Retry-After`
 header in seconds.
 
-Clients are bucketed by the first `X-Forwarded-For` hop, falling back to the socket
-address. That header is client-supplied and spoofable; this limit protects capacity and
-is explicitly not an authorization boundary.
+Clients are bucketed by the source IP the platform observed: the `sourceIp` in the Lambda
+function URL request context (forwarded by Lambda Web Adapter as `x-amzn-request-context`),
+else the right-most `X-Forwarded-For` hop (the one our own proxy appended), else the socket
+address. The left-most hop is never used because the client writes it; keying on it would
+give an attacker a fresh bucket per request. The identity is hashed to 16 hex characters
+before it reaches the Redis key, so key size does not depend on header size.
 
 Counters are atomic `INCR` operations in Redis, so a limit holds across workers rather
 than per-process. **When Redis is unavailable the limiter fails open** and requests are
@@ -926,7 +874,7 @@ HTML.
 }
 ```
 
-Validation errors generally return `422`. Unexpected server errors return `500`.
+Client input errors return `422`. Unexpected server errors, including a response model failing to validate against a database row, return `500` and are logged with a stack trace. 429 responses keep their `Retry-After` header.
 
 ## Browser Access
 
@@ -950,7 +898,7 @@ Similar-school discovery uses the same generated embedding documents. It compare
 
 ## Cache Behavior
 
-Caching is transparent to clients and does not change request or response contracts. The backend checks Redis before repository/database work, stores successful responses on misses, and falls back to normal execution if Redis is unavailable.
+Caching is transparent to clients and does not change request or response contracts. The backend checks Redis before repository/database work, stores successful responses on misses, and falls back to normal execution if Redis is unavailable. Every key also carries `SCHEMA_VERSION` (`services/cache.py`), bumped whenever a cached response model changes shape, so a deploy never deserializes JSON written under the old shape. Semantic and similar-school responses produced by the lexical fallback are not cached: that path runs when the database query failed, and pinning a degraded answer for the TTL would outlive the failure.
 
 | Resource | Key inputs | TTL |
 | --- | --- | --- |
@@ -959,14 +907,14 @@ Caching is transparent to clients and does not change request or response contra
 | Ranking | Resource name, full request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Semantic search | Resource name, normalized query, filters, preferences, retriever, embedding type, candidate limit, `RANKING_VERSION`, `DOCUMENT_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 | Similar schools | Resource name, school id, variant request, embedding type/model, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
-| Sensitivity analysis | Resource name, request body, normalized profile snapshot, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
+| Sensitivity analysis | Resource name, request body, `RANKING_VERSION`, `CACHE_KEY_VERSION` | 300 seconds |
 
 Example key shapes:
 
 ```text
-college-exploration:cache:v1:search:{sha256-digest}
-college-exploration:cache:v1:school-profile:{sha256-digest}
-college-exploration:cache:v1:ranking:{sha256-digest}
+college-exploration:cache:v1:s2:search:{sha256-digest}
+college-exploration:cache:v1:s2:school-profile:{sha256-digest}
+college-exploration:cache:v1:s2:ranking:{sha256-digest}
 ```
 
 Ranking keys include `RANKING_VERSION` so cached rankings cannot cross deterministic formula versions.
@@ -982,7 +930,7 @@ Ranking keys include `RANKING_VERSION` so cached rankings cannot cross determini
 | `POST` | `/comparisons` | Create a comparison session. | Planned after auth |
 | `GET` | `/comparisons/{id}` | Read comparison output. | Planned after auth |
 
-V2.4 decision endpoints are implemented before authentication with explicit `user_id` for local/demo use. Account-backed ownership and privacy controls remain V3 work.
+Decision reports are stateless: offers travel with each request and nothing per-visitor is stored server-side. Account-backed persistence remains V3.9 work.
 
 The V1.11 frontend does not call these planned saved-school or comparison endpoints because there is no authenticated user/session boundary. It persists state locally in browser `localStorage` instead:
 

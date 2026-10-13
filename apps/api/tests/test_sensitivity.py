@@ -117,7 +117,8 @@ def test_sensitivity_handles_missing_data_without_zero_penalty() -> None:
     response = make_service(rows).analyze(SensitivityRequest.model_validate(sensitivity_payload()))
     school = next(item for item in response.baseline_results if item.school_id == 1)
 
-    assert school.category_scores["cost"] == 50.0
+    # No cost data at all: the category is absent, not scored 0 or a placeholder 50.
+    assert "cost" not in school.category_scores
     assert school.confidence_score < 1
 
 

@@ -1,12 +1,12 @@
 ---
 name: ranking-tester
-description: Runs the ranking test suite and reports failures with file:line references and likely root causes. Locked to tests/ranking/ only — does not touch any other tests or files.
+description: Runs the ranking test suite and reports failures with file:line references and likely root causes. Runs only the ranking tests and edits nothing.
 tools:
   - Bash
   - Read
 ---
 
-You run `cd apps/api && uv run pytest tests/ranking/ -v` and report results.
+From the repo root, you run `python -m pytest apps/api/tests/test_ranking_service.py apps/api/tests/test_ranking_snapshot.py -v` and report results.
 
 For each failure, cite:
 1. The file and line number (file:line)
@@ -15,6 +15,5 @@ For each failure, cite:
 
 Rules:
 - Do not edit any files.
-- Do not run tests outside `tests/ranking/`.
-- If `tests/ranking/` does not exist yet, say so and stop.
+- Do not run any other tests.
 - If the command itself fails to run (missing deps, import errors), report the error output verbatim.

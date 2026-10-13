@@ -53,22 +53,22 @@ def semantic_search(
             },
         )
     )
-    for index, result in enumerate(response.results, start=1):
-        analytics.try_log_event(
-            AnalyticsEventCreate(
-                event_name="ranking_generated",
-                entity_type="school",
-                entity_id=result.school_id,
-                metadata={
-                    "source": "semantic_search",
-                    "ranking_version": response.ranking_version,
-                    "rank_position": (response.page - 1) * response.page_size + index,
-                    "fit_score": result.fit_score,
-                    "confidence_score": result.confidence_score,
-                    "top_reasons": result.top_reasons,
-                    "category_scores": result.category_scores or {},
-                    "category_weights": request.preferences.weights if request.preferences else {},
-                },
-            )
+    analytics.try_log_events([
+        AnalyticsEventCreate(
+            event_name="ranking_generated",
+            entity_type="school",
+            entity_id=result.school_id,
+            metadata={
+                "source": "semantic_search",
+                "ranking_version": response.ranking_version,
+                "rank_position": (response.page - 1) * response.page_size + index,
+                "fit_score": result.fit_score,
+                "confidence_score": result.confidence_score,
+                "top_reasons": result.top_reasons,
+                "category_scores": result.category_scores or {},
+                "category_weights": request.preferences.weights if request.preferences else {},
+            },
         )
+        for index, result in enumerate(response.results, start=1)
+    ])
     return response

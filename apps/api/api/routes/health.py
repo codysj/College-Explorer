@@ -21,7 +21,6 @@ def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
     return HealthResponse(
         status="ok",
         service=settings.app_name,
-        environment=settings.app_env,
         version=settings.app_version,
         timestamp=datetime.now(UTC),
     )

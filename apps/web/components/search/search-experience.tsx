@@ -26,6 +26,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   buildSearchParams,
   defaultFilters,
+  describeSearch,
+  isDescribeMode,
   isRankedMode,
   parseSearchFilters,
   rankSchools,
@@ -38,6 +40,7 @@ import { loadPreferenceProfile, type PreferenceProfile } from "@/lib/preferences
 import { useSchoolActionState } from "@/lib/school-actions";
 import { cn, humanize } from "@/lib/utils";
 import type { SchoolSearchCard, SchoolSearchResponse } from "@/types/api";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 
 const schoolTypes = ["Public", "Private"];
 const settings = ["Urban", "Suburban", "Rural"];
@@ -77,7 +80,7 @@ export function SearchExperience() {
 
   useEffect(() => {
     setDraftFilters(urlFilters);
-  }, [retryNonce, urlFilters]);
+  }, [urlFilters]);
 
   useEffect(() => {
     setPreferenceProfile(loadPreferenceProfile());
@@ -105,6 +108,7 @@ export function SearchExperience() {
     const controller = new AbortController();
     // Narrow to a non-null profile so ranked mode is a value, not just a boolean.
     const rankingProfile = isRankedMode(urlFilters, preferenceProfile) ? preferenceProfile : null;
+    const describing = isDescribeMode(urlFilters);
 
     setIsLoading(true);
     setError(null);
@@ -112,7 +116,12 @@ export function SearchExperience() {
     // The branch already knows whether it ranked, so carry the version along rather
     // than re-deriving it from the response shape.
     const request: Promise<{ payload: SchoolSearchResponse; version: string | null }> =
-      rankingProfile
+      describing
+        ? describeSearch(urlFilters, preferenceProfile, controller.signal).then((payload) => ({
+            payload,
+            version: payload.ranking_version,
+          }))
+        : rankingProfile
         ? rankSchools(urlFilters, rankingProfile, controller.signal).then((payload) => ({
             payload,
             version: payload.ranking_version,
@@ -136,11 +145,13 @@ export function SearchExperience() {
       });
 
     return () => controller.abort();
-  }, [preferenceProfile, profileLoaded, urlFilters]);
+    // retryNonce is a dependency only so the Retry button can re-run this request.
+  }, [preferenceProfile, profileLoaded, urlFilters, retryNonce]);
 
   const activeChips = useMemo(() => buildActiveChips(draftFilters), [draftFilters]);
   // Derived from urlFilters, which drive the fetch, not draftFilters, which lead it.
-  const isRanked = isRankedMode(urlFilters, preferenceProfile);
+  const isDescribing = isDescribeMode(urlFilters);
+  const isRanked = !isDescribing && isRankedMode(urlFilters, preferenceProfile);
   const results = response?.results ?? [];
   const totalResults = response?.total_results ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalResults / (response?.page_size ?? 10)));
@@ -172,28 +183,16 @@ export function SearchExperience() {
     <main className="mx-auto min-h-screen w-full max-w-7xl px-5 pb-28 pt-8 sm:px-8">
       <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <Link className="text-sm font-semibold text-primary" href="/">
-            College Exploration
-          </Link>
-          <h1 className="mt-3 text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
+          <h1 className="text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
             Explore schools
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Search the structured school dataset, keep promising options nearby,
-            and stage schools for comparison. Ranking-specific fit reasons will
-            appear here once V1.9 lands.
+            US universities with College Scorecard data. Describe what you want, filter, and
+            see why each school fits your preferences. Save the promising ones and compare up to five.
           </p>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex gap-2">
-            <Button asChild variant="secondary">
-              <Link href="/dashboard">Dashboard</Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link href="/compare">Compare</Link>
-            </Button>
-          </div>
           <label className="flex min-w-56 flex-col gap-2 text-sm font-medium text-foreground">
             Sort
             <select
@@ -249,9 +248,13 @@ export function SearchExperience() {
                 {isPending || isLoading ? " - updating" : ""}
               </p>
             </div>
-            {isRanked ? (
-              <Badge variant="outline">
-                Ranked by your preferences{rankingVersion ? ` - ${rankingVersion}` : ""}
+            {isDescribing ? (
+              <Badge variant="outline" title={rankingVersion ? `Ranking ${rankingVersion}` : undefined}>
+                Best matches for &quot;{urlFilters.query.trim()}&quot;
+              </Badge>
+            ) : isRanked ? (
+              <Badge variant="outline" title={rankingVersion ? `Ranking ${rankingVersion}` : undefined}>
+                Ranked by your preferences
               </Badge>
             ) : sortOptions.find((option) => option.value === draftFilters.sort)?.note ? (
               <Badge variant="muted">
@@ -311,10 +314,10 @@ function PreferenceBanner({ profile }: { profile: PreferenceProfile }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold">
-            Using local preference profile: {profile.completion.percent}% complete
+            Using your preferences ({profile.completion.percent}% complete)
           </p>
           <p className="mt-1 text-xs leading-5">
-            {profile.intended_major || "Undeclared"} - {profile.aid_importance || "aid not set"} - ranking integration arrives in V1.9.
+            {profile.intended_major || "Undeclared major"}. Saved in this browser only.
           </p>
         </div>
         <Button asChild size="default" variant="secondary">
@@ -337,17 +340,17 @@ function FilterPanel({ activeChips, filters, onClearFilter, onReset, onUpdate }:
   return (
     <FilterPanelShell
       title="Filters"
-      description="Refine the search with structured fields already supported by the API."
+      description="Narrow the list. Filters always apply, whatever the sort."
       actions={<SlidersHorizontal className="h-5 w-5 text-muted-foreground" aria-hidden="true" />}
       className="h-fit lg:sticky lg:top-6"
     >
       <label className="block text-sm font-medium text-foreground">
-        School name
-        <div className="mt-2 flex h-11 items-center gap-2 rounded-md border border-border bg-white px-3">
+        Search
+        <div className="mt-2 flex h-11 items-center gap-2 rounded-md border border-border bg-white px-3 focus-within:ring-2 focus-within:ring-primary">
           <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <input
             className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-            placeholder="Adams, Bayview..."
+            placeholder="A name, or engineering in Texas"
             value={filters.query}
             onChange={(event) => onUpdate("query", event.target.value)}
           />
@@ -662,20 +665,3 @@ function buildActiveChips(filters: SearchFilters): ActiveChip[] {
   return chips;
 }
 
-function formatPercent(value: number | null) {
-  return value === null ? "Unknown" : `${Math.round(value * 100)}%`;
-}
-
-function formatCurrency(value: number | null) {
-  return value === null
-    ? "Unknown"
-    : new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      }).format(value);
-}
-
-function formatNumber(value: number | null) {
-  return value === null ? "Unknown" : new Intl.NumberFormat("en-US").format(value);
-}

@@ -12,6 +12,9 @@ class NoopAnalyticsService:
     def try_log_event(self, request: AnalyticsEventCreate) -> None:
         return None
 
+    def try_log_events(self, requests: list[AnalyticsEventCreate]) -> None:
+        return None
+
 
 @pytest.fixture
 def client() -> Generator[TestClient, None, None]:
@@ -21,8 +24,3 @@ def client() -> Generator[TestClient, None, None]:
             yield test_client
         finally:
             app.dependency_overrides.pop(get_analytics_service, None)
-
-
-@pytest.fixture
-def test_database_url() -> str:
-    return "sqlite+pysqlite:///:memory:"

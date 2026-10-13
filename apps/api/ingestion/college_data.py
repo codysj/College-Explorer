@@ -40,6 +40,7 @@ SEED_COLUMNS = [
     "latitude",
     "longitude",
     "top_majors",
+    "majors_offered",
     "graduation_rate",
     "retention_rate",
     "student_faculty_ratio",
@@ -170,6 +171,8 @@ class ProductSchoolRecord:
     latitude: float | None = None
     longitude: float | None = None
     top_majors: list[str] = field(default_factory=list)
+    # Every program family with graduates (sorted by name). top_majors is the three largest.
+    majors_offered: list[str] = field(default_factory=list)
     graduation_rate: float | None = None
     retention_rate: float | None = None
     student_faculty_ratio: float | None = None
@@ -204,6 +207,7 @@ class ProductSchoolRecord:
             "latitude": format_optional(self.latitude, 6),
             "longitude": format_optional(self.longitude, 6),
             "top_majors": "|".join(self.top_majors),
+            "majors_offered": "|".join(self.majors_offered),
             "graduation_rate": format_optional(self.graduation_rate, 4),
             "retention_rate": format_optional(self.retention_rate, 4),
             "student_faculty_ratio": format_optional(self.student_faculty_ratio, 1),
@@ -272,6 +276,7 @@ def normalize_record(row: dict[str, str], metadata: IngestionMetadata) -> Produc
         latitude=float_value(pick(row, "latitude", "LATITUDE")),
         longitude=float_value(pick(row, "longitude", "LONGITUDE")),
         top_majors=top_majors,
+        majors_offered=list_value(pick(row, "majors_offered")),
         graduation_rate=rate_value(pick(row, "graduation_rate", "C150_4")),
         retention_rate=rate_value(pick(row, "retention_rate", "RET_FT4")),
         student_faculty_ratio=float_value(pick(row, "student_faculty_ratio", "STUFACR")),
@@ -465,6 +470,7 @@ def load_seed_rows(path: Path) -> list[dict[str, object]]:
             "enrollment": int_value(raw["undergraduate_enrollment"]),
             "acceptance_rate": float_value(raw["acceptance_rate"]),
             "top_majors": list_value(raw["top_majors"]),
+            "majors_offered": list_value(raw.get("majors_offered", "")),
             "graduation_rate": float_value(raw["graduation_rate"]),
             "retention_rate": float_value(raw["retention_rate"]),
             "student_faculty_ratio": float_value(raw["student_faculty_ratio"]),

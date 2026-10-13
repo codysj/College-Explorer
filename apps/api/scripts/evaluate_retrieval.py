@@ -22,18 +22,24 @@ static embeddings (needs the model under data/models) and reciprocal-rank-fusion
 
 Metrics:
   pool recall        share of relevant schools that survive retrieval and filtering
-  retriever P@10     precision of the pool in similarity order - the retriever alone
-  end-to-end P@10    precision of the page a student sees
+  retriever RP@10    precision of the pool in similarity order - the retriever alone
+  end-to-end RP@10   precision of the page a student sees, with a bootstrap 95% interval
   mean fit           average deterministic fit score of that page
 
-Precision is normalised by min(10, relevant count). That rewards pulling a whole tied group
+RP@10 is precision at 10 normalised by min(10, relevant count) - R-precision capped at ten,
+not plain P@10, which would cap queries with few relevant schools below 1.0. That rewards pulling a whole tied group
 into the top ten, so a state name alone can win a query - read the category table with
 data/evaluation/README.md. Latency is pipeline time in this process; for the full-text arm it
 includes a round trip to the local database. Neither is API latency.
 
+The 35 development queries are the ones retrieval was tuned against, so their numbers are
+in-sample. data/evaluation/holdout_queries.json was written after v1.3 froze and is reported
+separately with --queries; nothing has been tuned on it.
+
 Usage:
     python apps/api/scripts/evaluate_retrieval.py
     python apps/api/scripts/evaluate_retrieval.py --candidate-limits 10 25 50 --per-query
+    python apps/api/scripts/evaluate_retrieval.py --queries data/evaluation/holdout_queries.json
 """
 
 from __future__ import annotations
@@ -42,6 +48,7 @@ import argparse
 import json
 import math
 import os
+import random
 import statistics
 import sys
 import time
@@ -55,6 +62,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(API_ROOT))
 
 from ingestion.college_data import load_seed_rows  # noqa: E402
+from sqlalchemy.exc import OperationalError  # noqa: E402
+
 from repositories.schools import SchoolRepository  # noqa: E402
 from schemas.preferences import Preference  # noqa: E402
 from schemas.schools import SearchRequest  # noqa: E402
@@ -257,7 +266,8 @@ class OfflineRepository:
 
     def get_fulltext_scores(self, tsquery_text: str, documents: dict[int, str]) -> dict[int, float]:
         if self.fulltext is None:
-            raise RuntimeError("no database connected")
+            # A database error, as a real outage would raise: the service falls back only on those.
+            raise OperationalError("full-text scoring", {}, RuntimeError("no database connected"))
         return self.fulltext.get_fulltext_scores(tsquery_text, documents)
 
 
@@ -406,6 +416,13 @@ def percentile(values, share):
     return ordered[min(len(ordered) - 1, max(0, math.ceil(share * len(ordered)) - 1))]
 
 
+def bootstrap_interval(values: list[float], resamples: int = 2000, seed: int = 0) -> tuple[float, float]:
+    """95% percentile bootstrap interval of the mean, resampling queries. Seeded, so reruns match."""
+    rng = random.Random(seed)
+    means = sorted(statistics.fmean(rng.choices(values, k=len(values))) for _ in range(resamples))
+    return means[int(0.025 * resamples)], means[int(0.975 * resamples) - 1]
+
+
 def report(results, limits, per_query):
     groups = defaultdict(list)
     for result in results:
@@ -413,23 +430,25 @@ def report(results, limits, per_query):
 
     print("\n## Overall\n")
     print(
-        "| configuration | limit | pool recall | retriever P@10 | end-to-end P@10 "
+        "| configuration | limit | pool recall | retriever RP@10 | end-to-end RP@10 | 95% CI "
         "| filtered queries empty | mean fit (page) | p50 / p95 ms |"
     )
-    print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
     for (name, limit), group in groups.items():
         filtered = [row for row in group if row["category"] == "filtered"]
         timings = [t * 1000 for row in group for t in row["timings"]]
+        low, high = bootstrap_interval([r["end_to_end_p10"] for r in group])
         print(
             f"| {name} | {limit} | {mean(r['pool_recall'] for r in group):.2f} "
             f"| {mean(r['retriever_p10'] for r in group):.2f} | {mean(r['end_to_end_p10'] for r in group):.2f} "
+            f"| {low:.2f}-{high:.2f} "
             f"| {sum(r['empty'] for r in filtered)}/{len(filtered)} | {mean(r['mean_fit'] for r in group):.1f} "
             f"| {percentile(timings, 0.5):.2f} / {percentile(timings, 0.95):.2f} |"
         )
 
     focus = max(limits)
     categories = sorted({result["category"] for result in results})
-    print(f"\n## End-to-end P@10 by query category, candidate limit {focus}\n")
+    print(f"\n## End-to-end RP@10 by query category, candidate limit {focus}\n")
     print("| configuration | " + " | ".join(categories) + " |")
     print("| --- | " + " | ".join("---:" for _ in categories) + " |")
     for (name, limit), group in groups.items():
@@ -440,7 +459,7 @@ def report(results, limits, per_query):
 
     if per_query:
         print("\n## Per query\n")
-        print("| configuration | limit | query | category | relevant | pool | pool recall | retriever P@10 | end-to-end P@10 | empty |")
+        print("| configuration | limit | query | category | relevant | pool | pool recall | retriever RP@10 | end-to-end RP@10 | empty |")
         print("| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |")
         for r in results:
             print(
@@ -457,13 +476,14 @@ def main() -> None:
     parser.add_argument("--per-query", action="store_true")
     parser.add_argument("--model2vec-path", type=Path, default=DEFAULT_MODEL2VEC_PATH)
     parser.add_argument("--no-fts", action="store_true", help="skip the Postgres full-text arm")
+    parser.add_argument("--queries", type=Path, default=QUERIES_PATH, help="labeled query file")
     args = parser.parse_args()
 
     from dotenv import load_dotenv
 
     load_dotenv(REPO_ROOT / ".env", override=False)
     rows = load_seed_rows(SEED_PATH)
-    queries = json.loads(QUERIES_PATH.read_text(encoding="utf-8"))["queries"]
+    queries = json.loads(args.queries.read_text(encoding="utf-8"))["queries"]
 
     # Every query must have at least one relevant school, or its precision is undefined and a
     # typo in a predicate would silently score as a retrieval failure.
@@ -477,7 +497,7 @@ def main() -> None:
     for query in queries:
         counts[query["category"]] += 1
     print(
-        f"{len(queries)} queries over {len(rows)} schools; candidate limits {args.candidate_limits}; "
+        f"{len(queries)} queries ({args.queries.name}) over {len(rows)} schools; candidate limits {args.candidate_limits}; "
         f"RANKING_VERSION {RANKING_VERSION}, document {DOCUMENT_VERSION}"
     )
     print("queries per category:", dict(sorted(counts.items())))

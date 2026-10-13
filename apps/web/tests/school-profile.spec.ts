@@ -103,9 +103,12 @@ test("opens a school profile and renders backend fit summary data", async ({ pag
 
   await expect(page.getByRole("heading", { name: "Adams State College" })).toBeVisible();
   await expect(page.getByText("Northbridge, MA - Northeast")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Fit Summary" })).toBeVisible();
-  await expect(page.getByText("Confidence", { exact: true })).toBeVisible();
-  await expect(page.getByText("Ranking version")).toBeVisible();
+  // A profile is the same for everyone, so fit is sent to search, scored against the student.
+  await expect(page.getByRole("heading", { name: "How it fits you" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "See its fit for you" })).toHaveAttribute(
+    "href",
+    "/search?query=Adams+State+College&sort_ui=best_fit",
+  );
   await expect(page.getByText("Biology")).toBeVisible();
   await expect(page.getByText("$22,100").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Similar Schools" })).toBeVisible();

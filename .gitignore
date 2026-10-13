@@ -51,3 +51,6 @@ data/processed/*
 
 # Downloaded embedding models for local retrieval evaluation (tens of MB; fetched on demand)
 data/models/
+
+# Per-machine Claude Code permissions
+.claude/settings.local.json

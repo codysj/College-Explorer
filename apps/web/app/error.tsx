@@ -21,8 +21,8 @@ export default function Error({
           Something interrupted the page.
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          The frontend caught an unexpected state. Try again, and keep the API
-          server running if this page depends on live data.
+          This page hit an unexpected problem. Trying again usually fixes it; your saved
+          schools and preferences are stored in this browser and are not affected.
         </p>
         {error.digest ? (
           <p className="mt-3 text-xs text-muted-foreground">Digest: {error.digest}</p>

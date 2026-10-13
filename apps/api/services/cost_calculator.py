@@ -16,7 +16,7 @@ from schemas.cost_calculator import (
 )
 from services.ranking_service import to_float, to_int
 
-CALCULATOR_VERSION = "v1.0"
+CALCULATOR_VERSION = "v1.1"  # v1.1: entered aid no longer subtracted from net price
 DISCLAIMER = (
     "Cost/value calculator outputs are estimates for planning only, not financial advice. "
     "Actual aid, costs, borrowing terms, repayment, and outcomes may vary."
@@ -104,19 +104,38 @@ def build_result(
 
 
 def yearly_cost(assumption, row: dict[str, object]) -> int | None:
+    """The student's yearly cost from the most specific basis available.
+
+    Net price is cost of attendance minus the average grant and scholarship aid students
+    receive, so subtracting entered aid from it would count aid twice. Entered aid comes off
+    sticker tuition only; against a net price it is reported as a warning instead.
+    """
     if assumption.estimated_yearly_cost is not None:
         return assumption.estimated_yearly_cost
+    aid = (assumption.scholarships or 0) + (assumption.grants_aid or 0)
     if assumption.estimated_net_price is not None:
-        return max(0, assumption.estimated_net_price - (assumption.scholarships or 0) - (assumption.grants_aid or 0))
+        return assumption.estimated_net_price
     if assumption.tuition is not None:
-        return max(0, assumption.tuition - (assumption.scholarships or 0) - (assumption.grants_aid or 0))
+        return max(0, assumption.tuition - aid)
     net_price = to_int(row.get("net_price"))
     if net_price is not None:
-        return max(0, net_price - (assumption.scholarships or 0) - (assumption.grants_aid or 0))
+        return net_price
     tuition = to_int(row.get("tuition_out_state")) or to_int(row.get("tuition_in_state"))
     if tuition is not None:
-        return max(0, tuition - (assumption.scholarships or 0) - (assumption.grants_aid or 0))
+        return max(0, tuition - aid)
     return None
+
+
+def cost_basis(assumption, row: dict[str, object]) -> str:
+    if assumption.estimated_yearly_cost is not None:
+        return "estimated_yearly_cost"
+    if assumption.estimated_net_price is not None:
+        return "estimated_net_price"
+    if assumption.tuition is not None:
+        return "tuition - scholarships - grants_aid"
+    if row.get("net_price") is not None:
+        return "profile_net_price"
+    return "profile_out_of_state_tuition - scholarships - grants_aid"
 
 
 def estimated_debt_exposure(assumption, row: dict[str, object]) -> int | None:
@@ -196,6 +215,11 @@ def warning_flags(row: dict[str, object], assumption) -> list[str]:
         flags.append("missing_debt_assumption")
     if assumption.estimated_yearly_cost is None:
         flags.append("derived_yearly_cost")
+    if (assumption.scholarships or assumption.grants_aid) and cost_basis(assumption, row).endswith("net_price"):
+        # Enter the yearly cost from the award letter for a personal figure.
+        flags.append("aid_not_subtracted_from_net_price")
+    if cost_basis(assumption, row).startswith("profile_out_of_state_tuition"):
+        flags.append("sticker_tuition_excludes_housing")
     return sorted(set(flags))
 
 
@@ -208,18 +232,9 @@ def confidence_level(warnings: list[str], cost: int | None) -> CalculatorConfide
 
 
 def formulas(assumption, row: dict[str, object]) -> list[str]:
-    source = "estimated_yearly_cost"
-    if assumption.estimated_yearly_cost is None:
-        if assumption.estimated_net_price is not None:
-            source = "estimated_net_price - scholarships - grants_aid"
-        elif assumption.tuition is not None:
-            source = "tuition - scholarships - grants_aid"
-        elif row.get("net_price") is not None:
-            source = "profile_net_price - scholarships - grants_aid"
-        else:
-            source = "profile_tuition - scholarships - grants_aid"
     return [
-        f"estimated_yearly_cost = max(0, {source})",
+        f"estimated_yearly_cost = max(0, {cost_basis(assumption, row)})",
+        "net price already reflects typical grant aid, so entered aid is subtracted only from tuition",
         "estimated_four_year_total_cost = estimated_yearly_cost * 4",
         "estimated_debt_exposure = annual_loan_amount * 4 when supplied; otherwise observed median debt indicator when available",
         "repayment monthly payment uses the standard amortization formula with entered interest rate and term",

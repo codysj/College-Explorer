@@ -11,7 +11,7 @@ from schemas.schools import SchoolSearchResult
 from services.cache import CacheService, NullCacheBackend
 
 
-RANKING_VERSION = "v1.3"
+RANKING_VERSION = "v1.4"
 CATEGORY_KEYS = (
     "academic",
     "cost",
@@ -117,14 +117,22 @@ class RankingService:
             "campus": self.score_campus_lifestyle_fit(row, preferences),
             "admissions_realism": self.score_admissions_realism(row, preferences),
         }
+        # A category with no data has no score to report: a placeholder 50 here would reach
+        # clients, comparisons, and decision reports as if it were measured.
         category_scores = {
             key: round(value.score, 2)
             for key, value in categories.items()
+            if value.confidence > 0
         }
+        # A category with no data at all is left out and the remaining weights renormalized.
+        # Scoring it a neutral 50 sat well below the corpus mean (~75), so missing data
+        # acted as a demerit. Confidence still counts it, so the gap stays visible.
+        known_weight = sum(applied_weights[key] for key in CATEGORY_KEYS if categories[key].confidence > 0)
         fit_score = round(
-            sum(categories[key].score * applied_weights[key] for key in CATEGORY_KEYS),
+            sum(categories[key].score * applied_weights[key] for key in CATEGORY_KEYS if categories[key].confidence > 0)
+            / known_weight,
             2,
-        )
+        ) if known_weight > 0 else 50.0
         confidence_score = round(
             sum(categories[key].confidence * applied_weights[key] for key in CATEGORY_KEYS),
             4,
@@ -141,9 +149,10 @@ class RankingService:
 
     def violates_hard_constraints(self, row: dict[str, object], preferences: Preference) -> bool:
         major_terms = preference_terms(preferences)
-        school_majors = normalized_list(row.get("top_majors"))
-        if constraint_enabled(preferences, "major") and major_terms and school_majors:
-            if not intersects(major_terms, school_majors):
+        # Only the full list can prove a major is absent; top_majors is just the largest three.
+        offered = normalized_list(row.get("majors_offered"))
+        if constraint_enabled(preferences, "major") and major_terms and offered:
+            if not intersects(major_terms, offered):
                 return True
 
         max_cost = preferences.max_annual_cost
@@ -182,21 +191,26 @@ class RankingService:
 
     def score_academic_fit(self, row: dict[str, object], preferences: Preference) -> CategoryScore:
         major_terms = preference_terms(preferences)
-        school_majors = normalized_list(row.get("top_majors"))
+        offered = normalized_list(row.get("majors_offered"))
+        top_three = normalized_list(row.get("top_majors"))
         components: list[tuple[float, float]] = []
         reason_code = "academic_profile_available"
         tradeoff_code = "academic_profile_limited"
 
-        if major_terms and school_majors:
-            major_score = 100.0 if intersects(major_terms, school_majors) else 42.0
-            components.append((major_score, 0.40))
-            if major_score == 100.0:
+        # majors_offered lists every program family with graduates, so it can show a major is
+        # absent. Without it only top_majors (the largest three) is known, where a match is
+        # evidence and a miss is not - Computer Science is outside the top three at most
+        # schools that teach it - so a miss there is left out as unknown.
+        if major_terms and offered:
+            if intersects(major_terms, offered):
+                components.append((100.0, 0.40))
                 reason_code = "academic_major_match"
             else:
-                tradeoff_code = "academic_major_not_listed"
-        elif school_majors:
-            components.append((70.0, 0.20))
-            reason_code = "academic_programs_known"
+                components.append((25.0, 0.40))
+                tradeoff_code = "academic_major_not_offered"
+        elif major_terms and top_three and intersects(major_terms, top_three):
+            components.append((100.0, 0.40))
+            reason_code = "academic_major_match"
 
         graduation_rate = to_rate(row.get("graduation_rate"))
         if graduation_rate is not None:
@@ -283,16 +297,13 @@ class RankingService:
                 reason_code = "career_strong_repayment_rate"
 
         priorities = constraint_values(preferences, "career_priorities", "career_priority")
-        culture_tags = normalized_list(row.get("culture_tags"))
-        if priorities and culture_tags:
-            match_score = priority_tag_score(priorities, culture_tags)
+        match_score = priority_tag_score(priorities, normalized_list(row.get("culture_tags")))
+        if match_score is not None:
             components.append((match_score, 0.20))
             if match_score >= 80 and reason_code == "career_profile_available":
                 reason_code = "career_priority_match"
             if match_score < 50:
                 tradeoff_code = "career_priorities_less_visible"
-        elif culture_tags:
-            components.append((70.0, 0.10))
 
         return category_result(components, reason_code, tradeoff_code)
 
@@ -323,10 +334,6 @@ class RankingService:
             if region_score == 95.0 and reason_code == "location_profile_available":
                 reason_code = "location_preferred_region"
 
-        if not components and (school_state or school_region):
-            components.append((70.0, 0.25))
-            tradeoff_code = "location_no_preference"
-
         return category_result(components, reason_code, tradeoff_code)
 
     def score_campus_lifestyle_fit(self, row: dict[str, object], preferences: Preference) -> CategoryScore:
@@ -352,15 +359,13 @@ class RankingService:
             if type_score == 95.0 and reason_code == "campus_profile_available":
                 reason_code = "campus_preferred_school_type"
 
-        if campus_preferences:
-            preference_score = campus_preference_score(campus_preferences, row, culture_tags)
+        preference_score = campus_preference_score(campus_preferences, row, culture_tags)
+        if preference_score is not None:
             components.append((preference_score, 0.35))
             if preference_score >= 80 and reason_code == "campus_profile_available":
                 reason_code = "campus_lifestyle_match"
             if preference_score < 55:
                 tradeoff_code = "campus_lifestyle_less_visible"
-        elif culture_tags:
-            components.append((70.0, 0.10))
 
         greek_life = to_rate(row.get("greek_life_rate"))
         if greek_life is not None:
@@ -389,7 +394,9 @@ class RankingService:
         tradeoff_code = "admissions_more_selective_than_target"
 
         if strategy == "likely":
-            strategy_score = clamp((acceptance_rate / 0.75) * 100, 35, 100)
+            # No floor: a student asking for likely admits gets nothing from a 3% school, and
+            # the floor of 35 this had until v1.4 let the most selective schools rank highly.
+            strategy_score = clamp((acceptance_rate / 0.75) * 100, 0, 100)
             reason_code = "admissions_likely_option" if acceptance_rate >= 0.60 else reason_code
         elif strategy == "reach":
             strategy_score = clamp(100 - abs(acceptance_rate - 0.35) * 150, 45, 100)
@@ -619,48 +626,57 @@ def clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
 
 
-def priority_tag_score(priorities: list[str], culture_tags: list[str]) -> float:
-    mappings = {
-        "high earnings": {"career-focused", "technical", "business"},
-        "graduate school": {"research", "liberal-arts", "small-classes"},
-        "internships": {"career-focused", "urban", "technical"},
-        "research": {"research", "technical"},
-        "public service": {"public-service", "education", "health"},
-        "local jobs": {"career-focused", "commuter-friendly", "urban"},
-    }
-    score = 0
-    for priority in priorities:
-        desired = mappings.get(priority, {priority})
-        if desired.intersection(culture_tags):
-            score += 1
-    return 100.0 if not priorities else (score / len(priorities)) * 100
+# Which data can evaluate each onboarding option. An option with no entry has no signal in
+# the corpus (College Scorecard publishes nothing on internships or Greek life), so it is
+# unknown and left out of the score: a school is never marked down for data nobody has.
+CAREER_PRIORITY_TAGS = {
+    "research": {"very-high-research"},
+}
+SMALL_CLASS_MAX_RATIO = 12.0
+
+
+def priority_tag_score(priorities: list[str], culture_tags: list[str]) -> float | None:
+    """Share of evaluable career priorities the school's tags support, or None if none are evaluable."""
+    evaluable = [priority for priority in priorities if priority in CAREER_PRIORITY_TAGS]
+    if not evaluable or not culture_tags:
+        return None
+    matches = sum(1 for priority in evaluable if CAREER_PRIORITY_TAGS[priority].intersection(culture_tags))
+    return (matches / len(evaluable)) * 100
+
+
+def campus_preference_match(preference: str, row: dict[str, object], culture_tags: list[str]) -> bool | None:
+    """True or False when the data can answer the preference for this school, None when it cannot."""
+    if preference == "residential":
+        housing = row.get("housing_available")
+        return None if housing is None else bool(housing)
+    if preference == "athletics":
+        sports = normalize_text(row.get("sports_division"))
+        return None if not sports else sports in {"di", "dii"}
+    if preference == "small classes":
+        ratio = to_float(row.get("student_faculty_ratio"))
+        return None if ratio is None else ratio <= SMALL_CLASS_MAX_RATIO
+    if preference == "greek life":
+        greek_life = to_rate(row.get("greek_life_rate"))
+        return None if greek_life is None else greek_life >= 0.12
+    if preference in culture_tags:
+        return True
+    return None
 
 
 def campus_preference_score(
     preferences: list[str],
     row: dict[str, object],
     culture_tags: list[str],
-) -> float:
-    matches = 0
-    housing = row.get("housing_available")
-    sports = normalize_text(row.get("sports_division"))
-    greek_life = to_rate(row.get("greek_life_rate"))
-    for preference in preferences:
-        if preference == "residential" and housing is True:
-            matches += 1
-        elif preference == "commuter-friendly" and "commuter-friendly" in culture_tags:
-            matches += 1
-        elif preference == "athletics" and sports in {"di", "dii"}:
-            matches += 1
-        elif preference == "greek life" and greek_life is not None and greek_life >= 0.12:
-            matches += 1
-        elif preference == "diverse community" and "diverse" in culture_tags:
-            matches += 1
-        elif preference == "small classes" and "small-classes" in culture_tags:
-            matches += 1
-        elif preference in culture_tags:
-            matches += 1
-    return 100.0 if not preferences else (matches / len(preferences)) * 100
+) -> float | None:
+    """Share of answerable campus preferences the school meets, or None if none are answerable."""
+    answers = [
+        answer
+        for preference in preferences
+        if (answer := campus_preference_match(preference, row, culture_tags)) is not None
+    ]
+    if not answers:
+        return None
+    return (sum(answers) / len(answers)) * 100
 
 
 def unique_codes(codes: Iterable[str]) -> list[str]:

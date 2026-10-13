@@ -151,7 +151,7 @@ How the image runs on Lambda: `apps/api/Dockerfile` copies in the AWS Lambda Web
 - `curl.exe <ApiUrl>health` returns `"environment": "production"`, and `curl.exe <ApiUrl>ready` returns `"database": "ok"`.
 - Complete the journey (onboarding, search, a profile, compare, decision report) on a phone.
 - The AWS Budgets console lists the budget.
-- Leave everything idle for 10 minutes, then check that Neon reports the compute as idle. If it stays active, the idle Lambda containers are holding their pooled connections open, which spends Neon's free compute hours. Switch `db/session.py` to `NullPool` and redeploy.
+- Leave everything idle for 10 minutes, then check that Neon reports the compute as idle. `db/session.py` already uses `NullPool` when `AWS_LAMBDA_FUNCTION_NAME` is set, so idle Lambda containers hold no connections; if the compute stays active, look for another client.
 - Measure the first request after 15 idle minutes (cold start) and a warm request. Record both numbers here; do not estimate them.
 
 ## Production Safety Rules

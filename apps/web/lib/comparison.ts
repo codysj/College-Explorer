@@ -70,11 +70,11 @@ function buildBiggestTradeoff(schools: SchoolProfile[]) {
     return `${highestGrad.name} leads on graduation rate, while ${mostAccessible.name} is the most accessible by acceptance rate.`;
   }
 
-  return "The selected schools are close on the currently available V1 comparison signals.";
+  return "The selected schools are close on every reported measure.";
 }
 
 function buildTradeoffs(schools: SchoolProfile[]) {
-  if (schools.length < 2) return ["Select another school to generate deterministic side-by-side tradeoffs."];
+  if (schools.length < 2) return ["Select another school to see side-by-side tradeoffs."];
 
   const tradeoffs: string[] = [];
   const cheapest = minBy(schools, (school) => school.cost.net_price);
@@ -90,7 +90,7 @@ function buildTradeoffs(schools: SchoolProfile[]) {
     tradeoffs.push(`${highestGrad.name} has the strongest graduation rate; ${mostAccessible.name} has the highest acceptance rate.`);
   }
   if (highestEarnings) {
-    tradeoffs.push(`${highestEarnings.name} leads on known median earnings, using deterministic profile data only.`);
+    tradeoffs.push(`${highestEarnings.name} leads on reported median earnings.`);
   }
 
   return tradeoffs.length > 0

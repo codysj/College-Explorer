@@ -7,10 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricRow } from "@/components/ui/metric-row";
 import { ScorePill } from "@/components/ui/score-pill";
 
+// A real engine result, not a mock-up: UC San Diego scored by ranking v1.4 on data version
+// scorecard-2023.4 for the sample student named on the card. Re-run it if either changes.
 const reasons = [
-  "Strong graduation outcomes for similar academic interests",
-  "Net price sits inside the preferred affordability band",
-  "Urban campus with a mid-size student body",
+  "Net price is inside the $25,000 budget",
+  "Offers Biology, one of its three largest programs",
+  "Median earnings of $84,943 ten years after entry",
 ];
 
 export default function Home() {
@@ -34,9 +36,8 @@ export default function Home() {
             Build a college shortlist from fit, facts, and honest tradeoffs.
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">
-            Compare schools with structured data, deterministic scoring, and
-            visible reasons so every recommendation can be inspected instead of
-            taken on faith.
+            Rank US universities by what matters to you, using federal College Scorecard
+            data. Every score shows its reasons, its tradeoffs, and what the data does not cover.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -65,13 +66,13 @@ export default function Home() {
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <Badge variant="accent">Example recommendation</Badge>
-                <CardTitle className="mt-4">Northbridge State University</CardTitle>
+                <Badge variant="accent">Sample result</Badge>
+                <CardTitle className="mt-4">University of California-San Diego</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Public, urban, 18,400 students
+                  Public, urban, 33,787 undergraduates
                 </p>
               </div>
-              <ScorePill score={86} label="Fit" />
+              <ScorePill score={91} label="Fit" />
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -87,16 +88,19 @@ export default function Home() {
             <div className="rounded-md border border-border bg-warning p-4 text-warning-foreground">
               <p className="text-sm font-semibold">Tradeoff to inspect</p>
               <p className="mt-1 text-sm leading-6">
-                Median debt is above this student&apos;s target, so the school
-                should stay in the list only if aid improves.
+                A 25% admit rate is more selective than a balanced list calls for, so pair it
+                with likelier options.
               </p>
             </div>
 
             <div className="space-y-3 border-t border-border pt-5">
-              <MetricRow label="Estimated net price" value="$18.6k" detail="inside range" />
-              <MetricRow label="Graduation rate" value="76%" detail="above target" />
-              <MetricRow label="Data confidence" value="High" detail="profile mostly complete" />
+              <MetricRow label="Net price" value="$11,750" detail="2023" />
+              <MetricRow label="Graduation rate" value="88%" detail="2023" />
+              <MetricRow label="Median debt" value="$15,500" detail="2020" />
             </div>
+            <p className="text-xs leading-5 text-muted-foreground">
+              For a sample student: Biology, from California, up to $25,000 a year.
+            </p>
           </CardContent>
         </Card>
       </section>

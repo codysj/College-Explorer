@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy.exc import SQLAlchemyError
+
+from core.logging import get_logger
 from repositories.schools import SchoolRepository
 from schemas.preferences import Preference
 from schemas.similar_schools import (
@@ -18,6 +21,8 @@ from services.semantic_search import (
     build_search_document,
     lexical_fallback_rows,
 )
+
+logger = get_logger(__name__)
 
 
 VARIANT_REASON_CODES = {
@@ -48,7 +53,7 @@ class SimilarSchoolsService:
         self.repository = repository
         self.cache = cache or CacheService(NullCacheBackend(), "v1", 300, 3600, 300)
         self.embedding_provider = embedding_provider or LocalHashEmbeddingProvider()
-        self.ranking_service = RankingService(repository, cache)
+        self.ranking_service = RankingService(repository, self.cache)
 
     def get_similar_schools(self, school_id: int, request: SimilarSchoolsRequest) -> SimilarSchoolsResponse | None:
         cache_key = self.cache.make_key(
@@ -101,7 +106,9 @@ class SimilarSchoolsService:
             total_results=total_results,
             has_next=end < total_results,
         )
-        self.cache.set_model(cache_key, response, self.cache.search_ttl_seconds)
+        if retrieval_mode != "deterministic_fallback":
+            # A fallback answer may come from a transient failure; do not pin it for the TTL.
+            self.cache.set_model(cache_key, response, self.cache.search_ttl_seconds)
         return response
 
     def _retrieve_candidates(
@@ -117,7 +124,8 @@ class SimilarSchoolsService:
                 embedding_model=self.embedding_provider.model,
                 limit=request.candidate_limit,
             )
-        except Exception:
+        except SQLAlchemyError:
+            logger.warning("similar_vector_query_failed", extra={"school_id": school_id}, exc_info=True)
             rows = []
         if rows:
             return rows, "pgvector"
@@ -250,25 +258,26 @@ def row_matches_constraints(row: dict[str, object], request: SimilarSchoolsReque
 
 
 def structural_similarity(source: dict[str, object], candidate: dict[str, object]) -> tuple[float, list[str]]:
+    """Mean agreement over the attributes both schools report.
+
+    A known mismatch counts as 0 and an unknown attribute is left out. Until v1.4 only matches
+    were averaged, so a school matching on type alone scored 1.0 and beat one matching type,
+    setting, and region with partial major overlap.
+    """
     components: list[float] = []
     reasons: list[str] = []
-    if source.get("type") and source.get("type") == candidate.get("type"):
-        components.append(1.0)
-        reasons.append("same_school_type")
-    if source.get("setting") and source.get("setting") == candidate.get("setting"):
-        components.append(1.0)
-        reasons.append("same_setting")
-    if source.get("region") and source.get("region") == candidate.get("region"):
-        components.append(1.0)
-        reasons.append("same_region")
-    majors_overlap = overlap_ratio(source.get("top_majors"), candidate.get("top_majors"))
-    if majors_overlap > 0:
-        components.append(majors_overlap)
-        reasons.append("overlapping_majors")
-    culture_overlap = overlap_ratio(source.get("culture_tags"), candidate.get("culture_tags"))
-    if culture_overlap > 0:
-        components.append(culture_overlap)
-        reasons.append("similar_campus_culture")
+    for key, reason in (("type", "same_school_type"), ("setting", "same_setting"), ("region", "same_region")):
+        if source.get(key) and candidate.get(key):
+            matched = source[key] == candidate[key]
+            components.append(1.0 if matched else 0.0)
+            if matched:
+                reasons.append(reason)
+    for key, reason in (("top_majors", "overlapping_majors"), ("culture_tags", "similar_campus_culture")):
+        if source.get(key) and candidate.get(key):
+            overlap = overlap_ratio(source.get(key), candidate.get(key))
+            components.append(overlap)
+            if overlap > 0:
+                reasons.append(reason)
     return (sum(components) / len(components), reasons) if components else (0.5, ["structured_profile_available"])
 
 

@@ -1,12 +1,43 @@
 # Scoring Methodology
 
-V1.9 implements a deterministic ranking engine in the FastAPI backend. Scores, rank order, reason codes, tradeoffs, confidence, and `ranking_version` come from structured data and rule-based code only. No LLM or model-generated text is used.
+The FastAPI backend ranks schools with a deterministic engine. Scores, rank order, reason codes, tradeoffs, confidence, and `ranking_version` come from structured data and rule-based code only. No LLM or model-generated text is used.
 
 ## Version
 
-The current ranking version is `v1.3`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
+The current ranking version is `v1.4`. Any future change that materially changes score formulas, weights, hard-constraint behavior, confidence, or reason-code selection should update this version and this document in the same change.
 
 Ranking cache keys include this version. A future ranking formula change must bump the version so cached responses from older deterministic scoring logic cannot be reused.
+
+### v1.4 (2026-10-13): missing data stops acting as a score
+
+A review found several places where the engine turned "we do not know" into a low score,
+contradicting this document's own rule. Each is fixed below, and each has a regression test
+in `apps/api/tests/test_ranking_snapshot.py`.
+
+- **Data fix first (scorecard-2023.4).** The fetcher requested `program_percentage.biology`,
+  but Scorecard's field is `biological`, so Biology was absent from every school and 42 of 92
+  schools had the wrong top three majors. Smaller families such as Interdisciplinary Studies
+  were never requested either. The fetcher now requests every family and refuses a fetch
+  where a requested program field is absent from every school.
+- **Majors are checked against everything a school offers.** `top_majors` holds only the three
+  largest programs, so Computer Science scored 42 ("not offered") at 52 of the schools that
+  teach it. Ranking now reads `majors_offered`, every family with graduates: a match scores
+  100 and a genuine absence 25. Where only `top_majors` exists, a miss is unknown.
+- **Options with no data behind them are unknown, not zero.** The quiz's career options
+  mapped to tags no school carries (`career-focused`, `research`), and campus options such as
+  Greek life have no published data. Only options the corpus can answer count: Research uses
+  the Carnegie `very-high-research` tag; Residential, Athletics (Division I/II), and Small
+  classes (student-faculty ratio of 12 or lower) use IPEDS fields. A school with no
+  athletics record (Penn State) is unknown on Athletics instead of scoring like Division III.
+- **A category with no data drops out of fit.** It used to score a neutral 50, well below the
+  corpus mean of about 75, so a gap was a demerit. Weights renormalize over categories with
+  data; confidence still counts the gap.
+- **Uniform filler components removed.** Academic, career, campus, and location each added a
+  flat 70 for merely having tags, majors, or a state. They did not distinguish any school and
+  inflated confidence.
+- **The "likely" admissions strategy has no floor.** A 3% admit rate scored 35 of 100 for a
+  student asking for likely admission, which kept Caltech, MIT, and Rice in that student's
+  top ten.
 
 ### v1.1 (2026-09-12)
 
@@ -93,7 +124,7 @@ the query's tokens joined with `or` into `websearch_to_tsquery('english', ...)`,
 `ts_rank_cd` normalized to `rank / (rank + 1)`, over every school the filters admit. Full-text
 stems words and drops stopwords, which the hash could not.
 
-End-to-end P@10 at candidate limit 50 (`data/evaluation/results-v1.3.md`):
+End-to-end P@10 at candidate limit 50 (`data/evaluation/results-v1.3.md`, pre-2023.4 data; see `data/evaluation/README.md` for current numbers with intervals and a held-out set):
 
 | Retriever | End-to-end P@10 | Deployed |
 | --- | ---: | --- |
@@ -113,15 +144,15 @@ has no labeled evaluation yet.
 
 ## Categories
 
-All category scores are normalized to a `0` to `100` scale. Missing data is not treated as zero. When a category has no usable data, the category receives a neutral score of `50.0` and `0.0` confidence so the uncertainty is visible separately from fit.
+All category scores are normalized to a `0` to `100` scale. Missing data is not treated as zero. When a category has no usable data it reports `0.0` confidence and is left out of `fit_score` (the other weights renormalize), so the uncertainty is visible separately from fit.
 
 | Category key | Inputs used | Method |
 | --- | --- | --- |
 | `academic` | Intended major, academic interests, listed majors, graduation rate, retention rate, student-faculty ratio | Rewards major/interests matches, stronger graduation and retention rates, and lower student-faculty ratios. |
 | `cost` | Max annual cost, net price, average aid, tuition, median debt, aid importance | Rewards schools within budget, lower net price, stronger aid relative to tuition, and lower median debt. |
-| `career` | Median earnings, repayment rate, career priorities, culture tags | Rewards stronger earnings, repayment, and deterministic matches between career priorities and known tags such as `career-focused`, `technical`, `research`, or `urban`. |
+| `career` | Median earnings, repayment rate, career priorities, culture tags | Rewards stronger earnings and repayment. Of the career priorities, only Research has data behind it (the Carnegie `very-high-research` tag); the rest are unknown and left out. |
 | `location` | Home state, preferred states, preferred regions, school state, school region | Rewards exact preferred-state matches, then region or home-state alignment. |
-| `campus` | Preferred setting, school type, campus preferences, housing, sports division, Greek-life rate, culture tags | Rewards setting/type matches and deterministic lifestyle matches such as residential housing, athletics, Greek life, commuter-friendly tags, and small-class tags. |
+| `campus` | Preferred setting, school type, campus preferences, housing, sports division, student-faculty ratio, culture tags | Rewards setting/type matches and the campus preferences the data can answer: Residential (housing), Athletics (Division I/II), Small classes (ratio of 12 or lower). Unanswerable preferences are left out. |
 | `admissions_realism` | Acceptance rate, admissions strategy, target acceptance-rate comfort | Scores selectivity against a `likely`, `balanced`, or `reach` strategy and any minimum acceptance-rate comfort value. This is not admissions advice or an admission probability. |
 
 ## Weights
@@ -137,7 +168,7 @@ The ranking service accepts user preference weights from onboarding. Supported w
 
 The service also accepts documented aliases such as `academic_fit`, `campus_lifestyle`, and `admissions`. Unknown weight keys are ignored. Positive supported weights are normalized to sum to `1.0`.
 
-If no usable weights are provided, V1.9 uses these defaults:
+If no usable weights are provided, these defaults apply:
 
 ```json
 {
@@ -150,7 +181,46 @@ If no usable weights are provided, V1.9 uses these defaults:
 }
 ```
 
-The overall `fit_score` is the weighted sum of category scores, rounded to two decimals.
+The overall `fit_score` is the weighted mean of category scores over the categories that have data, rounded to two decimals.
+
+## Formulas and constants
+
+Every number the engine uses, from `apps/api/services/ranking_service.py`. A category's score
+is the weighted mean of the components present, and its confidence is the sum of those
+component weights (capped at 1). A component whose input is missing is not present. The
+anchors are hand-set product judgements, not fitted to outcomes; they are listed so they can
+be argued with.
+
+| Category | Component | Score | Weight |
+| --- | --- | --- | ---: |
+| academic | Intended major in `majors_offered` | 100 if offered, 25 if not | 0.40 |
+| academic | Graduation rate | rate x 100 | 0.25 |
+| academic | Retention rate | rate x 100 | 0.25 |
+| academic | Student-faculty ratio | clamp(100 - 4 x max(ratio - 10, 0), 25, 100) | 0.10 |
+| cost | Net price vs budget (budget given) | 100 within budget, else clamp(100 - 200 x overage / budget, 0, 100) | 0.50 |
+| cost | Net price (no budget) | clamp(100 - 65 x (net - 15,000) / 30,000, 35, 100) | 0.35 |
+| cost | Average grant aid / tuition | clamp(220 x ratio, 0, 100) | 0.15, or 0.25 if aid matters most |
+| cost | Median debt | clamp(100 - 70 x (debt - 18,000) / 22,000, 30, 100) | 0.20 |
+| career | Median earnings 10 years after entry | clamp(40 + 60 x (earnings - 40,000) / 40,000, 20, 100) | 0.55 |
+| career | Repayment rate | rate x 100 | 0.25 |
+| career | Answerable career priorities | share matched x 100 | 0.20 |
+| location | Preferred state | 100 match, 45 otherwise | 0.55 |
+| location | Home state (no preferred state) | 90 match, 60 otherwise | 0.35 |
+| location | Preferred region | 95 match, 50 otherwise | 0.45 |
+| campus | Preferred setting | 100 match, 50 otherwise | 0.30 |
+| campus | Preferred school type | 95 match, 55 otherwise | 0.20 |
+| campus | Answerable campus preferences | share matched x 100 | 0.35 |
+| campus | Greek-life rate (no school reports one today) | clamp(100 - 180 x abs(rate - 0.12), 55, 100) | 0.10 |
+| campus | Housing, when Residential is a preference | 100 if available, 30 if not | 0.15 |
+| admissions_realism | `likely` strategy | clamp(100 x rate / 0.75, 0, 100) | 0.65 |
+| admissions_realism | `balanced` strategy (default) | clamp(100 - 120 x abs(rate - 0.55), 45, 100) | 0.65 |
+| admissions_realism | `reach` strategy | clamp(100 - 150 x abs(rate - 0.35), 45, 100) | 0.65 |
+| admissions_realism | Minimum acceptance-rate comfort | 95 if met, else clamp(95 - 110 x shortfall / target, 20, 95) | 0.35 |
+
+Known limits of these anchors: earnings saturate at $80,000 (42 of 91 schools score 100 on that
+component) and debt at $18,000 (40 of 90), so they separate weaker schools better than strong
+ones; aid uses out-of-state tuition and 2021 aid against 2023 tuition. Percentile or log scaling
+would spread the top, and is a version bump when someone wants it.
 
 ## Hybrid Semantic Search
 
@@ -190,6 +260,12 @@ Similar-school responses also include a `fit_score` generated by the existing de
 
 V2.3 does not change `RANKING_VERSION` because the core ranking formula is unchanged.
 
+Structured similarity is the mean agreement over attributes both schools report: a known
+mismatch counts as 0 and an unknown attribute is left out. Until v1.4 only matches were
+averaged, so one shared attribute scored a perfect 1.0. Similar schools has no labeled
+evaluation, and its document similarity still uses the 64-bucket hash embedding, so no
+quality claim is made for it.
+
 ## Acceptance Decision Reports
 
 V2.4 decision reports and V2.7 shareable decision reports do not change `RANKING_VERSION`. They reuse the existing ranking service for fit score, category scores, reason codes, tradeoffs, and confidence. The decision report version is separate (`v2.7`) because report assembly can evolve without changing school ranking formulas.
@@ -220,19 +296,19 @@ Decision reports are decision-support summaries, not admissions advice, financia
 
 ## Cost/Value Calculator
 
-V2.5 cost/value calculation does not change `RANKING_VERSION`. It has its own `calculator_version` (`v1.0`) because financial estimates are separate from best-fit ranking.
+V2.5 cost/value calculation does not change `RANKING_VERSION`. It has its own `calculator_version` (`v1.1`) because financial estimates are separate from best-fit ranking.
 
 The calculator is deterministic and formula-driven:
 
 | Output | Deterministic basis |
 | --- | --- |
-| Estimated yearly cost | Entered yearly cost first; otherwise entered net price or tuition minus scholarships and grants/aid; otherwise profile net price or tuition minus entered scholarships and grants/aid. |
+| Estimated yearly cost | Entered yearly cost first; otherwise entered net price; otherwise entered tuition minus scholarships and grants/aid; otherwise profile net price; otherwise profile out-of-state tuition minus aid. Net price already subtracts typical grant aid, so entered aid is never subtracted from it (v1.1; v1.0 subtracted it twice). Aid entered against a net price raises `aid_not_subtracted_from_net_price`. |
 | Estimated four-year total cost | Estimated yearly cost multiplied by `4`. V2.5 does not model inflation or year-by-year tuition changes. |
 | Yearly and four-year cost differences | Difference from the selected baseline school's estimated yearly and four-year costs. |
 | Estimated debt exposure | Entered annual loan amount multiplied by `4`; if missing, observed median debt may be displayed as a data indicator with a warning. |
-| Repayment scenarios | Standard amortization for lower debt, base debt, and higher debt using the entered interest rate and term. |
+| Repayment scenarios | Standard amortization for lower debt, base debt, and higher debt using the entered interest rate and term. The default rate is 6.39%, the federal Direct Loan rate for undergraduate loans first disbursed between 2025-07-01 and 2026-06-30 (studentaid.gov); interest accrued while in school is not modelled. |
 | Affordability indicator | Compares estimated yearly cost with the entered family yearly budget. |
-| Directional outcome-adjusted value | Uses known four-year cost, median earnings, graduation rate, and repayment rate. Missing outcomes produce `uncertain`. |
+| Directional outcome-adjusted value | Uses known four-year cost, median earnings, graduation rate, and repayment rate. `stronger_value` needs cost under 1.7x earnings, graduation of at least 75%, and repayment of at least 75% when known; `reasonable_value` needs under 2.6x and at least 60%. These thresholds are unvalidated heuristics, not research findings. Cost (2023) and earnings (2020) are different vintages and are not inflation-adjusted. Missing outcomes produce `uncertain`. |
 
 The calculator intentionally avoids an opaque ROI score. Labels such as `stronger_value`, `reasonable_value`, `higher_cost_tradeoff`, and `uncertain` are directional summaries of visible formulas and known data. They do not alter ranking fit scores, admission realism, or decision-report best-fit categories.
 
@@ -265,7 +341,7 @@ Sensitivity outputs are deterministic:
 | Confidence impacts | Changes in `confidence_score` caused by emphasizing categories with different data coverage. |
 | Tradeoff explanations | Deterministic templates based on rank deltas and category drivers. |
 
-Sensitivity analysis does not alter stored rankings, does not smooth or randomize results, and does not generate opaque confidence. Missing data continues to lower category confidence while neutral category scores avoid treating unknowns as zero.
+Sensitivity analysis does not alter stored rankings, does not smooth or randomize results, and does not generate opaque confidence. Missing data continues to lower category confidence, and a category with no data is left out of fit rather than scored.
 
 ## Ranking Evaluation
 
@@ -298,13 +374,13 @@ Confidence is separate from fit. Each category tracks how much of its scoring si
 
 Examples:
 
-- A school with missing cost data is not assigned a zero cost score. It receives neutral cost fit and low cost confidence.
+- A school with no cost data gets no cost score at all: the category drops out of its fit and its confidence falls.
 - A school with known outcomes but no matching career-priority tags can still score on career outcomes, but confidence reflects only the available components.
 - A high fit score with lower confidence should be shown as promising but data-limited, not as more certain than the source data supports.
 
 ## Hard Constraints
 
-Hard constraints are optional and configured through the preference profile `constraints` object. V1.9 supports strict checks for:
+Hard constraints are optional and configured through the preference profile `constraints` object. The engine supports strict checks for:
 
 - `strict_major`, `major_strict`, `require_major`
 - `strict_cost`, `cost_strict`, `require_cost`
@@ -357,4 +433,4 @@ Example reason and tradeoff codes include:
 - `admissions_meets_acceptance_comfort`
 - `admissions_below_acceptance_comfort`
 
-Clients may map these codes to user-facing copy, but the codes themselves are the ranking explanation source of truth for V1.9.
+Clients may map these codes to user-facing copy, but the codes themselves are the ranking explanation source of truth.

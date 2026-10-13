@@ -111,7 +111,7 @@ test("ranks results from the stored preference profile and explains why", async 
   await page.goto("/search");
 
   await expect(page.getByText("Golden Gate Metropolitan University")).toBeVisible();
-  await expect(page.getByText("Ranked by your preferences - v1.0")).toBeVisible();
+  await expect(page.getByText("Ranked by your preferences")).toBeVisible();
 
   // The fit score and the reason codes the engine returned are both surfaced.
   await expect(page.getByText("86")).toBeVisible();

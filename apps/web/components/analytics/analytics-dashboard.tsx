@@ -50,11 +50,11 @@ export function AnalyticsDashboard() {
             Analytics and ranking evaluation
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Internal telemetry for product feedback loops, ranking-version usage, reason-code coverage, and decision-flow engagement.
+            Privacy-safe product telemetry: how rankings are used, which reasons appear, and how far students get through the decision flow.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="muted">Internal V2.8</Badge>
+          <Badge variant="muted">Operator view</Badge>
           <Button type="button" variant="secondary" onClick={load}>
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Refresh
@@ -66,7 +66,7 @@ export function AnalyticsDashboard() {
       {loadState === "error" ? (
         <EmptyState
           title="Analytics unavailable"
-          description="Start the FastAPI backend or seed events, then refresh this internal dashboard."
+          description="No events have been recorded yet, or the API is unreachable. Use the app, then refresh."
         />
       ) : null}
       {loadState === "unauthorized" ? (

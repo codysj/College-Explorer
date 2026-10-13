@@ -41,7 +41,7 @@ test("completes onboarding and routes to search with local preferences", async (
   await expect(page).toHaveURL(/\/search/);
   // Preferences drive ranking, so onboarding no longer copies them into URL filters.
   await expect(page).not.toHaveURL(/state=CA/);
-  await expect(page.getByText("Using local preference profile")).toBeVisible();
+  await expect(page.getByText("Using your preferences")).toBeVisible();
 
   const stored = await page.evaluate(() =>
     window.localStorage.getItem("college-exploration.preference-profile.v1"),

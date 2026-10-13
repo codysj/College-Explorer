@@ -7,17 +7,39 @@ check is skipped and says so.
 
 ```bash
 python apps/api/scripts/evaluate_retrieval.py --per-query
+python apps/api/scripts/evaluate_retrieval.py --queries data/evaluation/holdout_queries.json --per-query
 ```
+
+## Headline, read carefully
+
+Production (Postgres full-text) at the default candidate limit of 50, on data version
+`scorecard-2023.4`:
+
+| Query set | Queries | End-to-end RP@10 | 95% bootstrap CI |
+| --- | ---: | ---: | ---: |
+| Development (`retrieval_queries.json`) | 33 | 0.85 | 0.73-0.95 |
+| Held-out (`holdout_queries.json`) | 16 | 0.79 | 0.64-0.93 |
+| Held-out, the pipeline before v1.2 (hash) | 16 | 0.46 | 0.31-0.61 |
+
+The development number is **in-sample**: the v1.2 document and ordering changes were chosen
+by measuring them on those queries. The held-out queries were written after v1.3 froze and
+before any was run, so they are the out-of-sample estimate. The intervals are wide because the
+sets are small; differences among the top retrievers (full-text, model2vec, hybrids) sit
+inside them. What the held-out set does support is the large gap to the pre-v1.2 pipeline.
+Both sets were labeled by the project author, so shared blind spots remain possible.
 
 ## Files
 
 | File | What it is |
 | --- | --- |
-| `retrieval_queries.json` | 35 labeled queries. Committed before any retrieval change, so the labels cannot have been tuned to a method. |
+| `retrieval_queries.json` | The development set: 33 labeled queries (35 until two labels emptied under the 2023.4 data fix; see its notes). Committed before any retrieval change, but retrieval was then tuned on it, so its results are in-sample. |
+| `holdout_queries.json` | 16 held-out queries written after v1.3 froze. Nothing has been tuned on them. |
 | `results-baseline.md` | The pipeline as it first shipped, measured before anything changed. |
 | `results-variants.md` | Documents, filtering, and ordering variants that led to `RANKING_VERSION` v1.2. |
 | `results-v1.2.md` | The v1.2 pipeline, the pre-v1.2 pipeline for comparison, and candidate retrievers. |
 | `results-v1.3.md` | The shipped full-text pipeline, checked against the real service, beside the other retrievers. |
+| `results-v1.4.md` | The same comparison on corrected data (`scorecard-2023.4`), 33 queries, with confidence intervals. Not directly comparable to earlier files. |
+| `results-holdout.md` | The held-out set. |
 
 ## How relevance is defined
 
@@ -49,12 +71,18 @@ Queries are grouped by the kind of gap they test:
 ## Metrics
 
 - **Pool recall** - share of relevant schools that survive retrieval and filtering.
-- **Retriever P@10** - precision of the pool in similarity order: the retriever on its own.
-- **End-to-end P@10** - precision of the page a student actually sees.
+- **Retriever RP@10** - precision of the pool in similarity order: the retriever on its own.
+- **End-to-end RP@10** - precision of the page a student actually sees, with a 95% percentile
+  bootstrap interval over queries (2,000 resamples, fixed seed). Earlier result files call this
+  "P@10".
 - **Mean fit** - average deterministic fit score of that page, which shows what respecting the
   query costs.
 
-Precision is normalised by `min(10, relevant count)`.
+Precision is normalised by `min(10, relevant count)`, which makes it R-precision capped at ten
+rather than plain precision at ten: a query with three relevant schools scores 1.0 when all
+three are in the top ten. Relevance predicates read the same fields the search documents are
+built from, so these labels measure whether retrieval finds attribute matches, not whether a
+student would find the result useful.
 
 ## Reading the numbers honestly
 

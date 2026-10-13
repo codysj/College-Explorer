@@ -72,3 +72,15 @@ a {
     box-shadow: none;
   }
 }
+
+/* One visible keyboard focus style for every control. Several inputs use Tailwind's
+   outline-none for their resting look, so this has to win over it. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid hsl(var(--primary)) !important;
+  outline-offset: 2px;
+}
