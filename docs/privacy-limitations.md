@@ -20,7 +20,7 @@ Disallowed examples:
 - Raw search text.
 - Visit notes, unresolved concerns, parent notes, or student notes.
 - Aid offers, scholarships, estimated yearly cost, or loan amounts.
-- Email addresses or authentication identifiers beyond the existing demo `user_id`.
+- Email addresses or authentication identifiers. Analytics events carry no user identity at all.
 - Free-form preference narratives such as intended major text or home-state input.
 
 ## Evaluation Caveats

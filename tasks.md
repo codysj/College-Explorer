@@ -108,7 +108,8 @@ scope decisions live in `docs/roadmap.md` — read it before starting any V3 tas
 - [ ] V3.9 Authentication and cross-device account persistence
 - [ ] V3.10 Preference learning from forced-choice comparisons
 - [ ] V3.11 Usefulness study with 5-8 real students or counselors
-- [ ] V3.12 Portfolio polish (reshoot GIFs with real data, demo script, honest limitations)
+- [~] V3.12 Portfolio polish (reshoot GIFs with real data, demo script, honest limitations)
+  - Media and README done in the 2026-10-13 review; demo video waits on V3.3.
 
 Deprioritized with reasons in `docs/roadmap.md` section 3: admin data-quality console,
 observability dashboard and alerting, field-level provenance, collaborative comments and
@@ -256,9 +257,23 @@ report versioning, formal threat model.
   guarded against pgvector float32 near-ties, and semantic search no longer reads pgvector.
   Similar schools still uses hash embeddings. 100 backend tests pass.
 
+- 2026-10-13: Portfolio review council. Six reviewer seats (hiring manager, staff backend,
+  frontend/UX, appsec, data science, DevOps) audited the repo; findings and their resolutions
+  are in `docs/council-review.md`. Highlights: decision reports made stateless after a
+  client-supplied `user_id` exposed every visitor's offers; rate limiting keyed on the
+  platform-observed IP; CI now runs migrations, `alembic check`, the seed, and Postgres
+  integration tests, plus OpenAPI-generated frontend types with a drift check. A fetcher
+  field-name bug had hidden Biology from every school (42 of 92 had wrong top majors); data
+  version `scorecard-2023.4` fixes it and adds `majors_offered`. RANKING_VERSION v1.4 stops
+  missing data from acting as a score. The quiz had never sent career, campus, or interest
+  answers to the API. The retrieval eval gained a held-out set and confidence intervals
+  (0.79 held-out, 0.85 in-sample). `docker compose up` now seeds itself, verified from an
+  empty volume. IVFFlat index dropped (migration 0005). 104 backend tests, 7 Postgres
+  integration tests, and 16 Playwright tests pass.
+
 ## Planned Next Steps
 
-Updated 2026-09-12. Ordered by dependency.
+Updated 2026-10-13. Ordered by dependency.
 
 ### 1. Retrieval follow-ups (after V3.6)
 - Similar schools still retrieves by hash embedding and has no labeled evaluation; add one
@@ -272,11 +287,6 @@ Updated 2026-09-12. Ordered by dependency.
 - A repeatable workload over the four heaviest endpoints; cold-cache, warm-cache, and
   Redis-down scenarios; committed query plans; one optimization with before and after
   numbers. Needs Docker running.
-- Known from V3.6: the IVFFlat index on `school_embeddings` was created on an empty table with
-  16 lists, and at 92 rows the planner ignores it and sorts every row exactly. If a larger corpus
-  makes the planner start using it, `ivfflat.probes = 1` over centroids trained on nothing would
-  silently return wrong neighbours. Rebuild or drop it as part of V3.7. It now serves only
-  similar schools.
 - Known from V3.6: full-text sends every admitted document with each query. Measure it under
   the V3.7 workload; the upgrade is a stored generated `tsvector` column with a GIN index.
 - Check whether `localhost` also slows other large statements or result sets before attributing
@@ -291,15 +301,14 @@ Updated 2026-09-12. Ordered by dependency.
   `sam deploy`. Credentials and billing stay with the operator.
 - Set `ANALYTICS_API_TOKEN` and `APP_ENV=production` so the analytics gate closes.
 
-### 4. Re-record demo media (V3.12)
-- The GIFs in `docs/media/` still show synthetic schools.
+### 4. Portfolio polish (V3.12)
+- Done in the 2026-10-13 review: media reshot from the real stack by a committed script,
+  README rewritten. Remaining: a short demo script and video once a public URL exists.
 
 ### Open questions for the operator
 - The "most selective" slice ranks on admission rate alone, which admits small schools with
   low reported rates: Mississippi Christian University (about 2,500 undergraduates, latest
   reported rate 29%). Tightening the rule would change the corpus, so it stays as documented.
-- Penn State has no 2021 EADA record, so athletics-minded profiles score it like a Division
-  III school. Treating unknown athletics as neutral is a scoring change needing a version bump.
 
 ### Deferred deliberately
 - Vitest/RTL: not added. See the Stack note in CLAUDE.md.

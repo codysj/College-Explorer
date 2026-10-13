@@ -100,19 +100,19 @@ judgment call that is not the code's to make).
 
 ## R5 - Presentation and honesty
 
-- [ ] R5.1 README contradicts the code: ranking `v1.0` (code: v1.3), synthetic data (real
+- [x] R5.1 README contradicts the code: ranking `v1.0` (code: v1.3), synthetic data (real
   since V3.0), ranking not wired to UI (wired in V3.1), pgvector retrieval (full-text since
   v1.3), FastAPI badge `0.34`. *(hiring, devops, data)*
-- [ ] R5.2 README is 21 KB, PowerShell-only, no CI badge, and buries the measured retrieval
+- [x] R5.2 README is 21 KB, PowerShell-only, no CI badge, and buries the measured retrieval
   evaluation. Fix: shorter, results up front, bash commands, CI badge. *(hiring, devops)*
 - [x] R5.3 Retrieval metric is in-sample and named P@10 while capped by relevant-set size.
   Fix: rename, add bootstrap intervals, add a held-out query set written after v1.3
   froze and report it separately. *(data)*
 - [x] R5.4 Screenshots and GIFs show the synthetic, pre-ranking build ("FIT Unknown").
   Fix: re-capture against the real corpus with a production build. *(hiring)*
-- [ ] R5.5 `docs/screenshots.md` says no media exists; methodology doc says V1.9.
+- [x] R5.5 `docs/screenshots.md` says no media exists; methodology doc says V1.9.
   *(hiring, data)*
-- [ ] R5.6 Three git author identities. Fix: `.mailmap`. *(hiring)*
+- [x] R5.6 Three git author identities. Fix: `.mailmap`. *(hiring)*
 
 ## Needs the operator
 
