@@ -1,7 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
+from schemas.base import ApiModel
 
 SimilarityVariant = Literal[
     "general",
@@ -13,7 +14,7 @@ SimilarityVariant = Literal[
 ]
 
 
-class SimilarSchoolsRequest(BaseModel):
+class SimilarSchoolsRequest(ApiModel):
     variant: SimilarityVariant = "general"
     state: str | None = Field(default=None, min_length=2, max_length=2)
     region: str | None = Field(default=None, max_length=32)
@@ -44,7 +45,7 @@ class SimilarSchoolsRequest(BaseModel):
         return self
 
 
-class SimilarSchoolResult(BaseModel):
+class SimilarSchoolResult(ApiModel):
     school_id: int
     name: str
     city: str
@@ -64,7 +65,7 @@ class SimilarSchoolResult(BaseModel):
     ranking_version: str
 
 
-class SimilarSchoolsResponse(BaseModel):
+class SimilarSchoolsResponse(ApiModel):
     source_school_id: int
     variant: SimilarityVariant
     variant_applied: SimilarityVariant

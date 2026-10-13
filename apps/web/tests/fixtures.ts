@@ -143,3 +143,93 @@ export function toProfile(school: (typeof schools)[number]) {
     similar_schools: [],
   };
 }
+
+/** Echoes the calculator request back with the arithmetic the backend performs. */
+export async function routeCostCalculator(page: Page) {
+  await page.route("**/cost-calculator", async (route) => {
+    const body = await route.request().postDataJSON();
+    const results = (body.schools as Array<Record<string, number | null>>).map((item) => {
+      const school = schools.find((entry) => entry.school_id === item.school_id) ?? schools[0];
+      const yearly = item.estimated_yearly_cost ?? school.net_price;
+      const debt = item.annual_loan_amount === null || item.annual_loan_amount === undefined ? null : item.annual_loan_amount * 4;
+      return {
+        school_id: school.school_id,
+        name: school.name,
+        city: school.city,
+        state: school.state,
+        observed_cost_data: { tuition_in_state: null, tuition_out_state: null, net_price: school.net_price, average_aid: null, debt_median: null },
+        observed_outcome_data: { median_earnings: null, graduation_rate: school.graduation_rate, repayment_rate: null },
+        assumptions: item,
+        estimated_yearly_cost: yearly,
+        estimated_four_year_total_cost: yearly * 4,
+        yearly_cost_difference: null,
+        four_year_cost_difference: null,
+        estimated_debt_exposure: debt,
+        repayment_scenarios: [],
+        directional_outcome_adjusted_value: "uncertain",
+        affordability: { status: "unknown", message: "Add a family budget to evaluate affordability." },
+        confidence: "medium",
+        warnings: [],
+        formulas: [],
+      };
+    });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        calculator_version: "test",
+        generated_at: new Date().toISOString(),
+        disclaimer: "Estimates for planning only.",
+        baseline_school_id: results[0]?.school_id ?? null,
+        results,
+        comparison_summary: [],
+      }),
+    });
+  });
+}
+
+/** A minimal valid report for whatever offers the page sends; records each request body. */
+export async function routeDecisionReport(page: Page, requests: unknown[] = []) {
+  await page.route("**/decision/report", async (route) => {
+    const body = await route.request().postDataJSON();
+    requests.push(body);
+    const ids = (body.offers as Array<{ school_id: number; status: string }>).map((offer) => offer.school_id);
+    const picked = ids.map((id) => schools.find((school) => school.school_id === id) ?? schools[0]);
+    const recommendation = (label: string) => ({ label, school_id: picked[0].school_id, school_name: picked[0].name, rationale: "Test rationale." });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        report_version: "test",
+        ranking_version: "test",
+        report_title: "College Decision Briefing",
+        generated_at: new Date().toISOString(),
+        disclaimer: "Decision support only.",
+        methodology_note: "Deterministic.",
+        printable_report_path: "/decision/report",
+        share_url_path: "/decision/report",
+        decision_confidence: "medium",
+        confidence_flags: [],
+        schools: picked.map((school, index) => ({
+          school_id: school.school_id, name: school.name, status: index === 0 ? "finalist" : "accepted",
+          fit_score: 80 - index, confidence_score: 0.8, category_scores: { career: 70 },
+          estimated_yearly_cost: school.net_price, net_price: school.net_price, median_earnings: null,
+          unresolved_concern_count: 0, top_reasons: [], top_tradeoffs: [], confidence_flags: [],
+        })),
+        finalist_ranking_table: picked.map((school, index) => ({
+          rank: index + 1, school_id: school.school_id, school_name: school.name, fit_score: 80 - index,
+          confidence_score: 0.8, estimated_yearly_cost: school.net_price, four_year_cost: school.net_price * 4,
+          career_score: 70, major_tradeoff: "None flagged.",
+        })),
+        category_score_table: [],
+        cost_value_comparison: [],
+        sensitivity_highlights: [],
+        unresolved_questions: [],
+        best_overall_fit: recommendation("Best overall fit"),
+        best_value: recommendation("Best value"),
+        strongest_career_upside: recommendation("Strongest career upside"),
+        lowest_risk: recommendation("Lowest risk"),
+        biggest_unresolved_factor: recommendation("Biggest unresolved factor"),
+        major_tradeoffs: ["Test tradeoff."],
+      }),
+    });
+  });
+}

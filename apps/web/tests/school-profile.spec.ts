@@ -105,7 +105,6 @@ test("opens a school profile and renders backend fit summary data", async ({ pag
   await expect(page.getByText("Northbridge, MA - Northeast")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Fit Summary" })).toBeVisible();
   await expect(page.getByText("Confidence", { exact: true })).toBeVisible();
-  await expect(page.getByText("Ranking version")).toBeVisible();
   await expect(page.getByText("Biology")).toBeVisible();
   await expect(page.getByText("$22,100").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Similar Schools" })).toBeVisible();

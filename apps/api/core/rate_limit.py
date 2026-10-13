@@ -14,7 +14,9 @@ across workers instead of being per-process.
 # class dependency's annotations against `__globals__`, which an instance does not have,
 # so stringized annotations make it treat `request: Request` as a query parameter and
 # every call 422s. Python is pinned to >=3.12, so `X | None` works without the import.
+import hashlib
 import hmac
+import json
 import time
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -28,18 +30,31 @@ logger = get_logger(__name__)
 
 
 def client_identifier(request: Request) -> str:
-    """Best-effort client identity for bucketing.
+    """Client identity for bucketing, hashed to a fixed length for the Redis key.
 
-    Behind a proxy the socket address is the proxy, so the first X-Forwarded-For hop is
-    preferred. That header is client-controlled and trivially spoofed, which is
-    acceptable here: this limit protects capacity, it is not an authorization boundary.
+    The left-most X-Forwarded-For hop is whatever the client typed, so keying on it would
+    give an attacker a fresh bucket per request. Prefer the source IP the platform
+    observed: Lambda Web Adapter forwards the function URL request context, which carries
+    it. Otherwise use the right-most hop, the one our own proxy appended, then the socket.
     """
+    context = request.headers.get("x-amzn-request-context")
+    if context:
+        try:
+            source_ip = json.loads(context)["http"]["sourceIp"]
+        except (ValueError, KeyError, TypeError):
+            source_ip = None
+        if isinstance(source_ip, str) and source_ip:
+            return _digest(source_ip)
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        first_hop = forwarded.split(",")[0].strip()
-        if first_hop:
-            return first_hop
-    return request.client.host if request.client else "unknown"
+        last_hop = forwarded.split(",")[-1].strip()
+        if last_hop:
+            return _digest(last_hop)
+    return _digest(request.client.host if request.client else "unknown")
+
+
+def _digest(identity: str) -> str:
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
 
 
 class RateLimit:

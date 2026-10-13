@@ -1,10 +1,11 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from schemas.base import ApiModel
 from schemas.preferences import Preference
 from schemas.schools import SchoolSearchResult, SearchRequest
 
 
-class RankingScore(BaseModel):
+class RankingScore(ApiModel):
     school_id: int
     fit_score: float = Field(ge=0, le=100)
     confidence_score: float | None = Field(default=None, ge=0, le=1)
@@ -14,12 +15,12 @@ class RankingScore(BaseModel):
     ranking_version: str
 
 
-class RankingRequest(BaseModel):
+class RankingRequest(ApiModel):
     preferences: Preference
     filters: SearchRequest = Field(default_factory=SearchRequest)
 
 
-class RankingResponse(BaseModel):
+class RankingResponse(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {

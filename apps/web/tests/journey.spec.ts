@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { routeSensitivity, schools, toProfile } from "./fixtures";
+import { routeCostCalculator, routeDecisionReport, routeSensitivity, schools, toProfile } from "./fixtures";
 
 /**
  * V3.2: the one test that crosses the whole student journey.
@@ -50,25 +50,10 @@ test("carries a student from preferences through to a decision report", async ({
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(toProfile(school)) });
   });
 
-  await page.route("**/decision/offers", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        id: 1,
-        user_id: 1,
-        school_name: "Test College 1",
-        city: "Northbridge",
-        state: "MA",
-        ...(await route.request().postDataJSON()),
-      }),
-    });
-  });
-
   await routeSensitivity(page);
-  // Cost calculator and the server-rendered report are covered by their own specs; here
-  // they are aborted so the journey exercises the deterministic local fallback path.
-  await page.route("**/cost-calculator", (route) => route.abort());
-  await page.route("**/decision/report", (route) => route.abort());
+  await routeCostCalculator(page);
+  const reportRequests: unknown[] = [];
+  await routeDecisionReport(page, reportRequests);
   await page.route("**/analytics/events", (route) =>
     route.fulfill({ contentType: "application/json", body: "{}" }),
   );
@@ -132,6 +117,10 @@ test("carries a student from preferences through to a decision report", async ({
   await expect(page.getByRole("heading", { name: "Accepted schools", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Generate summary" }).click();
   await expect(page.getByText("Decision summary")).toBeVisible();
+  // The report is built from offers the page sends; there is no server-side identity to trust.
+  const sent = reportRequests[0] as { offers: Array<{ school_id: number }>; user_id?: unknown };
+  expect(sent.offers.map((offer) => offer.school_id).sort()).toEqual([1, 2]);
+  expect(sent).not.toHaveProperty("user_id");
 
   // 6. Report ---------------------------------------------------------------------
   await page.getByRole("link", { name: "Open report" }).click();

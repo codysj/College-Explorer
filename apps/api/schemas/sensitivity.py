@@ -1,7 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from schemas.base import ApiModel
 from schemas.preferences import Preference
 from schemas.schools import SearchRequest
 
@@ -21,7 +22,7 @@ SensitivityDimension = Literal[
 ]
 
 
-class SensitivityScenario(BaseModel):
+class SensitivityScenario(ApiModel):
     scenario_id: str = Field(min_length=1, max_length=48, pattern=r"^[A-Za-z0-9_-]+$")
     label: str = Field(min_length=1, max_length=80)
     weight_adjustments: dict[SensitivityDimension, float] = Field(default_factory=dict)
@@ -34,7 +35,7 @@ class SensitivityScenario(BaseModel):
         return self
 
 
-class SensitivityRequest(BaseModel):
+class SensitivityRequest(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -82,7 +83,7 @@ class SensitivityRequest(BaseModel):
         return self
 
 
-class SensitivitySchoolMovement(BaseModel):
+class SensitivitySchoolMovement(ApiModel):
     school_id: int
     name: str
     city: str
@@ -103,7 +104,7 @@ class SensitivitySchoolMovement(BaseModel):
     explanation: str
 
 
-class SensitivityScenarioResult(BaseModel):
+class SensitivityScenarioResult(ApiModel):
     scenario_id: str
     label: str
     applied_weights: dict[str, float]
@@ -112,7 +113,7 @@ class SensitivityScenarioResult(BaseModel):
     summary: str
 
 
-class SensitivityChoiceSummary(BaseModel):
+class SensitivityChoiceSummary(ApiModel):
     school_id: int
     name: str
     base_rank: int | None = None
@@ -122,21 +123,21 @@ class SensitivityChoiceSummary(BaseModel):
     explanation: str
 
 
-class SensitivityCategoryDriver(BaseModel):
+class SensitivityCategoryDriver(ApiModel):
     category: str
     average_absolute_fit_delta: float
     affected_school_count: int
     explanation: str
 
 
-class SensitivityConfidenceImpact(BaseModel):
+class SensitivityConfidenceImpact(ApiModel):
     school_id: int
     name: str
     max_confidence_delta: float
     explanation: str
 
 
-class SensitivityResponse(BaseModel):
+class SensitivityResponse(ApiModel):
     ranking_version: str
     baseline_weights: dict[str, float]
     stable_choice_definition: str

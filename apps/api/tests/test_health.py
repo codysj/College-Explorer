@@ -12,10 +12,6 @@ def test_health_endpoint(client: TestClient) -> None:
     assert "timestamp" in payload
 
 
-def test_basic_test_db_fixture(test_database_url: str) -> None:
-    assert test_database_url == "sqlite+pysqlite:///:memory:"
-
-
 def test_local_frontend_origin_is_allowed_for_cors(client: TestClient) -> None:
     response = client.options(
         "/health",

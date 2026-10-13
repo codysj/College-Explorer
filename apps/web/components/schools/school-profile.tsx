@@ -214,7 +214,6 @@ function FitSummary({ profile }: { profile: SchoolProfile }) {
             <InsightList emptyText="Data unavailable. No deterministic tradeoffs are present for this profile yet." items={profile.top_tradeoffs} title="Top tradeoffs" warning />
           </div>
 
-          <MetricRow label="Ranking version" value={profile.ranking_version ?? "Data unavailable"} />
         </div>
       </div>
     </SectionCard>

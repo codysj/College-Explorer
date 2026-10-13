@@ -1,76 +1,45 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from schemas.base import ApiModel
 from schemas.preferences import Preference
 
 DecisionStatus = Literal["accepted", "finalist"]
 
 
-class DecisionOfferBase(BaseModel):
-    user_id: int = Field(default=1, ge=1)
+class DecisionOfferInput(ApiModel):
+    """One accepted or finalist school as the student entered it.
+
+    Offers live in the student's browser and travel with each report request. The server
+    keeps no per-visitor offer store, so there is nothing for one visitor to read of another's.
+    """
+
     school_id: int = Field(ge=1)
     status: DecisionStatus = "accepted"
-    aid_offer: int | None = Field(default=None, ge=0)
-    scholarships: int | None = Field(default=None, ge=0)
-    estimated_yearly_cost: int | None = Field(default=None, ge=0)
-    visit_notes: str | None = Field(default=None, max_length=4000)
-    unresolved_concerns: list[str] = Field(default_factory=list, max_length=12)
-    parent_priority_notes: str | None = Field(default=None, max_length=4000)
-    student_priority_notes: str | None = Field(default=None, max_length=4000)
+    aid_offer: int | None = Field(default=None, ge=0, le=250_000)
+    scholarships: int | None = Field(default=None, ge=0, le=250_000)
+    estimated_yearly_cost: int | None = Field(default=None, ge=0, le=250_000)
+    unresolved_concerns: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode="after")
-    def validate_offer_totals(self) -> DecisionOfferBase:
-        if self.aid_offer is not None and self.estimated_yearly_cost is not None:
-            if self.aid_offer > 250_000 or self.estimated_yearly_cost > 250_000:
-                raise ValueError("Annual financial inputs must be realistic yearly amounts.")
-        if self.scholarships is not None and self.scholarships > 250_000:
-            raise ValueError("Annual financial inputs must be realistic yearly amounts.")
+    def strip_concerns(self) -> DecisionOfferInput:
         self.unresolved_concerns = [item.strip() for item in self.unresolved_concerns if item.strip()]
         return self
 
 
-class DecisionOfferCreate(DecisionOfferBase):
+class DecisionReportRequest(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "user_id": 1,
-                "school_id": 2,
-                "status": "finalist",
-                "aid_offer": 12000,
-                "scholarships": 8000,
-                "estimated_yearly_cost": 24000,
-                "visit_notes": "Strong department visit; commute felt manageable.",
-                "unresolved_concerns": ["Confirm housing cost", "Compare internship access"],
-                "parent_priority_notes": "Keep debt below the family budget.",
-                "student_priority_notes": "Prefer urban campus and strong CS hiring.",
-            }
-        }
-    )
-
-
-class DecisionOffer(DecisionOfferBase):
-    id: int
-    school_name: str
-    city: str
-    state: str
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-class DecisionOffersResponse(BaseModel):
-    offers: list[DecisionOffer] = Field(default_factory=list)
-
-
-class DecisionReportRequest(BaseModel):
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "user_id": 1,
-                "school_ids": [1, 2, 3],
+                "offers": [
+                    {"school_id": 1, "status": "finalist", "aid_offer": 12000, "estimated_yearly_cost": 24000,
+                     "unresolved_concerns": ["Confirm housing cost"]},
+                    {"school_id": 2, "status": "accepted", "estimated_yearly_cost": 31000},
+                ],
                 "preferences": {
                     "intended_major": "Computer Science",
                     "home_state": "CA",
@@ -81,14 +50,19 @@ class DecisionReportRequest(BaseModel):
         }
     )
 
-    user_id: int = Field(default=1, ge=1)
-    school_ids: list[int] | None = Field(default=None, min_length=1, max_length=8)
+    offers: list[DecisionOfferInput] = Field(min_length=1, max_length=8)
     preferences: Preference = Field(default_factory=Preference)
     max_annual_family_budget: int | None = Field(default=None, ge=0, le=250_000)
-    save_snapshot: bool = True
+
+    @model_validator(mode="after")
+    def unique_schools(self) -> DecisionReportRequest:
+        ids = [offer.school_id for offer in self.offers]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Each school can appear in a decision report only once.")
+        return self
 
 
-class DecisionSchoolSummary(BaseModel):
+class DecisionSchoolSummary(ApiModel):
     school_id: int
     name: str
     status: DecisionStatus
@@ -104,7 +78,7 @@ class DecisionSchoolSummary(BaseModel):
     confidence_flags: list[str]
 
 
-class DecisionFinalistRankingRow(BaseModel):
+class DecisionFinalistRankingRow(ApiModel):
     rank: int
     school_id: int
     school_name: str
@@ -116,7 +90,7 @@ class DecisionFinalistRankingRow(BaseModel):
     major_tradeoff: str
 
 
-class DecisionCategoryScoreRow(BaseModel):
+class DecisionCategoryScoreRow(ApiModel):
     school_id: int
     school_name: str
     academic: float | None = None
@@ -127,7 +101,7 @@ class DecisionCategoryScoreRow(BaseModel):
     admissions_realism: float | None = None
 
 
-class DecisionCostValueRow(BaseModel):
+class DecisionCostValueRow(ApiModel):
     school_id: int
     school_name: str
     estimated_yearly_cost: int | None
@@ -138,28 +112,28 @@ class DecisionCostValueRow(BaseModel):
     warnings: list[str]
 
 
-class DecisionConcernRow(BaseModel):
+class DecisionConcernRow(ApiModel):
     school_id: int
     school_name: str
     unresolved_concern_count: int
     questions: list[str]
 
 
-class DecisionSensitivityHighlight(BaseModel):
+class DecisionSensitivityHighlight(ApiModel):
     label: str
     school_id: int | None = None
     school_name: str | None = None
     summary: str
 
 
-class DecisionRecommendation(BaseModel):
+class DecisionRecommendation(ApiModel):
     label: str
     school_id: int | None
     school_name: str | None
     rationale: str
 
 
-class DecisionReportResponse(BaseModel):
+class DecisionReportResponse(ApiModel):
     report_version: str
     ranking_version: str
     report_title: str
@@ -182,4 +156,3 @@ class DecisionReportResponse(BaseModel):
     lowest_risk: DecisionRecommendation
     biggest_unresolved_factor: DecisionRecommendation
     major_tradeoffs: list[str]
-    snapshot_id: int | None = None

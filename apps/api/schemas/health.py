@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from schemas.base import ApiModel
 
-class HealthResponse(BaseModel):
+class HealthResponse(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -24,7 +25,7 @@ class HealthResponse(BaseModel):
     timestamp: datetime
 
 
-class ReadyResponse(BaseModel):
+class ReadyResponse(ApiModel):
     status: Literal["ready"]
     database: Literal["ok"]
     timestamp: datetime

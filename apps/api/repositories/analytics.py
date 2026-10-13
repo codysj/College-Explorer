@@ -12,25 +12,25 @@ class AnalyticsRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def create_event(
-        self,
-        user_id: int | None,
-        event_name: str,
-        entity_type: str | None,
-        entity_id: int | None,
-        metadata: dict[str, object],
-    ) -> dict[str, object]:
-        event = Event(
-            user_id=user_id,
-            event_name=event_name,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            metadata_=metadata,
-        )
-        self.db.add(event)
-        self.db.flush()
-        self.db.commit()
-        return event_row(event)
+    def create_events(self, events: list[dict[str, object]]) -> list[dict[str, object]]:
+        """Insert events in one transaction. On failure the session is rolled back, so the
+        request's other queries are not left running on an aborted transaction."""
+        rows = [
+            Event(
+                event_name=event["event_name"],
+                entity_type=event["entity_type"],
+                entity_id=event["entity_id"],
+                metadata_=event["metadata"],
+            )
+            for event in events
+        ]
+        try:
+            self.db.add_all(rows)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        return [event_row(row) for row in rows]
 
     def list_events(self, lookback_days: int = 90, limit: int = 5000) -> list[dict[str, object]]:
         since = datetime.now(UTC) - timedelta(days=lookback_days)

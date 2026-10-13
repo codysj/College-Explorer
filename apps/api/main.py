@@ -1,7 +1,4 @@
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
-from pydantic import ValidationError as PydanticValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 
@@ -14,12 +11,7 @@ from api.routes.semantic_search import router as semantic_search_router
 from api.routes.sensitivity import router as sensitivity_router
 from api.routes.schools import router as schools_router
 from core.config import get_settings
-from core.errors import (
-    http_exception_handler,
-    pydantic_validation_exception_handler,
-    unhandled_exception_handler,
-    validation_exception_handler,
-)
+from core.errors import register_exception_handlers
 from core.logging import configure_logging
 
 
@@ -38,10 +30,15 @@ def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
 
+    # Interactive docs are a development convenience; a deployed API does not advertise its surface.
+    docs_enabled = settings.app_env.lower() in {"development", "dev", "local", "test"}
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="Backend API foundation for the College Exploration Platform.",
+        description="Deterministic college ranking, search, and decision-support API.",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
     if settings.cors_origin_list:
         app.add_middleware(
@@ -66,10 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(cost_calculator_router)
     app.include_router(sensitivity_router)
     app.include_router(analytics_router)
-    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
-    app.add_exception_handler(PydanticValidationError, pydantic_validation_exception_handler)
-    app.add_exception_handler(Exception, unhandled_exception_handler)
+    register_exception_handlers(app)
     return app
 
 

@@ -132,6 +132,12 @@ class RedisCacheBackend:
         self.available = False
 
 
+# Bump whenever a cached response model changes shape. Every key carries it, so a deploy
+# with a new schema never deserializes JSON written by the old one: pydantic would fill new
+# fields with defaults instead of failing, which looks like real data.
+SCHEMA_VERSION = "s2"
+
+
 class CacheService:
     def __init__(
         self,
@@ -175,7 +181,7 @@ class CacheService:
     def make_key(self, resource: str, payload: dict[str, Any], version: str | None = None) -> str:
         key_payload = {"resource": resource, "version": version, "params": payload}
         digest = hashlib.sha256(self._canonical_json(key_payload).encode("utf-8")).hexdigest()[:24]
-        return f"{self.namespace}:{self.key_version}:{resource}:{digest}"
+        return f"{self._prefix()}:{resource}:{digest}"
 
     def search_key(self, filters: BaseModel) -> str:
         return self.make_key("search", filters.model_dump(mode="json"))
@@ -212,7 +218,10 @@ class CacheService:
         return self.backend.delete(key)
 
     def invalidate_resource(self, resource: str) -> int:
-        return self.backend.delete_prefix(f"{self.namespace}:{self.key_version}:{resource}:")
+        return self.backend.delete_prefix(f"{self._prefix()}:{resource}:")
+
+    def _prefix(self) -> str:
+        return f"{self.namespace}:{self.key_version}:{SCHEMA_VERSION}"
 
     def _canonical_json(self, payload: dict[str, Any]) -> str:
         return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

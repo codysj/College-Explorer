@@ -34,16 +34,12 @@ class SensitivityService:
     def __init__(self, repository: SchoolRepository, cache: CacheService | None = None) -> None:
         self.repository = repository
         self.cache = cache or CacheService(NullCacheBackend(), "v1", 300, 3600, 300)
-        self.ranking_service = RankingService(repository, cache)
+        self.ranking_service = RankingService(repository, self.cache)
 
     def analyze(self, request: SensitivityRequest) -> SensitivityResponse:
         cache_key = self.cache.make_key(
             "sensitivity",
-            {
-                "request": request.model_dump(mode="json"),
-                "profile_snapshot": self._profile_snapshot(request.preferences),
-                "ranking_version": RANKING_VERSION,
-            },
+            {"request": request.model_dump(mode="json")},
             version=RANKING_VERSION,
         )
         cached = self.cache.get_model(cache_key, SensitivityResponse)
@@ -206,15 +202,6 @@ class SensitivityService:
             results=movements,
             summary=scenario_summary(scenario.label, movements, emphasis),
         )
-
-    def _profile_snapshot(self, preferences: Preference) -> dict[str, object]:
-        return {
-            "intended_major": preferences.intended_major,
-            "home_state": preferences.home_state,
-            "max_annual_cost": preferences.max_annual_cost,
-            "constraints": preferences.constraints,
-            "weights": normalize_weights(preferences.weights),
-        }
 
 
 def scenario_weights(base_weights: dict[str, float], scenario: SensitivityScenario) -> tuple[dict[str, float], str | None]:

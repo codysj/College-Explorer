@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy.exc import SQLAlchemyError
+
+from core.logging import get_logger
 from repositories.schools import SchoolRepository
 from schemas.preferences import Preference
 from schemas.similar_schools import (
@@ -18,6 +21,8 @@ from services.semantic_search import (
     build_search_document,
     lexical_fallback_rows,
 )
+
+logger = get_logger(__name__)
 
 
 VARIANT_REASON_CODES = {
@@ -48,7 +53,7 @@ class SimilarSchoolsService:
         self.repository = repository
         self.cache = cache or CacheService(NullCacheBackend(), "v1", 300, 3600, 300)
         self.embedding_provider = embedding_provider or LocalHashEmbeddingProvider()
-        self.ranking_service = RankingService(repository, cache)
+        self.ranking_service = RankingService(repository, self.cache)
 
     def get_similar_schools(self, school_id: int, request: SimilarSchoolsRequest) -> SimilarSchoolsResponse | None:
         cache_key = self.cache.make_key(
@@ -101,7 +106,9 @@ class SimilarSchoolsService:
             total_results=total_results,
             has_next=end < total_results,
         )
-        self.cache.set_model(cache_key, response, self.cache.search_ttl_seconds)
+        if retrieval_mode != "deterministic_fallback":
+            # A fallback answer may come from a transient failure; do not pin it for the TTL.
+            self.cache.set_model(cache_key, response, self.cache.search_ttl_seconds)
         return response
 
     def _retrieve_candidates(
@@ -117,7 +124,8 @@ class SimilarSchoolsService:
                 embedding_model=self.embedding_provider.model,
                 limit=request.candidate_limit,
             )
-        except Exception:
+        except SQLAlchemyError:
+            logger.warning("similar_vector_query_failed", extra={"school_id": school_id}, exc_info=True)
             rows = []
         if rows:
             return rows, "pgvector"

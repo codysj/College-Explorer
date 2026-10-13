@@ -5,48 +5,58 @@ from sqlalchemy.orm import Session
 
 from core.logging import get_logger
 from models.school import School, SchoolAcademics, SchoolCampusLife, SchoolCosts, SchoolOutcomes
-from repositories.base import BaseRepository
 from schemas.schools import SchoolSearchResult, SearchRequest
 
 logger = get_logger(__name__)
 
+# The columns every scoring path reads. One definition so a new ranking input cannot reach
+# some paths and silently score None on others.
+CANDIDATE_COLUMNS = (
+    School.id.label("school_id"),
+    School.name,
+    School.city,
+    School.state,
+    School.region,
+    School.type,
+    School.setting,
+    School.undergraduate_enrollment.label("enrollment"),
+    School.acceptance_rate,
+    SchoolAcademics.top_majors,
+    SchoolAcademics.graduation_rate,
+    SchoolAcademics.retention_rate,
+    SchoolAcademics.student_faculty_ratio,
+    SchoolCosts.tuition_in_state,
+    SchoolCosts.tuition_out_state,
+    SchoolCosts.net_price,
+    SchoolCosts.average_aid,
+    SchoolCosts.debt_median,
+    SchoolOutcomes.median_earnings,
+    SchoolOutcomes.repayment_rate,
+    SchoolCampusLife.housing_available,
+    SchoolCampusLife.sports_division,
+    SchoolCampusLife.greek_life_rate,
+    SchoolCampusLife.culture_tags,
+)
 
-class SchoolRepository(BaseRepository[School]):
+
+def candidate_query(*extra_columns) -> Select[tuple]:
+    return (
+        select(*CANDIDATE_COLUMNS, *extra_columns)
+        .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
+        .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
+        .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
+        .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+    )
+
+
+
+class SchoolRepository:
     def __init__(self, db: Session) -> None:
-        super().__init__(db)
+        self.db = db
 
     def get_school_profile_row(self, school_id: int) -> dict[str, object] | None:
         query = (
-            select(
-                School.id.label("school_id"),
-                School.name,
-                School.city,
-                School.state,
-                School.region,
-                School.type,
-                School.setting,
-                School.undergraduate_enrollment.label("enrollment"),
-                School.acceptance_rate,
-                SchoolAcademics.top_majors,
-                SchoolAcademics.graduation_rate,
-                SchoolAcademics.retention_rate,
-                SchoolAcademics.student_faculty_ratio,
-                SchoolCosts.tuition_in_state,
-                SchoolCosts.tuition_out_state,
-                SchoolCosts.net_price,
-                SchoolCosts.average_aid,
-                SchoolCosts.debt_median,
-                SchoolOutcomes.median_earnings,
-                SchoolOutcomes.repayment_rate,
-                SchoolCampusLife.housing_available,
-                SchoolCampusLife.sports_division,
-                SchoolCampusLife.greek_life_rate,
-                SchoolCampusLife.culture_tags,
-            )
-            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
-            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
-            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
-            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+            candidate_query()
             .where(School.id == school_id)
         )
         row = self.db.execute(query).mappings().one_or_none()
@@ -112,36 +122,7 @@ class SchoolRepository(BaseRepository[School]):
 
     def get_ranking_candidate_rows(self, filters: SearchRequest) -> list[dict[str, object]]:
         query = (
-            select(
-                School.id.label("school_id"),
-                School.name,
-                School.city,
-                School.state,
-                School.region,
-                School.type,
-                School.setting,
-                School.undergraduate_enrollment.label("enrollment"),
-                School.acceptance_rate,
-                SchoolAcademics.top_majors,
-                SchoolAcademics.graduation_rate,
-                SchoolAcademics.retention_rate,
-                SchoolAcademics.student_faculty_ratio,
-                SchoolCosts.tuition_in_state,
-                SchoolCosts.tuition_out_state,
-                SchoolCosts.net_price,
-                SchoolCosts.average_aid,
-                SchoolCosts.debt_median,
-                SchoolOutcomes.median_earnings,
-                SchoolOutcomes.repayment_rate,
-                SchoolCampusLife.housing_available,
-                SchoolCampusLife.sports_division,
-                SchoolCampusLife.greek_life_rate,
-                SchoolCampusLife.culture_tags,
-            )
-            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
-            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
-            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
-            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+            candidate_query()
         )
         filtered_query = self._apply_filters(query, filters).order_by(School.id.asc())
         rows = self.db.execute(filtered_query).mappings().all()
@@ -151,36 +132,7 @@ class SchoolRepository(BaseRepository[School]):
         if not school_ids:
             return []
         query = (
-            select(
-                School.id.label("school_id"),
-                School.name,
-                School.city,
-                School.state,
-                School.region,
-                School.type,
-                School.setting,
-                School.undergraduate_enrollment.label("enrollment"),
-                School.acceptance_rate,
-                SchoolAcademics.top_majors,
-                SchoolAcademics.graduation_rate,
-                SchoolAcademics.retention_rate,
-                SchoolAcademics.student_faculty_ratio,
-                SchoolCosts.tuition_in_state,
-                SchoolCosts.tuition_out_state,
-                SchoolCosts.net_price,
-                SchoolCosts.average_aid,
-                SchoolCosts.debt_median,
-                SchoolOutcomes.median_earnings,
-                SchoolOutcomes.repayment_rate,
-                SchoolCampusLife.housing_available,
-                SchoolCampusLife.sports_division,
-                SchoolCampusLife.greek_life_rate,
-                SchoolCampusLife.culture_tags,
-            )
-            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
-            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
-            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
-            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+            candidate_query()
             .where(School.id.in_(school_ids))
             .order_by(School.id.asc())
         )
@@ -216,39 +168,7 @@ class SchoolRepository(BaseRepository[School]):
 
     def get_semantic_document_rows(self, filters: SearchRequest | None = None) -> list[dict[str, object]]:
         query = (
-            select(
-                School.id.label("school_id"),
-                School.name,
-                School.city,
-                School.state,
-                School.region,
-                School.type,
-                School.setting,
-                School.undergraduate_enrollment.label("enrollment"),
-                School.acceptance_rate,
-                School.source_name,
-                School.source_year,
-                School.data_version,
-                SchoolAcademics.top_majors,
-                SchoolAcademics.graduation_rate,
-                SchoolAcademics.retention_rate,
-                SchoolAcademics.student_faculty_ratio,
-                SchoolCosts.tuition_in_state,
-                SchoolCosts.tuition_out_state,
-                SchoolCosts.net_price,
-                SchoolCosts.average_aid,
-                SchoolCosts.debt_median,
-                SchoolOutcomes.median_earnings,
-                SchoolOutcomes.repayment_rate,
-                SchoolCampusLife.housing_available,
-                SchoolCampusLife.sports_division,
-                SchoolCampusLife.greek_life_rate,
-                SchoolCampusLife.culture_tags,
-            )
-            .join(SchoolAcademics, SchoolAcademics.school_id == School.id, isouter=True)
-            .join(SchoolCosts, SchoolCosts.school_id == School.id, isouter=True)
-            .join(SchoolOutcomes, SchoolOutcomes.school_id == School.id, isouter=True)
-            .join(SchoolCampusLife, SchoolCampusLife.school_id == School.id, isouter=True)
+            candidate_query(School.source_name, School.source_year, School.data_version)
             .order_by(School.id.asc())
         )
         if filters is not None:
@@ -273,10 +193,13 @@ class SchoolRepository(BaseRepository[School]):
             FROM unnest(CAST(:school_ids AS bigint[]), CAST(:documents AS text[])) AS t(school_id, document)
             """
         )
-        rows = self.db.execute(
-            statement,
-            {"query": tsquery_text, "school_ids": list(documents), "documents": list(documents.values())},
-        ).all()
+        # A savepoint, so a failure here rolls back only this statement and the caller's
+        # fallback can keep using the session instead of hitting an aborted transaction.
+        with self.db.begin_nested():
+            rows = self.db.execute(
+                statement,
+                {"query": tsquery_text, "school_ids": list(documents), "documents": list(documents.values())},
+            ).all()
         return {int(school_id): float(score) for school_id, score in rows}
 
     def upsert_school_embedding(
@@ -369,20 +292,21 @@ class SchoolRepository(BaseRepository[School]):
             LIMIT :limit
             """
         )
-        rows = self.db.execute(
-            statement,
-            {
-                "school_id": school_id,
-                "embedding_type": embedding_type,
-                "embedding_model": embedding_model,
-                "limit": limit,
-            },
-        ).mappings().all()
+        with self.db.begin_nested():  # see get_fulltext_scores
+            rows = self.db.execute(
+                statement,
+                {
+                    "school_id": school_id,
+                    "embedding_type": embedding_type,
+                    "embedding_model": embedding_model,
+                    "limit": limit,
+                },
+            ).mappings().all()
         return [dict(row) for row in rows]
 
     def _apply_filters(self, query: Select[tuple], filters: SearchRequest) -> Select[tuple]:
         if filters.query:
-            query = query.where(School.name.ilike(f"%{filters.query}%"))
+            query = query.where(School.name.icontains(filters.query, autoescape=True))
         if filters.state:
             query = query.where(School.state == filters.state.upper())
         if filters.region:

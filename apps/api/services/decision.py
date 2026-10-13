@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from repositories.decision import DecisionRepository
+from typing import Protocol
+
 from schemas.decision import (
     DecisionCategoryScoreRow,
     DecisionConcernRow,
     DecisionCostValueRow,
     DecisionFinalistRankingRow,
-    DecisionOffer,
-    DecisionOfferCreate,
-    DecisionOffersResponse,
     DecisionRecommendation,
     DecisionReportRequest,
     DecisionReportResponse,
@@ -33,26 +31,21 @@ METHODOLOGY_NOTE = (
 )
 
 
+class DecisionCandidateRepository(Protocol):
+    def get_ranking_candidate_rows_by_ids(self, school_ids: list[int]) -> list[dict[str, object]]: ...
+
+
 class DecisionService:
-    def __init__(self, repository: DecisionRepository, ranking_service: RankingService) -> None:
+    def __init__(self, repository: DecisionCandidateRepository, ranking_service: RankingService) -> None:
         self.repository = repository
         self.ranking_service = ranking_service
 
-    def upsert_offer(self, request: DecisionOfferCreate) -> DecisionOffer:
-        return DecisionOffer(**self.repository.upsert_offer(request))
-
-    def list_offers(self, user_id: int) -> DecisionOffersResponse:
-        return DecisionOffersResponse(
-            offers=[DecisionOffer(**row) for row in self.repository.get_offer_rows(user_id)]
-        )
-
     def build_report(self, request: DecisionReportRequest) -> DecisionReportResponse:
-        offer_rows = self.repository.get_offer_rows(request.user_id, request.school_ids)
-        if len(offer_rows) > 8:
-            raise ValueError("Decision reports support up to 8 accepted or finalist schools.")
-        school_ids = [int(row["school_id"]) for row in offer_rows]
-        school_rows = self.repository.get_decision_candidate_rows(school_ids)
-        offers_by_school = {int(row["school_id"]): row for row in offer_rows}
+        offers_by_school: dict[int, dict[str, object]] = {
+            offer.school_id: offer.model_dump() for offer in request.offers
+        }
+        school_ids = list(offers_by_school)
+        school_rows = self.repository.get_ranking_candidate_rows_by_ids(school_ids)
         ranked_by_school = {
             int(row["school_id"]): self.ranking_service.score_school(row, request.preferences)
             for row in school_rows
@@ -65,7 +58,7 @@ class DecisionService:
         ]
         summaries.sort(key=lambda item: (-item.fit_score, -item.confidence_score, item.school_id))
         if not summaries:
-            raise ValueError("At least one accepted or finalist offer is required to generate a decision report.")
+            raise ValueError("None of the offered schools exist in the current dataset.")
 
         confidence_flags = build_report_confidence_flags(summaries, request)
         cost_rows = build_cost_value_rows(school_rows, offers_by_school, request)
@@ -110,13 +103,6 @@ class DecisionService:
             biggest_unresolved_factor=biggest_unresolved_factor(summaries),
             major_tradeoffs=major_tradeoffs(summaries),
         )
-        if request.save_snapshot:
-            response.snapshot_id = self.repository.save_snapshot(
-                request.user_id,
-                DECISION_REPORT_VERSION,
-                [item.school_id for item in summaries],
-                response.model_dump(mode="json", exclude={"snapshot_id"}),
-            )
         return response
 
 

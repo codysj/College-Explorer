@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from typing import Iterable
 
+from core.logging import get_logger
 from repositories.analytics import AnalyticsRepository
 from schemas.analytics import (
     AnalyticsCountRow,
@@ -17,6 +18,8 @@ from schemas.analytics import (
     RankingEvaluationSummary,
 )
 from services.ranking_service import RANKING_VERSION
+
+logger = get_logger(__name__)
 
 PRIVACY_NOTE = (
     "Analytics events are product telemetry only. They avoid sensitive notes, free-form search text, aid details, "
@@ -83,34 +86,33 @@ ALLOWED_METADATA_KEYS = {
 }
 
 
+def event_values(request: AnalyticsEventCreate) -> dict[str, object]:
+    return {
+        "event_name": request.event_name,
+        "entity_type": request.entity_type,
+        "entity_id": request.entity_id,
+        "metadata": sanitize_metadata(request.metadata),
+    }
+
+
 class AnalyticsService:
     def __init__(self, repository: AnalyticsRepository) -> None:
         self.repository = repository
 
     def log_event(self, request: AnalyticsEventCreate) -> AnalyticsEventResponse:
-        metadata = sanitize_metadata(request.metadata)
-        row = self.repository.create_event(
-            user_id=request.user_id,
-            event_name=request.event_name,
-            entity_type=request.entity_type,
-            entity_id=request.entity_id,
-            metadata=metadata,
-        )
-        return AnalyticsEventResponse(
-            id=int(row["id"]),
-            user_id=row["user_id"],
-            event_name=row["event_name"],
-            entity_type=row["entity_type"],
-            entity_id=row["entity_id"],
-            metadata=row["metadata"],
-            created_at=row.get("created_at"),
-        )
+        return AnalyticsEventResponse(**self.repository.create_events([event_values(request)])[0])
+
+    def try_log_events(self, requests: list[AnalyticsEventCreate]) -> None:
+        """Best-effort telemetry: one commit for the batch, and a failure never fails the request."""
+        if not requests:
+            return
+        try:
+            self.repository.create_events([event_values(request) for request in requests])
+        except Exception:
+            logger.warning("analytics_write_failed", extra={"event_count": len(requests)}, exc_info=True)
 
     def try_log_event(self, request: AnalyticsEventCreate) -> None:
-        try:
-            self.log_event(request)
-        except Exception:
-            return
+        self.try_log_events([request])
 
     def summary(self, lookback_days: int = 90) -> AnalyticsSummaryResponse:
         events = self.repository.list_events(lookback_days=lookback_days)

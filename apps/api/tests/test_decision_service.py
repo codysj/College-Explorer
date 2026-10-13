@@ -1,8 +1,9 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from api.routes.decision import get_decision_service
 from apps.api.main import app
-from schemas.decision import DecisionOfferCreate, DecisionReportRequest
+from schemas.decision import DecisionOfferInput, DecisionReportRequest
 from schemas.preferences import Preference
 from services.decision import DecisionService
 from services.ranking_service import RankingService
@@ -39,68 +40,26 @@ def make_row(**overrides: object) -> dict[str, object]:
     return row
 
 
-class FakeDecisionRepository:
-    def __init__(self) -> None:
-        self.offers = [
-            {
-                "id": 1,
-                "user_id": 1,
-                "school_id": 1,
-                "status": "finalist",
-                "aid_offer": 12000,
-                "scholarships": 8000,
-                "estimated_yearly_cost": 22000,
-                "visit_notes": "Strong academic visit.",
-                "unresolved_concerns": ["Housing cost"],
-                "parent_priority_notes": "Keep debt low.",
-                "student_priority_notes": "Career access matters.",
-                "created_at": None,
-                "updated_at": None,
-                "school_name": "Berkeley Demo University",
-                "city": "Berkeley",
-                "state": "CA",
-            },
-            {
-                "id": 2,
-                "user_id": 1,
-                "school_id": 2,
-                "status": "accepted",
-                "aid_offer": 10000,
-                "scholarships": 6000,
-                "estimated_yearly_cost": 18000,
-                "visit_notes": "",
-                "unresolved_concerns": [],
-                "parent_priority_notes": "",
-                "student_priority_notes": "",
-                "created_at": None,
-                "updated_at": None,
-                "school_name": "UCLA Demo College",
-                "city": "Los Angeles",
-                "state": "CA",
-            },
-        ]
-        self.snapshots: list[dict[str, object]] = []
-
-    def upsert_offer(self, request: DecisionOfferCreate) -> dict[str, object]:
-        self.offers[0] = {**self.offers[0], **request.model_dump(), "school_name": "Berkeley Demo University", "city": "Berkeley", "state": "CA"}
-        return self.offers[0]
-
-    def get_offer_rows(self, user_id: int, school_ids: list[int] | None = None) -> list[dict[str, object]]:
-        rows = [offer for offer in self.offers if offer["user_id"] == user_id]
-        if school_ids:
-            rows = [offer for offer in rows if offer["school_id"] in school_ids]
-        return rows
-
-    def get_decision_candidate_rows(self, school_ids: list[int]) -> list[dict[str, object]]:
+class FakeCandidateRepository:
+    def get_ranking_candidate_rows_by_ids(self, school_ids: list[int]) -> list[dict[str, object]]:
         rows = [
             make_row(school_id=1, name="Berkeley Demo University", net_price=26000, median_earnings=79000),
             make_row(school_id=2, name="UCLA Demo College", net_price=24000, median_earnings=70000, graduation_rate=0.86),
         ]
         return [row for row in rows if row["school_id"] in school_ids]
 
-    def save_snapshot(self, user_id: int, summary_version: str, school_ids: list[int], summary: dict[str, object]) -> int:
-        self.snapshots.append({"user_id": user_id, "summary_version": summary_version, "school_ids": school_ids, "summary": summary})
-        return 99
+
+def make_offers(**second_overrides: object) -> list[DecisionOfferInput]:
+    return [
+        DecisionOfferInput(
+            school_id=1, status="finalist", aid_offer=12000, scholarships=8000,
+            estimated_yearly_cost=22000, unresolved_concerns=["Housing cost"],
+        ),
+        DecisionOfferInput(
+            **{"school_id": 2, "status": "accepted", "aid_offer": 10000, "scholarships": 6000,
+               "estimated_yearly_cost": 18000, **second_overrides}
+        ),
+    ]
 
 
 class FakeSchoolRepository:
@@ -109,30 +68,13 @@ class FakeSchoolRepository:
 
 
 def make_service() -> DecisionService:
-    return DecisionService(FakeDecisionRepository(), RankingService(FakeSchoolRepository()))
-
-
-def test_offer_upsert_returns_decision_offer() -> None:
-    service = make_service()
-
-    offer = service.upsert_offer(
-        DecisionOfferCreate(
-            school_id=1,
-            status="finalist",
-            estimated_yearly_cost=21000,
-            unresolved_concerns=["Confirm housing"],
-        )
-    )
-
-    assert offer.school_id == 1
-    assert offer.status == "finalist"
-    assert offer.estimated_yearly_cost == 21000
+    return DecisionService(FakeCandidateRepository(), RankingService(FakeSchoolRepository()))
 
 
 def test_decision_report_is_deterministic_and_distinguishes_categories() -> None:
     service = make_service()
     request = DecisionReportRequest(
-        user_id=1,
+        offers=make_offers(),
         preferences=Preference(
             intended_major="Computer Science",
             max_annual_cost=25000,
@@ -159,46 +101,46 @@ def test_decision_report_is_deterministic_and_distinguishes_categories() -> None
 
 
 def test_missing_data_reduces_decision_confidence() -> None:
-    repository = FakeDecisionRepository()
-    repository.offers[1]["estimated_yearly_cost"] = None
-    service = DecisionService(repository, RankingService(FakeSchoolRepository()))
+    service = make_service()
 
-    report = service.build_report(DecisionReportRequest(user_id=1, preferences=Preference()))
+    report = service.build_report(
+        DecisionReportRequest(offers=make_offers(estimated_yearly_cost=None), preferences=Preference())
+    )
 
     assert report.decision_confidence in {"low", "medium"}
     assert "missing_financial_data" in report.confidence_flags
 
 
-def test_report_rejects_missing_finalists() -> None:
-    repository = FakeDecisionRepository()
-    repository.offers = []
-    service = DecisionService(repository, RankingService(FakeSchoolRepository()))
+def test_report_rejects_unknown_schools() -> None:
+    service = make_service()
 
-    try:
-        service.build_report(DecisionReportRequest(user_id=1, preferences=Preference()))
-    except ValueError as exc:
-        assert "accepted or finalist offer" in str(exc)
-    else:
-        raise AssertionError("Expected missing finalists to be rejected.")
+    with pytest.raises(ValueError, match="current dataset"):
+        service.build_report(DecisionReportRequest(offers=[DecisionOfferInput(school_id=404)]))
 
 
-def test_invalid_financial_inputs_return_validation_error(client: TestClient) -> None:
-    response = client.post(
-        "/decision/offers",
-        json={"school_id": 1, "estimated_yearly_cost": -1},
-    )
+def test_report_request_validation(client: TestClient) -> None:
+    for offers in (
+        [],
+        [{"school_id": 1, "estimated_yearly_cost": -1}],
+        [{"school_id": 1}, {"school_id": 1}],
+        [{"school_id": 1, "unresolved_concerns": ["x" * 301]}],
+    ):
+        assert client.post("/decision/report", json={"offers": offers}).status_code == 422
 
-    assert response.status_code == 422
+
+def test_offer_store_is_not_exposed(client: TestClient) -> None:
+    """Offers travel with each report request; no endpoint returns one visitor's offers to another."""
+    assert client.get("/decision/offers").status_code in {404, 405}
+    assert client.post("/decision/offers", json={"school_id": 1}).status_code in {404, 405}
 
 
 def test_decision_endpoints_return_report(client: TestClient) -> None:
     app.dependency_overrides[get_decision_service] = make_service
     try:
-        offers = client.get("/decision/offers")
         report = client.post(
             "/decision/report",
             json={
-                "user_id": 1,
+                "offers": [offer.model_dump() for offer in make_offers()],
                 "preferences": {
                     "intended_major": "Computer Science",
                     "max_annual_cost": 25000,
@@ -209,8 +151,6 @@ def test_decision_endpoints_return_report(client: TestClient) -> None:
     finally:
         app.dependency_overrides.clear()
 
-    assert offers.status_code == 200
-    assert len(offers.json()["offers"]) == 2
     assert report.status_code == 200
     assert report.json()["best_value"]["school_id"] == 2
     assert report.json()["printable_report_path"] == "/decision/report"

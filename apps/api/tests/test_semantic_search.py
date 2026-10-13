@@ -1,3 +1,4 @@
+from sqlalchemy.exc import OperationalError
 from fastapi.testclient import TestClient
 
 from api.routes.semantic_search import get_semantic_search_service
@@ -87,7 +88,7 @@ class FakeSemanticRepository:
 
     def get_fulltext_scores(self, tsquery_text: str, documents: dict[int, str]) -> dict[int, float]:
         if not self.scores:
-            raise RuntimeError("database unavailable")
+            raise OperationalError("SELECT", {}, Exception("database unavailable"))
         self.tsquery_texts.append(tsquery_text)
         return {school_id: self.scores.get(school_id, 0.0) for school_id in documents}
 

@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from api.deps import get_cache_service
 from core.config import Settings, get_settings
+from core.errors import register_exception_handlers
 from core.rate_limit import RateLimit, client_identifier, require_analytics_token
 
 
@@ -40,6 +41,8 @@ class UnavailableCache(CountingCache):
 
 def build_app(cache: CountingCache, settings: Settings) -> FastAPI:
     app = FastAPI()
+    # The production handlers, so a header dropped by error formatting is caught here.
+    register_exception_handlers(app)
 
     @app.post("/limited", dependencies=[Depends(RateLimit("test_bucket", limit=3))])
     def limited() -> dict[str, bool]:
@@ -141,14 +144,23 @@ def test_analytics_summary_requires_a_matching_token() -> None:
         assert client.get("/gated", headers={"X-Analytics-Token": "s3cret"}).status_code == 200
 
 
-def test_client_identifier_prefers_the_first_forwarded_hop() -> None:
+def test_client_identifier_ignores_client_supplied_forwarded_hops() -> None:
     class FakeRequest:
         def __init__(self, headers: dict[str, str], host: str | None) -> None:
             self.headers = headers
             self.client = type("C", (), {"host": host})() if host else None
 
-    assert client_identifier(FakeRequest({"x-forwarded-for": "1.1.1.1, 2.2.2.2"}, "9.9.9.9")) == "1.1.1.1"
-    assert client_identifier(FakeRequest({}, "9.9.9.9")) == "9.9.9.9"
-    # A blank forwarded header must fall back rather than bucket everyone together.
-    assert client_identifier(FakeRequest({"x-forwarded-for": "  "}, "9.9.9.9")) == "9.9.9.9"
-    assert client_identifier(FakeRequest({}, None)) == "unknown"
+    def ident(headers: dict[str, str], host: str | None = "9.9.9.9") -> str:
+        return client_identifier(FakeRequest(headers, host))
+
+    # Rotating the client-controlled left-most hop must not mint a new bucket.
+    assert ident({"x-forwarded-for": "1.1.1.1, 2.2.2.2"}) == ident({"x-forwarded-for": "7.7.7.7, 2.2.2.2"})
+    assert ident({"x-forwarded-for": "1.1.1.1, 2.2.2.2"}) != ident({"x-forwarded-for": "1.1.1.1, 3.3.3.3"})
+    # The platform-observed source IP wins over any header the client can write.
+    context = '{"http": {"sourceIp": "5.5.5.5"}}'
+    assert ident({"x-amzn-request-context": context, "x-forwarded-for": "6.6.6.6"}) == ident({}, "5.5.5.5")
+    assert ident({"x-amzn-request-context": "not json"}) == ident({})
+    # A blank forwarded header falls back to the socket rather than bucketing everyone together.
+    assert ident({"x-forwarded-for": "  "}) == ident({})
+    # Keys are fixed length however long the header is.
+    assert len(ident({"x-forwarded-for": "x" * 5000})) == 16

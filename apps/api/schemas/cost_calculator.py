@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from schemas.base import ApiModel
 
 CalculatorConfidence = Literal["low", "medium", "high"]
 AffordabilityStatus = Literal["within_budget", "near_budget", "above_budget", "unknown"]
@@ -12,7 +13,7 @@ DirectionalValue = Literal["stronger_value", "reasonable_value", "higher_cost_tr
 RepaymentScenarioKind = Literal["base", "lower_debt", "higher_debt"]
 
 
-class CostCalculatorAssumption(BaseModel):
+class CostCalculatorAssumption(ApiModel):
     school_id: int = Field(ge=1)
     tuition: int | None = Field(default=None, ge=0, le=250_000)
     estimated_net_price: int | None = Field(default=None, ge=0, le=250_000)
@@ -32,7 +33,7 @@ class CostCalculatorAssumption(BaseModel):
         return self
 
 
-class CostCalculatorRequest(BaseModel):
+class CostCalculatorRequest(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -70,7 +71,7 @@ class CostCalculatorRequest(BaseModel):
         return self
 
 
-class ObservedCostData(BaseModel):
+class ObservedCostData(ApiModel):
     tuition_in_state: int | None
     tuition_out_state: int | None
     net_price: int | None
@@ -78,13 +79,13 @@ class ObservedCostData(BaseModel):
     debt_median: int | None
 
 
-class ObservedOutcomeData(BaseModel):
+class ObservedOutcomeData(ApiModel):
     median_earnings: int | None
     graduation_rate: float | None
     repayment_rate: float | None
 
 
-class RepaymentScenario(BaseModel):
+class RepaymentScenario(ApiModel):
     scenario: RepaymentScenarioKind
     principal: int
     interest_rate: float
@@ -94,12 +95,12 @@ class RepaymentScenario(BaseModel):
     assumption: str
 
 
-class AffordabilityIndicator(BaseModel):
+class AffordabilityIndicator(ApiModel):
     status: AffordabilityStatus
     message: str
 
 
-class CostCalculatorSchoolResult(BaseModel):
+class CostCalculatorSchoolResult(ApiModel):
     school_id: int
     name: str
     city: str
@@ -120,7 +121,7 @@ class CostCalculatorSchoolResult(BaseModel):
     formulas: list[str]
 
 
-class CostCalculatorResponse(BaseModel):
+class CostCalculatorResponse(ApiModel):
     calculator_version: str
     generated_at: datetime
     disclaimer: str

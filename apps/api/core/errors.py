@@ -1,7 +1,6 @@
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError as PydanticValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_500_INTERNAL_SERVER_ERROR
 
@@ -11,9 +10,11 @@ from schemas.errors import ErrorDetail, ErrorResponse
 logger = get_logger(__name__)
 
 
-def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
+def _error_response(
+    status_code: int, code: str, message: str, headers: dict[str, str] | None = None
+) -> JSONResponse:
     body = ErrorResponse(error=ErrorDetail(code=code, message=message))
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    return JSONResponse(status_code=status_code, content=body.model_dump(), headers=headers)
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -25,24 +26,13 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         status_code=exc.status_code,
         code=f"http_{exc.status_code}",
         message=str(exc.detail),
+        headers=getattr(exc, "headers", None),
     )
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     logger.info(
         "validation_exception",
-        extra={"path": request.url.path, "errors": exc.errors()},
-    )
-    return _error_response(
-        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-        code="validation_error",
-        message="Request validation failed.",
-    )
-
-
-async def pydantic_validation_exception_handler(request: Request, exc: PydanticValidationError) -> JSONResponse:
-    logger.info(
-        "pydantic_validation_exception",
         extra={"path": request.url.path, "errors": exc.errors()},
     )
     return _error_response(
@@ -62,3 +52,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         code="internal_server_error",
         message="An unexpected error occurred.",
     )
+
+
+def register_exception_handlers(app: FastAPI) -> None:
+    # A pydantic ValidationError raised after request parsing is a server bug (a bad row
+    # or a stale cached shape), not bad client input, so it falls through to the 500
+    # handler. Client input errors arrive as RequestValidationError.
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)

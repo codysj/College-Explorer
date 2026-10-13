@@ -77,7 +77,7 @@ export function SearchExperience() {
 
   useEffect(() => {
     setDraftFilters(urlFilters);
-  }, [retryNonce, urlFilters]);
+  }, [urlFilters]);
 
   useEffect(() => {
     setPreferenceProfile(loadPreferenceProfile());
@@ -136,7 +136,8 @@ export function SearchExperience() {
       });
 
     return () => controller.abort();
-  }, [preferenceProfile, profileLoaded, urlFilters]);
+    // retryNonce is a dependency only so the Retry button can re-run this request.
+  }, [preferenceProfile, profileLoaded, urlFilters, retryNonce]);
 
   const activeChips = useMemo(() => buildActiveChips(draftFilters), [draftFilters]);
   // Derived from urlFilters, which drive the fetch, not draftFilters, which lead it.
