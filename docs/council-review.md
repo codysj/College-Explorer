@@ -108,7 +108,7 @@ judgment call that is not the code's to make).
 - [x] R5.3 Retrieval metric is in-sample and named P@10 while capped by relevant-set size.
   Fix: rename, add bootstrap intervals, add a held-out query set written after v1.3
   froze and report it separately. *(data)*
-- [ ] R5.4 Screenshots and GIFs show the synthetic, pre-ranking build ("FIT Unknown").
+- [x] R5.4 Screenshots and GIFs show the synthetic, pre-ranking build ("FIT Unknown").
   Fix: re-capture against the real corpus with a production build. *(hiring)*
 - [ ] R5.5 `docs/screenshots.md` says no media exists; methodology doc says V1.9.
   *(hiring, data)*
@@ -134,6 +134,11 @@ judgment call that is not the code's to make).
   Next.js advisory and a high PostCSS one landed after the lockfile was last updated.
 - [x] F3 The pydantic `ValidationError` -> 422 mapping was masking that `GET /schools/search`
   built its query model by hand; it now uses FastAPI's query-parameter model.
+
+- [x] F4 The onboarding quiz never sent career priorities, campus preferences, or academic
+  interests to the API, and sent only the first region, setting, and type, so those steps
+  changed nothing. Found while recapturing the README media against the real stack; the
+  journey test now asserts every answer reaches the ranking request.
 
 ## Deliberately not done
 

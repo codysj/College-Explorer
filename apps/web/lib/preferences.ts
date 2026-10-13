@@ -38,7 +38,7 @@ export type ApiPreferenceProfile = {
   home_state: string | null;
   max_annual_cost: number | null;
   weights: Record<string, number>;
-  constraints: Record<string, string | number | boolean | null>;
+  constraints: Record<string, string | string[] | number | boolean | null>;
 };
 
 export type PreferenceDraft = Omit<PreferenceProfile, "completion" | "profile_version" | "updated_at">;
@@ -107,11 +107,17 @@ export function toApiPreferenceProfile(profile: PreferenceProfile): ApiPreferenc
     home_state: profile.home_state.trim() || null,
     max_annual_cost: profile.max_annual_cost,
     weights: profile.weights,
+    // Every multi-select answer is sent whole. Until this was fixed only the first region,
+    // setting, and type went out, and career priorities, campus preferences, and academic
+    // interests were never sent at all, so those quiz steps changed nothing.
     constraints: {
-      preferred_region: profile.preferred_regions[0] ?? null,
-      preferred_state: profile.preferred_states[0] ?? (profile.home_state || null),
-      preferred_setting: profile.preferred_settings[0] ?? null,
-      preferred_school_type: profile.preferred_school_types[0] ?? null,
+      preferred_regions: profile.preferred_regions,
+      preferred_states: profile.preferred_states.length ? profile.preferred_states : profile.home_state ? [profile.home_state] : [],
+      preferred_settings: profile.preferred_settings,
+      preferred_school_types: profile.preferred_school_types,
+      career_priorities: profile.career_priorities,
+      campus_preferences: profile.campus_preferences,
+      academic_interests: profile.academic_interests,
       aid_importance: profile.aid_importance,
       admissions_strategy: profile.admissions_strategy || null,
       target_acceptance_rate_min: profile.target_acceptance_rate_min,

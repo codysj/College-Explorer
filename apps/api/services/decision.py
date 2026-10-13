@@ -26,7 +26,7 @@ DISCLAIMER = (
     "Estimates are based on available public data, local seed data, and user-entered offer assumptions."
 )
 METHODOLOGY_NOTE = (
-    "Rankings, category scores, cost/value labels, sensitivity highlights, confidence, reasons, and tradeoffs are produced by deterministic code. "
+    "Rankings, category scores, cost/value labels, sensitivity highlights, confidence, reasons, and tradeoffs come from fixed, published rules (deterministic code, no AI-generated text). "
     "Missing data is treated as unknown and lowers confidence instead of being converted to zero."
 )
 
@@ -83,7 +83,7 @@ class DecisionService:
             best_overall_fit=recommendation(
                 "Best overall fit",
                 max_by(summaries, lambda item: item.fit_score),
-                "Highest deterministic fit score from the current preference profile.",
+                "Highest fit score for your preferences.",
             ),
             best_value=recommendation(
                 "Best value",
@@ -93,7 +93,7 @@ class DecisionService:
             strongest_career_upside=recommendation(
                 "Strongest career upside",
                 max_by(summaries, lambda item: item.category_scores.get("career")),
-                "Highest deterministic career category score from known earnings, repayment, and career signals.",
+                "Highest career score, from reported earnings and loan repayment.",
             ),
             lowest_risk=recommendation(
                 "Lowest risk",
@@ -269,7 +269,7 @@ def finalist_ranking_table(
             estimated_yearly_cost=school.estimated_yearly_cost if school.estimated_yearly_cost is not None else school.net_price,
             four_year_cost=cost_by_school.get(school.school_id).estimated_four_year_total_cost if cost_by_school.get(school.school_id) else None,
             career_score=school.category_scores.get("career"),
-            major_tradeoff=(school.top_tradeoffs[0] if school.top_tradeoffs else "No major deterministic tradeoff flagged."),
+            major_tradeoff=(school.top_tradeoffs[0] if school.top_tradeoffs else "No major tradeoff flagged."),
         )
         for index, school in enumerate(summaries)
     ]

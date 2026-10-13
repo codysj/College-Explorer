@@ -85,10 +85,19 @@ test("carries a student from preferences through to a decision report", async ({
   // The weights captured in step 1 are what the engine was asked to rank by.
   expect(rankingRequests.length).toBeGreaterThan(0);
   const ranked = rankingRequests[0] as {
-    preferences: { intended_major: string | null; max_annual_cost: number | null };
+    preferences: {
+      intended_major: string | null;
+      max_annual_cost: number | null;
+      constraints: Record<string, unknown>;
+    };
   };
   expect(ranked.preferences.intended_major).toBe("Computer Science");
   expect(ranked.preferences.max_annual_cost).toBe(32000);
+  // Every quiz step must reach the engine; career and campus answers once never left the browser.
+  expect(ranked.preferences.constraints.career_priorities).toEqual(["Internships"]);
+  expect(ranked.preferences.constraints.preferred_regions).toEqual(["West"]);
+  expect(ranked.preferences.constraints.preferred_settings).toEqual(["Urban"]);
+  expect(ranked.preferences.constraints.preferred_school_types).toEqual(["Public"]);
 
   // 3. Shortlist ------------------------------------------------------------------
   for (let index = 0; index < 3; index += 1) {
