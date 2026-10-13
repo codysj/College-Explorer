@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TypeAlias
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -14,9 +14,13 @@ JsonScalar: TypeAlias = str | int | float | bool | None
 
 class AcceptanceOffer(Base):
     __tablename__ = "acceptance_offers"
-    __table_args__ = (UniqueConstraint("user_id", "school_id", name="uq_acceptance_offers_user_school"),)
+    __table_args__ = (
+        Index("ix_acceptance_offers_user_id", "user_id"),
+        Index("ix_acceptance_offers_school_id", "school_id"),
+        UniqueConstraint("user_id", "school_id", name="uq_acceptance_offers_user_school"),
+    )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -33,8 +37,11 @@ class AcceptanceOffer(Base):
 
 class DecisionSummarySnapshot(Base):
     __tablename__ = "decision_summary_snapshots"
+    __table_args__ = (
+        Index("ix_decision_summary_snapshots_user_id", "user_id"),
+    )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     summary_version: Mapped[str] = mapped_column(String(24), nullable=False)
     school_ids: Mapped[list[int]] = mapped_column(JSON, default=list)

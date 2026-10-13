@@ -19,6 +19,10 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 COPY apps/api apps/api
 COPY data/seed data/seed
 
+# Lambda runs the function as its own unprivileged user; this covers Compose and self-hosting.
+RUN useradd --system --no-create-home --uid 10001 app
+USER app
+
 WORKDIR /app/apps/api
 
 EXPOSE 8000

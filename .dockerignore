@@ -16,3 +16,5 @@ apps/web/playwright-report
 apps/web/tsconfig.tsbuildinfo
 data/raw/*
 !data/raw/.gitkeep
+apps/api/tests
+data/models
