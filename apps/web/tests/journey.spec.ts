@@ -79,7 +79,7 @@ test("carries a student from preferences through to a decision report", async ({
 
   // 2. Ranked results -------------------------------------------------------------
   await expect(page).toHaveURL(/\/search/);
-  await expect(page.getByText("Ranked by your preferences - v1.0")).toBeVisible();
+  await expect(page.getByText("Ranked by your preferences")).toBeVisible();
   await expect(page.getByText("Academic major match").first()).toBeVisible();
 
   // The weights captured in step 1 are what the engine was asked to rank by.

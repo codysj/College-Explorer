@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { readDecisionReport } from "@/lib/decision";
 import type { DecisionReportResponse } from "@/types/api";
 import { humanize } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 
 export function DecisionReportPage() {
   const [report, setReport] = useState<DecisionReportResponse | null>(null);
@@ -66,7 +67,7 @@ export function DecisionReportPage() {
                 {report.report_title}
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Generated {new Date(report.generated_at).toLocaleDateString()} using ranking {report.ranking_version} and report {report.report_version}.
+                Generated {new Date(report.generated_at).toLocaleDateString()}.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -206,10 +207,6 @@ function ReportSection({ children, icon, title }: { children: ReactNode; icon: R
       {children}
     </section>
   );
-}
-
-function formatCurrency(value: number | null) {
-  return value === null ? "Unknown" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 }
 
 function displayRecommendationLabel(label: string) {

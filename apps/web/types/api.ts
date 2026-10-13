@@ -19,6 +19,7 @@ export type RankingCategoryScores = Partial<Record<RankingCategoryKey, number>>;
 export type SchoolSearchCard = Schemas["SchoolSearchResult"];
 export type SchoolSearchResponse = Schemas["SearchResponse"];
 export type RankingResponse = Schemas["RankingResponse"];
+export type SemanticSearchResponse = Schemas["SemanticSearchResponse"];
 export type SchoolProfile = Schemas["SchoolProfileResponse"];
 
 export type SimilarSchoolCard = Schemas["SimilarSchoolResult"];

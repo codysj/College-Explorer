@@ -40,6 +40,7 @@ export function GlobalCompareTray() {
               key={school.school_id}
               className="inline-flex max-w-52 items-center gap-1 rounded-md border border-border bg-white px-2.5 py-1 text-xs font-semibold text-foreground transition hover:bg-muted"
               type="button"
+              aria-label={`Remove ${school.name} from comparison`}
               onClick={() => removeCompareSchool(school.school_id)}
             >
               <span className="truncate">{school.name}</span>

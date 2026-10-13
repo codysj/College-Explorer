@@ -72,7 +72,6 @@ export function SensitivityAnalysis({ schoolIds }: { schoolIds: number[] }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="muted">Ranking {report?.ranking_version ?? "pending"}</Badge>
           <Badge variant={report?.volatile_schools.length ? "muted" : "default"}>
             {report?.volatile_schools.length ?? 0} volatile
           </Badge>

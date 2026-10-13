@@ -1,4 +1,4 @@
-import type { RankingResponse, SchoolSearchResponse } from "@/types/api";
+import type { RankingResponse, SchoolSearchResponse, SemanticSearchResponse } from "@/types/api";
 import { apiFetch } from "@/lib/api-client";
 import { toApiPreferenceProfile, type PreferenceProfile } from "@/lib/preferences";
 
@@ -138,24 +138,51 @@ export function isRankedMode(filters: SearchFilters, profile: PreferenceProfile 
   return filters.sort === "best_fit" && profile !== null;
 }
 
+/** The semantic endpoint needs three characters; shorter input stays a school-name filter. */
+export const MIN_DESCRIBE_LENGTH = 3;
+
+/**
+ * A search box entry long enough to describe a school ("engineering in Texas") is matched
+ * against school documents, which include the name, so one box covers both kinds of search.
+ */
+export function isDescribeMode(filters: SearchFilters) {
+  return filters.query.trim().length >= MIN_DESCRIBE_LENGTH;
+}
+
+function apiFilters(filters: SearchFilters, { includeQuery }: { includeQuery: boolean }) {
+  return {
+    ...(includeQuery && filters.query.trim() ? { query: filters.query.trim() } : {}),
+    ...(filters.state.trim() ? { state: filters.state.trim().toUpperCase() } : {}),
+    ...(filters.type ? { type: filters.type } : {}),
+    ...(filters.setting ? { setting: filters.setting } : {}),
+    ...(filters.maxNetPrice ? { max_net_price: Number(filters.maxNetPrice) } : {}),
+    ...(filters.minGraduationRate ? { min_graduation_rate: Number(filters.minGraduationRate) / 100 } : {}),
+    page: filters.page,
+    page_size: PAGE_SIZE,
+  };
+}
+
 export function buildRankingBody(filters: SearchFilters, profile: PreferenceProfile) {
   return {
     preferences: toApiPreferenceProfile(profile),
     // The ranking engine applies these as hard constraints before scoring, so the
     // filter panel keeps working exactly as it does in structured search.
-    filters: {
-      ...(filters.query.trim() ? { query: filters.query.trim() } : {}),
-      ...(filters.state.trim() ? { state: filters.state.trim().toUpperCase() } : {}),
-      ...(filters.type ? { type: filters.type } : {}),
-      ...(filters.setting ? { setting: filters.setting } : {}),
-      ...(filters.maxNetPrice ? { max_net_price: Number(filters.maxNetPrice) } : {}),
-      ...(filters.minGraduationRate
-        ? { min_graduation_rate: Number(filters.minGraduationRate) / 100 }
-        : {}),
-      page: filters.page,
-      page_size: PAGE_SIZE,
-    },
+    filters: apiFilters(filters, { includeQuery: true }),
   };
+}
+
+/** Relevance to the description first, with the student's fit breaking ties. */
+export function describeSearch(filters: SearchFilters, profile: PreferenceProfile | null, signal?: AbortSignal) {
+  return apiFetch<SemanticSearchResponse>("/semantic-search", {
+    method: "POST",
+    body: {
+      query: filters.query.trim(),
+      // The description is the query here, not a name filter, so it is not repeated in filters.
+      filters: apiFilters(filters, { includeQuery: false }),
+      ...(profile ? { preferences: toApiPreferenceProfile(profile) } : {}),
+    },
+    signal,
+  });
 }
 
 export function rankSchools(

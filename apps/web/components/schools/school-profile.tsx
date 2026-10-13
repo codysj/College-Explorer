@@ -36,6 +36,7 @@ import { useSchoolActionState } from "@/lib/school-actions";
 import { getSchoolProfile, getSimilarSchools } from "@/lib/schools";
 import { cn } from "@/lib/utils";
 import type { SchoolProfile, SimilarSchoolCard, SimilarSchoolVariant } from "@/types/api";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 
 type SchoolProfilePageProps = {
   schoolId: number;
@@ -79,7 +80,7 @@ export function SchoolProfilePage({ schoolId }: SchoolProfilePageProps) {
   }
 
   if (!profile) {
-    return <ProfileError message="Data unavailable." onRetry={() => setRetryNonce((current) => current + 1)} />;
+    return <ProfileError message="We could not find this school." onRetry={() => setRetryNonce((current) => current + 1)} />;
   }
 
   const isSaved = savedIds.has(profile.school_id);
@@ -181,40 +182,24 @@ function ProfileHeader({
   );
 }
 
+// A profile is the same for every student, so it carries no fit score. Fit is computed against
+// the student's own preferences in search, which this links to with the school's name.
 function FitSummary({ profile }: { profile: SchoolProfile }) {
-  const categoryScores = Object.entries(profile.category_scores ?? {});
-
+  const params = new URLSearchParams({ query: profile.name, sort_ui: "best_fit" });
   return (
-    <SectionCard icon={CheckCircle2} title="Fit Summary">
-      <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
-        <div className="space-y-3">
-          <ScorePill className="w-full" label="Fit" score={profile.fit_score} />
-          <ScorePill className="w-full border-accent/20 bg-accent/10 text-accent" label="Confidence" score={profile.data_confidence_score * 100} />
-          <p className="rounded-md bg-muted p-3 text-sm leading-6 text-muted-foreground">
-            Ranking fit is unavailable until profile ranking is connected. Confidence here reflects profile data completeness.
-          </p>
-        </div>
-
-        <div className="space-y-5">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Category score breakdown</p>
-            {categoryScores.length > 0 ? (
-              <div className="mt-3 space-y-3">
-                {categoryScores.map(([category, score]) => (
-                  <ScoreBar key={category} label={formatLabel(category)} score={score} />
-                ))}
-              </div>
-            ) : (
-              <UnavailableBlock text="Data unavailable. Category scores are only returned by ranked results today." />
-            )}
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <InsightList emptyText="Data unavailable. No deterministic reasons are present for this profile yet." items={profile.top_reasons} title="Top reasons" />
-            <InsightList emptyText="Data unavailable. No deterministic tradeoffs are present for this profile yet." items={profile.top_tradeoffs} title="Top tradeoffs" warning />
-          </div>
-
-        </div>
+    <SectionCard icon={CheckCircle2} title="How it fits you">
+      <p className="text-sm leading-6 text-muted-foreground">
+        Fit depends on what you told us matters: your major, budget, location, and campus
+        preferences. See this school scored against them, with the reasons and tradeoffs behind
+        the number.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <Button asChild>
+          <Link href={`/search?${params.toString()}`}>See its fit for you</Link>
+        </Button>
+        <Button asChild variant="secondary">
+          <Link href="/onboarding">Update preferences</Link>
+        </Button>
       </div>
     </SectionCard>
   );
@@ -224,12 +209,12 @@ function AcademicsSection({ profile }: { profile: SchoolProfile }) {
   return (
     <SectionCard icon={GraduationCap} title="Academics" reportingYear={profile.reporting_years?.completion}>
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <TagPanel emptyText="Data unavailable for popular majors." items={profile.academics.popular_majors ?? []} title="Popular majors" />
+        <TagPanel emptyText="Not reported." items={profile.academics.popular_majors ?? []} title="Largest programs" />
         <MetricStack
           metrics={[
             ["Graduation rate", formatPercent(profile.academics.graduation_rate)],
             ["Retention rate", formatPercent(profile.academics.retention_rate)],
-            [withYear("Student-faculty ratio", profile.reporting_years?.student_faculty), profile.academics.student_faculty_ratio === null ? "Data unavailable" : `${profile.academics.student_faculty_ratio}:1`],
+            [withYear("Student-faculty ratio", profile.reporting_years?.student_faculty), profile.academics.student_faculty_ratio === null ? "Unknown" : `${profile.academics.student_faculty_ratio}:1`],
           ]}
         />
       </div>
@@ -262,17 +247,9 @@ function CostSection({ profile }: { profile: SchoolProfile }) {
 function OutcomesSection({ profile }: { profile: SchoolProfile }) {
   return (
     <SectionCard icon={TrendingUp} title="Outcomes" reportingYear={profile.reporting_years?.earnings}>
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricTile label="Median earnings" value={formatCurrency(profile.outcomes.median_earnings)} />
-        <MetricTile label="Completion rate" value={formatPercent(profile.outcomes.completion_rate)} />
-        <MetricTile label="Repayment rate" value={formatPercent(profile.outcomes.repayment_rate)} />
-      </div>
-      <div className="mt-4">
-        {profile.outcomes.outcome_percentiles ? (
-          <TagPanel items={Object.keys(profile.outcomes.outcome_percentiles)} title="Career/outcome indicators" />
-        ) : (
-          <UnavailableBlock text="Data unavailable. Outcome percentile indicators are not in the V1 profile schema yet." />
-        )}
+      <div className="grid gap-4 md:grid-cols-2">
+        <MetricTile label="Median earnings, 10 years after entry" value={formatCurrency(profile.outcomes.median_earnings)} />
+        <MetricTile label="Loan repayment rate" value={formatPercent(profile.outcomes.repayment_rate)} />
       </div>
     </SectionCard>
   );
@@ -286,14 +263,13 @@ function CampusLifeSection({ profile }: { profile: SchoolProfile }) {
           metrics={[
             ["Setting", profile.setting],
             [withYear("On-campus housing", profile.reporting_years?.housing), formatBoolean(profile.campus_life.housing)],
-            [withYear("Athletics", profile.reporting_years?.athletics), profile.campus_life.sports ?? "Data unavailable"],
-            ["Greek life", formatPercent(profile.campus_life.greek_life)],
+            [withYear("Athletics", profile.reporting_years?.athletics), profile.campus_life.sports ?? "Unknown"],
           ]}
         />
         <TagPanel
-          emptyText="Data unavailable for diversity and culture tags."
+          emptyText="Not reported."
           items={profile.campus_life.culture_tags ?? []}
-          title="Diversity and culture"
+          title="School characteristics"
         />
       </div>
     </SectionCard>
@@ -547,7 +523,7 @@ function MetricTile({ label, value }: { label: string; value: string }) {
 }
 
 function TagPanel({
-  emptyText = "Data unavailable.",
+  emptyText = "Not reported.",
   items,
   title,
 }: {
@@ -568,33 +544,6 @@ function TagPanel({
         </div>
       ) : (
         <UnavailableBlock className="mt-3" text={emptyText} />
-      )}
-    </div>
-  );
-}
-
-function InsightList({
-  emptyText,
-  items,
-  title,
-  warning,
-}: {
-  emptyText: string;
-  items: string[];
-  title: string;
-  warning?: boolean;
-}) {
-  return (
-    <div>
-      <p className="text-sm font-semibold text-foreground">{title}</p>
-      {items.length > 0 ? (
-        <ul className="mt-2 space-y-2 text-sm leading-6 text-foreground">
-          {items.map((item) => (
-            <li key={item}>{formatLabel(item)}</li>
-          ))}
-        </ul>
-      ) : (
-        <UnavailableBlock className={cn("mt-2", warning ? "bg-warning text-warning-foreground" : undefined)} text={emptyText} />
       )}
     </div>
   );
@@ -682,26 +631,8 @@ function ProfileSkeleton() {
   );
 }
 
-function formatCurrency(value: number | null) {
-  return value === null
-    ? "Data unavailable"
-    : new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      }).format(value);
-}
-
-function formatNumber(value: number | null) {
-  return value === null ? "Data unavailable" : new Intl.NumberFormat("en-US").format(value);
-}
-
-function formatPercent(value: number | null) {
-  return value === null ? "Data unavailable" : `${Math.round(value * 100)}%`;
-}
-
 function formatBoolean(value: boolean | null) {
-  if (value === null) return "Data unavailable";
+  if (value === null) return "Unknown";
   return value ? "Available" : "Not available";
 }
 

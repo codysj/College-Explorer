@@ -14,6 +14,10 @@ from services.cache import CacheService, NullCacheBackend
 from ingestion.college_data import REPORTING_YEARS
 
 
+# Fields that measure completeness. Fields no source publishes for any school (completion
+# percentiles, weather, diversity metrics, Greek life) are excluded: counting them told every
+# school it was missing data the platform never collects, capping completeness near 0.83.
+# popular_majors is the same column as majors, so it is counted once.
 PROFILE_COMPLETENESS_FIELDS = (
     "school_id",
     "name",
@@ -25,7 +29,6 @@ PROFILE_COMPLETENESS_FIELDS = (
     "enrollment",
     "acceptance_rate",
     "academics.majors",
-    "academics.popular_majors",
     "academics.graduation_rate",
     "academics.retention_rate",
     "academics.student_faculty_ratio",
@@ -35,14 +38,9 @@ PROFILE_COMPLETENESS_FIELDS = (
     "cost.average_aid",
     "cost.debt_median",
     "outcomes.median_earnings",
-    "outcomes.completion_rate",
     "outcomes.repayment_rate",
-    "outcomes.outcome_percentiles",
     "campus_life.sports",
-    "campus_life.greek_life",
     "campus_life.housing",
-    "campus_life.weather_band",
-    "campus_life.diversity_metrics",
     "campus_life.culture_tags",
 )
 

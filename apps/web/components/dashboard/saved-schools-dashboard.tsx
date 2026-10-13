@@ -14,6 +14,7 @@ import {
   type SavedSchoolStatus,
   useSchoolActionState,
 } from "@/lib/school-actions";
+import { formatCurrency, formatPercent } from "@/lib/format";
 
 const statusLabels: Record<SavedSchoolStatus, string> = {
   interested: "Interested",
@@ -205,16 +206,3 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatCurrency(value: number | null | undefined) {
-  return value === null || value === undefined
-    ? "Unknown"
-    : new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      }).format(value);
-}
-
-function formatPercent(value: number | null | undefined) {
-  return value === null || value === undefined ? "Unknown" : `${Math.round(value * 100)}%`;
-}

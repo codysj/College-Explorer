@@ -12,7 +12,7 @@ export default function Error({ reset }: { error: Error & { digest?: string }; r
           School profile failed to load
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          The profile page could not render. Keep the API server running and try again.
+          We could not load this school right now. Check your connection and try again.
         </p>
         <div className="mt-6 flex gap-3">
           <Button type="button" onClick={reset}>Try again</Button>

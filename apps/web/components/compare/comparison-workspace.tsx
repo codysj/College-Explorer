@@ -18,6 +18,7 @@ import { buildComparisonSummary } from "@/lib/comparison";
 import { useSchoolActionState } from "@/lib/school-actions";
 import { getSchoolProfiles } from "@/lib/schools";
 import type { CostCalculatorResponse, SchoolProfile } from "@/types/api";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -93,7 +94,7 @@ export function ComparisonWorkspace() {
             Compare schools
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Review 2 to 5 selected schools using deterministic profile metrics and explicit unknowns.
+            Side by side, 2 to 5 schools. Anything a school does not report is shown as unknown, never as zero.
           </p>
         </div>
         <Badge variant={compareIds.size >= 2 ? "default" : "muted"}>
@@ -411,29 +412,11 @@ function ComparisonSkeleton() {
   );
 }
 
-function formatCurrency(value: number | null) {
-  return value === null
-    ? "Unknown"
-    : new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      }).format(value);
-}
-
 function formatSignedCurrency(value: number | null) {
   if (value === null) return "Unknown";
   const formatted = formatCurrency(Math.abs(value));
   if (value === 0) return "$0";
   return value > 0 ? `+${formatted}` : `-${formatted}`;
-}
-
-function formatNumber(value: number | null) {
-  return value === null ? "Unknown" : new Intl.NumberFormat("en-US").format(value);
-}
-
-function formatPercent(value: number | null) {
-  return value === null ? "Unknown" : `${Math.round(value * 100)}%`;
 }
 
 function formatScore(value: number | null | undefined) {

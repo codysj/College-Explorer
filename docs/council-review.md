@@ -60,21 +60,21 @@ judgment call that is not the code's to make).
 
 ## R3 - Product polish (frontend)
 
-- [ ] R3.1 Milestone names and developer text shown to students ("arrives in V1.9", "keep
+- [x] R3.1 Milestone names and developer text shown to students ("arrives in V1.9", "keep
   the API server running", "not part of the V1 frontend foundation", "Saved to API").
   *(hiring, frontend)*
-- [ ] R3.2 No site-wide navigation; pages invent inconsistent back links. *(frontend)*
-- [ ] R3.3 Internal `/analytics` dashboard sits in the public nav space and gets indexed.
+- [x] R3.2 No site-wide navigation; pages invent inconsistent back links. *(frontend)*
+- [x] R3.3 Internal `/analytics` dashboard sits in the public nav space and gets indexed.
   *(frontend)*
-- [ ] R3.4 Format helpers copied in seven files with different `undefined` handling.
+- [x] R3.4 Format helpers copied in seven files with different `undefined` handling.
   *(frontend)*
-- [ ] R3.5 Accessibility: no focus ring on inputs, `EmptyState` renders a second `<h1>`,
+- [x] R3.5 Accessibility: no focus ring on inputs, `EmptyState` renders a second `<h1>`,
   unlabeled tray remove buttons. *(frontend)*
-- [ ] R3.6 Duplicate site name in two page titles; unguarded localStorage write; "Open
+- [x] R3.6 Duplicate site name in two page titles; unguarded localStorage write; "Open
   report" enabled with no report. *(frontend)*
-- [ ] R3.7 The search feature with a measured evaluation has no UI: the search box is a
+- [x] R3.7 The search feature with a measured evaluation has no UI: the search box is a
   name substring match. Fix: free-text search that calls `/semantic-search`. *(frontend)*
-- [ ] R3.8 Landing page hero card shows an invented school and score. *(hiring)*
+- [x] R3.8 Landing page hero card shows an invented school and score. *(hiring)*
 - [x] R3.9 Frontend types are hand-written while the project claims generated types.
   *(frontend)*
 

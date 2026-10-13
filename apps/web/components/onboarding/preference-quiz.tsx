@@ -144,7 +144,7 @@ export function PreferenceQuiz() {
             Build my shortlist
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Create a local preference profile that V1.9 ranking can use later.
+            Tell us what matters and we will rank schools by it. Your answers stay in this browser.
             For now, the profile pre-fills supported search filters and stays in
             this browser.
           </p>
@@ -299,12 +299,20 @@ function StepBody({
 
   if (stepIndex === 2) {
     return (
-      <OptionGrid
-        label="Career priorities"
-        options={careerOptions}
-        selected={draft.career_priorities}
-        onToggle={(value) => updateDraft("career_priorities", toggleString(draft.career_priorities, value))}
-      />
+      <div className="space-y-3">
+        <OptionGrid
+          label="Career priorities"
+          options={careerOptions}
+          selected={draft.career_priorities}
+          onToggle={(value) => updateDraft("career_priorities", toggleString(draft.career_priorities, value))}
+        />
+        {/* Mirrors CAREER_PRIORITY_TAGS in apps/api/services/ranking_service.py. */}
+        <p className="text-xs leading-5 text-muted-foreground">
+          Research is matched using each school&apos;s research classification. Public data does not
+          cover the others yet, so they are saved but do not change scores. Earnings and loan
+          repayment always count toward career fit.
+        </p>
+      </div>
     );
   }
 
@@ -352,6 +360,12 @@ function StepBody({
           selected={draft.campus_preferences}
           onToggle={(value) => updateDraft("campus_preferences", toggleString(draft.campus_preferences, value))}
         />
+        {/* Mirrors campus_preference_match in apps/api/services/ranking_service.py. */}
+        <p className="text-xs leading-5 text-muted-foreground">
+          Residential, Athletics (NCAA Division I or II), and Small classes (12 students per faculty
+          member or fewer) are matched with federal data. No public source covers the others, so
+          they are saved but do not change scores.
+        </p>
       </div>
     );
   }
@@ -471,7 +485,6 @@ function ProgressSummary({ percent, stepIndex }: { percent: number; stepIndex: n
 
 function ProfilePreview({ draft }: { draft: PreferenceDraft }) {
   const profile = buildPreferenceProfile(draft);
-  const apiProfile = toApiPreferenceProfile(profile);
   const hasAnyPreference =
     Boolean(profile.intended_major.trim()) ||
     profile.academic_interests.length > 0 ||
@@ -506,10 +519,6 @@ function ProfilePreview({ draft }: { draft: PreferenceDraft }) {
           <PreviewRow label="Location" value={profile.preferred_regions[0] ?? (profile.home_state || "Unknown")} />
           <PreviewRow label="Admissions" value={profile.admissions_strategy || "Unknown"} />
         </div>
-        <p className="mt-4 rounded-md bg-muted p-3 text-xs leading-5 text-muted-foreground">
-          Stored locally as `PreferenceProfile`; down-maps to the planned backend
-          shape with keys: {Object.keys(apiProfile).join(", ")}.
-        </p>
       </CardContent>
     </Card>
   );

@@ -9,9 +9,12 @@ type EmptyStateProps = {
   description: string;
   action?: ReactNode;
   className?: string;
+  /** h2 by default: most pages already have their own h1. */
+  headingLevel?: "h1" | "h2";
 };
 
-export function EmptyState({ action, className, description, title }: EmptyStateProps) {
+export function EmptyState({ action, className, description, headingLevel = "h2", title }: EmptyStateProps) {
+  const Heading = headingLevel;
   return (
     <div
       className={cn(
@@ -22,7 +25,7 @@ export function EmptyState({ action, className, description, title }: EmptyState
       <div className="flex h-12 w-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
         <Inbox className="h-6 w-6" aria-hidden="true" />
       </div>
-      <h1 className="mt-5 text-xl font-semibold tracking-normal text-foreground">{title}</h1>
+      <Heading className="mt-5 text-xl font-semibold tracking-normal text-foreground">{title}</Heading>
       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">{description}</p>
       {action ? (
         <Button asChild className="mt-6" variant="secondary">

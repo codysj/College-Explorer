@@ -25,6 +25,7 @@ import {
 } from "@/lib/decision";
 import { getVisibleSavedSchools, useSchoolActionState, type SavedSchoolEntry } from "@/lib/school-actions";
 import type { CostCalculatorResponse, DecisionReportResponse } from "@/types/api";
+import { formatCurrency, formatPercent } from "@/lib/format";
 
 export function AcceptedSchoolsWorkspace() {
   const { savedSchools, updateSavedStatus } = useSchoolActionState();
@@ -482,10 +483,3 @@ function TextArea({ label, onChange, value }: { label: string; onChange: (value:
   );
 }
 
-function formatCurrency(value: number | null) {
-  return value === null ? "Unknown" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
-}
-
-function formatPercent(value: number | null | undefined) {
-  return value === null || value === undefined ? "Unknown" : `${Math.round(value * 100)}%`;
-}
