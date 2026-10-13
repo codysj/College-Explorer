@@ -71,18 +71,25 @@ def test_calculates_four_year_cost_differences_and_value_summary() -> None:
     assert any("$82,000 more" in item for item in response.comparison_summary)
 
 
-def test_scholarships_and_aid_reduce_derived_yearly_cost() -> None:
+def test_aid_comes_off_tuition_but_not_off_net_price() -> None:
+    """Net price already subtracts typical grant aid; subtracting entered aid again double counts it."""
     response = make_service().calculate(
         CostCalculatorRequest(
-            schools=[{"school_id": 1, "estimated_net_price": 30000, "scholarships": 8000, "grants_aid": 5000}],
+            schools=[
+                {"school_id": 1, "tuition": 30000, "scholarships": 8000, "grants_aid": 5000},
+                {"school_id": 2, "estimated_net_price": 30000, "scholarships": 8000, "grants_aid": 5000},
+            ],
         )
     )
+    from_tuition, from_net_price = response.results
 
-    result = response.results[0]
+    assert from_tuition.estimated_yearly_cost == 17000
+    assert from_tuition.estimated_four_year_total_cost == 68000
+    assert "aid_not_subtracted_from_net_price" not in from_tuition.warnings
 
-    assert result.estimated_yearly_cost == 17000
-    assert result.estimated_four_year_total_cost == 68000
-    assert "derived_yearly_cost" in result.warnings
+    assert from_net_price.estimated_yearly_cost == 30000
+    assert "aid_not_subtracted_from_net_price" in from_net_price.warnings
+    assert "derived_yearly_cost" in from_net_price.warnings
 
 
 def test_debt_sensitivity_scenarios_use_standard_amortization() -> None:
@@ -93,7 +100,8 @@ def test_debt_sensitivity_scenarios_use_standard_amortization() -> None:
     scenarios = {item.scenario: item for item in response.results[0].repayment_scenarios}
 
     assert scenarios["base"].principal == 20000
-    assert scenarios["base"].estimated_monthly_payment == monthly_payment(20000, 0.055, 10)
+    assert scenarios["base"].interest_rate == 0.0639, "default is the cited federal undergraduate rate"
+    assert scenarios["base"].estimated_monthly_payment == monthly_payment(20000, 0.0639, 10)
     assert scenarios["higher_debt"].principal == 30000
 
 
@@ -139,6 +147,6 @@ def test_cost_calculator_endpoint_response_schema(client: TestClient) -> None:
     payload = response.json()
 
     assert response.status_code == 200
-    assert payload["calculator_version"] == "v1.0"
+    assert payload["calculator_version"] == "v1.1"
     assert payload["results"][0]["formulas"]
     assert payload["disclaimer"]

@@ -21,15 +21,17 @@ class CostCalculatorAssumption(ApiModel):
     grants_aid: int | None = Field(default=None, ge=0, le=250_000)
     estimated_yearly_cost: int | None = Field(default=None, ge=0, le=250_000)
     annual_loan_amount: int | None = Field(default=None, ge=0, le=250_000)
-    loan_interest_rate: float = Field(default=0.055, ge=0, le=0.25)
+    # Federal Direct Loan rate for undergraduates, loans first disbursed 2025-07-01 to
+    # 2026-06-30 (studentaid.gov). Update yearly; private loans usually cost more.
+    loan_interest_rate: float = Field(default=0.0639, ge=0, le=0.25)
     loan_term_years: int = Field(default=10, ge=1, le=30)
 
     @model_validator(mode="after")
     def validate_aid_against_tuition(self) -> "CostCalculatorAssumption":
         total_aid = (self.scholarships or 0) + (self.grants_aid or 0)
-        known_price = self.tuition if self.tuition is not None else self.estimated_net_price
-        if known_price is not None and total_aid > known_price:
-            raise ValueError("Scholarships plus grants/aid cannot exceed the known yearly price input.")
+        # Aid is subtracted from tuition only (net price already nets it out), so that is the bound.
+        if self.tuition is not None and total_aid > self.tuition:
+            raise ValueError("Scholarships plus grants/aid cannot exceed tuition.")
         return self
 
 

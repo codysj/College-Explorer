@@ -31,7 +31,15 @@ SEED_PATH = Path(__file__).resolve().parents[3] / "data" / "seed" / "schools_see
 # breaking ties. The deterministic engine pinned here is unchanged, so these orders are too.
 # v1.3 reviewed: semantic search retrieves with Postgres full-text instead of hash vectors.
 # The engine is again untouched; these orders stand.
-SNAPSHOT_RANKING_VERSION = "v1.3"
+# v1.4 reviewed, on data version scorecard-2023.4 (Biology was never fetched before, so 42
+# schools had wrong top majors). Scoring changes, all about missing data acting as a score:
+# majors are checked against every program a school offers instead of its top three; career
+# and campus options with no data behind them are unknown rather than zero; a category with
+# no data drops out of fit instead of scoring 50; uniform filler components are gone; and
+# the "likely" admissions strategy no longer floors a 3% admit rate at 35. California now
+# fills eight of the budget engineer's top ten, and the earnings profile no longer lists
+# Caltech, MIT, and Rice for a student who asked for likely admission.
+SNAPSHOT_RANKING_VERSION = "v1.4"
 
 
 class SeedRepository:
@@ -92,18 +100,18 @@ def test_corpus_size_is_stable(seed_rows: list[dict[str, object]]) -> None:
 
 def test_budget_conscious_engineer_ranking(seed_rows: list[dict[str, object]]) -> None:
     assert top_names(seed_rows, BUDGET_ENGINEER) == [
-        # Six California schools lead, which is the location preference doing its job,
-        # followed by strong out-of-state options rather than excluding them.
+        # California schools lead, which is the location preference doing its job, and a
+        # strong out-of-state option still appears rather than being excluded.
         "California Institute of Technology",
         "Stanford University",
         "University of California-Berkeley",
         "University of California-Los Angeles",
         "University of California-San Diego",
         "University of California-Davis",
+        "University of Southern California",
+        "University of California-Irvine",
+        "University of California-Santa Barbara",
         "Massachusetts Institute of Technology",
-        "University of Notre Dame",
-        "Princeton University",
-        "Dartmouth College",
     ]
 
 
@@ -116,14 +124,14 @@ def test_earnings_focused_ranking(seed_rows: list[dict[str, object]]) -> None:
     assert top_names(seed_rows, EARNINGS_FOCUSED) == [
         "Brigham Young University",
         "Virginia Polytechnic Institute and State University",
+        "University of California-Davis",
         "University of Illinois Urbana-Champaign",
         "University of Maryland-College Park",
         "University of Minnesota-Twin Cities",
         "Texas A&M University-College Station",
         "Rutgers University-New Brunswick",
+        "University of Washington-Seattle Campus",
         "University of Colorado Boulder",
-        "University of Notre Dame",
-        "Washington University in St Louis",
     ]
 
 
@@ -237,3 +245,40 @@ def test_a_matched_location_is_never_reported_as_a_mismatch(
         assert "location_preference_not_matched" not in item.top_tradeoffs, (
             f"{item.row['name']} is in the student's home state"
         )
+
+
+# Mirrors academicOptions and careerOptions in apps/web/components/onboarding/preference-quiz.tsx.
+ONBOARDING_MAJORS = ["Computer Science", "Business", "Biology", "Engineering", "Psychology", "Education"]
+
+
+def test_every_onboarding_major_is_offered_somewhere(seed_rows: list[dict[str, object]]) -> None:
+    """A quiz option no school can match would score every school as not offering it."""
+    for major in ONBOARDING_MAJORS:
+        assert any(major in (row["majors_offered"] or []) for row in seed_rows), major
+
+
+def test_a_major_outside_the_top_three_is_not_a_demerit(seed_rows: list[dict[str, object]]) -> None:
+    """Most schools teach Computer Science without it being a top-three program."""
+    service = RankingService(SeedRepository(seed_rows))
+    preference = Preference(intended_major="Computer Science")
+    for row in seed_rows:
+        if "Computer Science" in (row["majors_offered"] or []):
+            assert "academic_major_not_offered" not in service.score_school(row, preference).top_tradeoffs
+
+
+def test_unknown_athletics_is_not_scored_as_a_mismatch(seed_rows: list[dict[str, object]]) -> None:
+    """Penn State has no EADA record. It used to score like a Division III school."""
+    service = RankingService(SeedRepository(seed_rows))
+    athletics = Preference(weights={"campus": 1}, constraints={"campus_preferences": ["athletics"]})
+    penn_state = next(row for row in seed_rows if str(row["name"]).startswith("Pennsylvania State"))
+    assert not penn_state["sports_division"]
+    ranked = service.score_school(penn_state, athletics)
+    assert ranked.confidence_score == 0, "nothing known about campus, so nothing is claimed"
+
+
+def test_research_priority_uses_the_carnegie_tag(seed_rows: list[dict[str, object]]) -> None:
+    """The quiz's "Research" option once looked for a tag no school carries."""
+    service = RankingService(SeedRepository(seed_rows))
+    research = Preference(weights={"career": 1}, constraints={"career_priorities": ["research"]})
+    reasons = {code for row in seed_rows for code in service.score_school(row, research).top_reasons}
+    assert "career_priority_match" in reasons

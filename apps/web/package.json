@@ -9,7 +9,7 @@
     "lint": "eslint . --max-warnings=0",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "generate:api-types": "openapi-typescript types/openapi.json -o types/api.gen.ts"
+    "generate:api-types": "openapi-typescript types/openapi.json -o types/api.gen.ts --default-non-nullable false"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.1",

@@ -584,7 +584,7 @@
             "title": "Grants Aid"
           },
           "loan_interest_rate": {
-            "default": 0.055,
+            "default": 0.0639,
             "maximum": 0.25,
             "minimum": 0.0,
             "title": "Loan Interest Rate",
@@ -690,7 +690,7 @@
             "title": "Grants Aid"
           },
           "loan_interest_rate": {
-            "default": 0.055,
+            "default": 0.0639,
             "maximum": 0.25,
             "minimum": 0.0,
             "title": "Loan Interest Rate",

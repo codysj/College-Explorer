@@ -15,14 +15,13 @@ export function defaultCostAssumption(
   const snapshot = school as SchoolSnapshot;
   return {
     school_id: school.school_id,
-    tuition: profile.cost?.tuition_out_state ?? null,
+    // Net price takes precedence over tuition, so prefilling both would hide the tuition input.
+    tuition: null,
     estimated_net_price: profile.cost?.net_price ?? snapshot.net_price ?? null,
     scholarships: offer?.scholarships ?? null,
     grants_aid: offer?.aid_offer ?? null,
     estimated_yearly_cost: offer?.estimated_yearly_cost ?? null,
     annual_loan_amount: null,
-    loan_interest_rate: 0.055,
-    loan_term_years: 10,
   };
 }
 

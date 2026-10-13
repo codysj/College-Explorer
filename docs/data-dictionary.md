@@ -24,7 +24,7 @@ Indexes: `state`, `region`, `type`, `setting`, `undergraduate_enrollment`, `acce
 
 One row per school for academic attributes.
 
-Key fields: `school_id`, `top_majors`, `graduation_rate`, `retention_rate`, `student_faculty_ratio`, `created_at`.
+Key fields: `school_id`, `top_majors` (the three largest program families), `majors_offered` (every family with graduates, used to tell "not offered" from "smaller"), `graduation_rate`, `retention_rate`, `student_faculty_ratio`, `created_at`.
 
 Index: `graduation_rate`.
 
@@ -244,7 +244,19 @@ fails, the whole fetch stops: writing Scorecard rows with silently empty IPEDS c
 would look like a real data regression, so a partial snapshot is never produced.
 
 `top_majors` is derived from `latest.academics.program_percentage.*`, taking the three
-largest program shares. `culture_tags` is derived only from reported structural fields
+largest program shares, and `majors_offered` keeps every family with a share above zero.
+Both are stored sorted by name. Until data version `scorecard-2023.4` the fetcher asked for
+`program_percentage.biology`, but the field is `biological`, so Biology was missing from
+every school; `parks_recreation` had the same problem, and 14 smaller families were never
+requested. 42 of 92 schools had the wrong top three (Biology is a top-three program at 35).
+The fetcher now requests every family and stops if any requested program field is absent
+from every school, instead of producing a silently incomplete snapshot.
+
+`scorecard-2023.4` was produced with `--unitids-from data/seed/schools_seed.csv`, which
+refreshes exactly the current schools by UNITID instead of re-running selection: selection
+sorts on `latest.*` values that move between Scorecard releases, so a plain refresh could
+swap schools in or out. Apart from the two majors columns, every value is byte-identical to
+`scorecard-2023.3`. `culture_tags` is derived only from reported structural fields
 (ownership, locale, enrollment band, research classification) — no invented descriptors.
 The research tag (`very-high-research`, Carnegie Basic 15) was silently absent from every
 school until data version `scorecard-2023.3`: the fetcher read `school.carnegie_basic` but

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "notes": [
+    "Held-out queries, written on 2026-10-13 after RANKING_VERSION v1.3 froze retrieval, and before any of them was run. Nothing has been tuned on this set; the 35 queries in retrieval_queries.json are the development set retrieval was tuned against, so only these numbers are out-of-sample.",
+    "Same predicate format and categories as retrieval_queries.json. major_any checks a school's top three majors.",
+    "Written by the same author as the development set, so shared blind spots remain possible. A set labeled by someone else would be stronger.",
+    "ho-ny-psychology was replaced by ho-ny-computer-science before the first run: no New York school in the corpus has Psychology among its top three majors, so the label was empty and the harness refused it. Only label validity was checked, never retrieval output."
+  ],
+  "queries": [
+    {"id": "ho-ca-biology", "category": "state_name", "query": "biology programs in California", "relevant_if": {"state_in": ["CA"], "major_any": ["Biology"]}},
+    {"id": "ho-ny-computer-science", "category": "state_name", "query": "computer science in New York", "relevant_if": {"state_in": ["NY"], "major_any": ["Computer Science"]}},
+    {"id": "ho-mi-engineering", "category": "state_name", "query": "engineering in Michigan", "relevant_if": {"state_in": ["MI"], "major_any": ["Engineering"]}},
+    {"id": "ho-il-private", "category": "state_name", "query": "private universities in Illinois", "relevant_if": {"state_in": ["IL"], "type": "Private"}},
+
+    {"id": "ho-west-public", "category": "exact_vocabulary", "query": "public universities in the West", "relevant_if": {"region_in": ["West"], "type": "Public"}},
+    {"id": "ho-urban-private", "category": "exact_vocabulary", "query": "urban private universities", "relevant_if": {"setting_in": ["Urban"], "type": "Private"}},
+    {"id": "ho-large-south-public", "category": "exact_vocabulary", "query": "large public universities in the South", "relevant_if": {"region_in": ["South"], "size_in": ["L"], "type": "Public"}},
+    {"id": "ho-division-iii", "category": "exact_vocabulary", "query": "Division III schools", "relevant_if": {"division_in": ["DIII"]}},
+
+    {"id": "ho-pre-med", "category": "synonym", "query": "pre-med", "relevant_if": {"major_any": ["Biology", "Health Professions"]}},
+    {"id": "ho-economics", "category": "synonym", "query": "economics", "relevant_if": {"major_any": ["Social Sciences"]}},
+    {"id": "ho-software", "category": "synonym", "query": "software engineering", "relevant_if": {"major_any": ["Computer Science", "Engineering"]}},
+
+    {"id": "ho-affordable", "category": "structured_only", "query": "affordable college", "relevant_if": {"max_net_price": 18000}},
+    {"id": "ho-highly-selective", "category": "structured_only", "query": "highly selective universities", "relevant_if": {"max_acceptance": 0.1}},
+
+    {"id": "ho-big-ten", "category": "world_knowledge", "query": "Big Ten schools", "relevant_if": {"unitid_in": [145637, 170976, 174066, 204796, 214777, 243780, 240444, 163286, 186380, 151351, 171100, 147767, 110662, 123961, 236948]}},
+
+    {"id": "ho-filter-tx-biology", "category": "filtered", "query": "biology", "filters": {"state": "TX"}, "relevant_if": {"major_any": ["Biology"]}},
+    {"id": "ho-filter-cheap-public-cs", "category": "filtered", "query": "computer science", "filters": {"type": "Public", "max_net_price": 15000}, "relevant_if": {"major_any": ["Computer Science"]}}
+  ]
+}

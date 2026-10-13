@@ -196,3 +196,19 @@ def test_variant_scoring_rewards_lower_price_for_cheaper() -> None:
 
     assert cheap.score > expensive.score
     assert "lower_net_price" in cheap.reasons
+
+
+def test_structural_similarity_counts_known_mismatches() -> None:
+    """More agreement must never score lower: a one-attribute match used to score a perfect 1.0."""
+    from services.similar_schools import structural_similarity
+
+    source = {"type": "Public", "setting": "Urban", "region": "West", "top_majors": ["Biology", "Business", "Engineering"]}
+    type_only = {"type": "Public", "setting": "Rural", "region": "South", "top_majors": ["History"]}
+    close = {"type": "Public", "setting": "Urban", "region": "West", "top_majors": ["Biology", "Psychology"]}
+
+    type_only_score, _ = structural_similarity(source, type_only)
+    close_score, reasons = structural_similarity(source, close)
+
+    assert close_score > type_only_score
+    assert type_only_score == 0.25  # 1 of 4 known attributes agree
+    assert "overlapping_majors" in reasons

@@ -150,9 +150,9 @@ def test_weighted_aggregation_normalizes_custom_weights() -> None:
 
 def test_hard_constraints_filter_cost_and_major_when_strict() -> None:
     rows = [
-        make_row(school_id=1, top_majors=["Computer Science"], net_price=26000),
-        make_row(school_id=2, top_majors=["Biology"], net_price=26000),
-        make_row(school_id=3, top_majors=["Computer Science"], net_price=42000),
+        make_row(school_id=1, majors_offered=["Computer Science"], net_price=26000),
+        make_row(school_id=2, majors_offered=["Biology"], net_price=26000),
+        make_row(school_id=3, majors_offered=["Computer Science"], net_price=42000),
     ]
     service = make_service(rows)
     preference = Preference(

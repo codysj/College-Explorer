@@ -75,7 +75,7 @@ class SchoolService:
             enrollment=row["enrollment"],
             acceptance_rate=self._to_float(row["acceptance_rate"]),
             academics=SchoolProfileAcademics(
-                majors=top_majors,
+                majors=row.get("majors_offered") or top_majors,
                 popular_majors=top_majors,
                 graduation_rate=self._to_float(row["graduation_rate"]),
                 retention_rate=self._to_float(row["retention_rate"]),

@@ -57,6 +57,7 @@ class SchoolAcademics(Base):
 
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), primary_key=True)
     top_majors: Mapped[list[str]] = mapped_column(ARRAY(String(80)), default=list)
+    majors_offered: Mapped[list[str]] = mapped_column(ARRAY(String(80)), default=list)
     graduation_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     retention_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     student_faculty_ratio: Mapped[Decimal | None] = mapped_column(Numeric(4, 1))

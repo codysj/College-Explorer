@@ -39,23 +39,23 @@ judgment call that is not the code's to make).
 
 ## R2 - Scoring integrity (ranking v1.4)
 
-- [ ] R2.1 Career and campus preference options map to tags the real corpus does not have
+- [x] R2.1 Career and campus preference options map to tags the real corpus does not have
   (for example "Research" looks for `research`, data says `very-high-research`; Greek life
   is null for all 92 schools), so unknown is scored as zero. Fix: map to real tags; drop
   the component when the attribute is unknown; test that every UI option can match.
   *(data)*
-- [ ] R2.2 "Not in the top 3 majors" is scored as "not offered". Fix: treat as unknown.
+- [x] R2.2 "Not in the top 3 majors" is scored as "not offered". Fix: treat as unknown.
   *(data)*
-- [ ] R2.3 A fully missing category scores a neutral 50, below a corpus mean near 75-80, so
+- [x] R2.3 A fully missing category scores a neutral 50, below a corpus mean near 75-80, so
   it acts as a demerit. Fix: drop it and renormalize that school's weights. *(data)*
-- [ ] R2.4 Similar-schools structural score averages over matches only, so one match beats
+- [x] R2.4 Similar-schools structural score averages over matches only, so one match beats
   three. *(data)*
-- [ ] R2.5 Cost calculator subtracts grant aid from net price, which already nets grant aid.
+- [x] R2.5 Cost calculator subtracts grant aid from net price, which already nets grant aid.
   *(data)*
 - [x] R2.6 The browser computes its own fit and category scores when the API fails, with
   invented constants (location 50, urban 72). Fix: show an error and retry instead.
   *(frontend)*
-- [ ] R2.7 Scoring constants and transforms are absent from the methodology doc; loan rate
+- [x] R2.7 Scoring constants and transforms are absent from the methodology doc; loan rate
   default is uncited. *(data)*
 
 ## R3 - Product polish (frontend)
@@ -93,10 +93,10 @@ judgment call that is not the code's to make).
 - [x] R4.6 Models drift from migrations (missing unique constraint, no `onupdate`), and the
   offer upsert races. *(backend)*
 - [x] R4.7 Lambda uses a pooled engine against Neon. *(devops, backend)*
-- [ ] R4.8 Vestigial directories (`packages/`, `tests/`, `infra/docker/`), committed
+- [x] R4.8 Vestigial directories (`packages/`, `tests/`, `infra/docker/`), committed
   per-machine `.claude/settings.local.json`, two `pytest.ini` files, no `.nvmrc`.
   *(devops, hiring)*
-- [ ] R4.9 Frontend sends no security headers. *(security)*
+- [x] R4.9 Frontend sends no security headers. *(security)*
 
 ## R5 - Presentation and honesty
 
@@ -105,7 +105,7 @@ judgment call that is not the code's to make).
   v1.3), FastAPI badge `0.34`. *(hiring, devops, data)*
 - [ ] R5.2 README is 21 KB, PowerShell-only, no CI badge, and buries the measured retrieval
   evaluation. Fix: shorter, results up front, bash commands, CI badge. *(hiring, devops)*
-- [ ] R5.3 Retrieval metric is in-sample and named P@10 while capped by relevant-set size.
+- [x] R5.3 Retrieval metric is in-sample and named P@10 while capped by relevant-set size.
   Fix: rename, add bootstrap intervals, add a held-out query set written after v1.3
   froze and report it separately. *(data)*
 - [ ] R5.4 Screenshots and GIFs show the synthetic, pre-ranking build ("FIT Unknown").
@@ -125,10 +125,18 @@ judgment call that is not the code's to make).
 - [-] Agent workflow files (`CLAUDE.md`, `AGENTS.md`, `.claude/agents`) are kept on purpose
   and disclosed in the README as an AI-assisted workflow, rather than hidden.
 
+## Found while fixing
+
+- [x] F1 The fetcher requested `program_percentage.biology`; the Scorecard field is
+  `biological`. Biology was missing from every school and 42 of 92 had wrong top-three
+  majors. Found by a test that every onboarding option must match some school.
+- [x] F2 CI's `npm audit --audit-level=high` gate was already failing on `main`: a critical
+  Next.js advisory and a high PostCSS one landed after the lockfile was last updated.
+- [x] F3 The pydantic `ValidationError` -> 422 mapping was masking that `GET /schools/search`
+  built its query model by hand; it now uses FastAPI's query-parameter model.
+
 ## Deliberately not done
 
-- Full program lists per school (would fix R2.2 properly) needs a new Scorecard field
-  family and a data version bump; R2.2 removes the false penalty instead.
 - `useSyncExternalStore` rewrite of the saved/compare store, server-rendering the profile
   page, and splitting 500-700 line client components: real improvements, no user-visible
   bug today. Listed in `tasks.md` Planned Next Steps.

@@ -4,7 +4,8 @@
     "Labeled query set for the V3.6 retrieval comparison, written before any retrieval change so the labels cannot be tuned to a method.",
     "Relevance is defined by explicit attribute predicates over the seed corpus, not by hand-picked result lists, so every label is reproducible and auditable. A query's relevant set is every school that satisfies its relevant_if predicate and passes its filters.",
     "Predicate keys: unitid_in, state_in, region_in, type, setting_in, size_in (S under 5,000 undergraduates, M under 20,000, L otherwise), major_any (any listed major among the school's top three), division_in, max_net_price, max_acceptance, max_ratio. All keys must hold. A missing value fails its check rather than passing it.",
-    "Categories name the kind of gap a query tests: exact_vocabulary (the words appear in the documents), state_name (a state spelled out, where documents carry only the abbreviation), synonym (same meaning, different words), world_knowledge (facts not in the documents), structured_only (numeric reasoning over fields documents do not express searchably), filtered (a short topical query plus a hard filter)."
+    "Categories name the kind of gap a query tests: exact_vocabulary (the words appear in the documents), state_name (a state spelled out, where documents carry only the abbreviation), synonym (same meaning, different words), world_knowledge (facts not in the documents), structured_only (numeric reasoning over fields documents do not express searchably), filtered (a short topical query plus a hard filter).",
+    "2026-10-13: retired ga-psychology, agriculture. Data version scorecard-2023.4 fixed a fetcher bug that had never requested Biology (and some smaller program families), so every school's top three was computed without them. Under corrected data these labels match no school. Results from results-v1.4.md onward use 33 queries and are not directly comparable to earlier result files."
   ],
   "queries": [
     {"id": "tx-engineering", "category": "state_name", "query": "engineering schools in Texas", "relevant_if": {"state_in": ["TX"], "major_any": ["Engineering"]}},
@@ -12,14 +13,12 @@
     {"id": "fl-business", "category": "state_name", "query": "business programs in Florida", "relevant_if": {"state_in": ["FL"], "major_any": ["Business"]}},
     {"id": "ma-private", "category": "state_name", "query": "private universities in Massachusetts", "relevant_if": {"state_in": ["MA"], "type": "Private"}},
     {"id": "tx-health", "category": "state_name", "query": "health professions programs in Texas", "relevant_if": {"state_in": ["TX"], "major_any": ["Health Professions"]}},
-    {"id": "ga-psychology", "category": "state_name", "query": "psychology programs in Georgia", "relevant_if": {"state_in": ["GA"], "major_any": ["Psychology"]}},
 
     {"id": "midwest-public", "category": "exact_vocabulary", "query": "public universities in the Midwest", "relevant_if": {"region_in": ["Midwest"], "type": "Public"}},
     {"id": "south-suburban", "category": "exact_vocabulary", "query": "suburban schools in the South", "relevant_if": {"region_in": ["South"], "setting_in": ["Suburban"]}},
     {"id": "small-private", "category": "exact_vocabulary", "query": "small private colleges", "relevant_if": {"size_in": ["S"], "type": "Private"}},
     {"id": "town-setting", "category": "exact_vocabulary", "query": "schools in a town setting", "relevant_if": {"setting_in": ["Town"]}},
     {"id": "northeast-mathematics", "category": "exact_vocabulary", "query": "mathematics programs in the Northeast", "relevant_if": {"region_in": ["Northeast"], "major_any": ["Mathematics"]}},
-    {"id": "agriculture", "category": "exact_vocabulary", "query": "agriculture programs", "relevant_if": {"major_any": ["Agriculture"]}},
     {"id": "legal-studies", "category": "exact_vocabulary", "query": "legal studies programs", "relevant_if": {"major_any": ["Legal Studies"]}},
     {"id": "education", "category": "exact_vocabulary", "query": "education programs", "relevant_if": {"major_any": ["Education"]}},
     {"id": "criminal-justice", "category": "exact_vocabulary", "query": "criminal justice programs", "relevant_if": {"major_any": ["Criminal Justice"]}},

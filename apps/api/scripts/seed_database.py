@@ -94,11 +94,12 @@ def seed_school(conn: psycopg.Connection, row: dict[str, str]) -> None:
         cur.execute(
             """
             INSERT INTO school_academics (
-                school_id, top_majors, graduation_rate, retention_rate, student_faculty_ratio
+                school_id, top_majors, majors_offered, graduation_rate, retention_rate, student_faculty_ratio
             )
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (school_id) DO UPDATE SET
                 top_majors = EXCLUDED.top_majors,
+                majors_offered = EXCLUDED.majors_offered,
                 graduation_rate = EXCLUDED.graduation_rate,
                 retention_rate = EXCLUDED.retention_rate,
                 student_faculty_ratio = EXCLUDED.student_faculty_ratio
@@ -106,6 +107,7 @@ def seed_school(conn: psycopg.Connection, row: dict[str, str]) -> None:
             (
                 school_id,
                 split_list(row["top_majors"]),
+                split_list(row.get("majors_offered", "")),
                 nullable_float(row["graduation_rate"]),
                 nullable_float(row["retention_rate"]),
                 nullable_float(row["student_faculty_ratio"]),

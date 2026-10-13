@@ -515,7 +515,7 @@ Request body:
       "scholarships": 8000,
       "grants_aid": 6000,
       "annual_loan_amount": 5500,
-      "loan_interest_rate": 0.055,
+      "loan_interest_rate": 0.0639,
       "loan_term_years": 10
     },
     {
@@ -535,7 +535,7 @@ Rules:
 | --- | --- |
 | `schools` | Required, 1 to 8 unique schools. |
 | `tuition`, `estimated_net_price`, `scholarships`, `grants_aid`, `estimated_yearly_cost`, `annual_loan_amount` | Optional nonnegative annual dollar amounts. |
-| `loan_interest_rate` | Optional, defaults to `0.055`, must be `0` to `0.25`. |
+| `loan_interest_rate` | Optional, defaults to `0.0639` (federal undergraduate Direct Loan rate, 2025-26), must be `0` to `0.25`. |
 | `loan_term_years` | Optional, defaults to `10`, must be `1` to `30`. |
 | `baseline_school_id` | Optional; when supplied, it must be one of the requested schools. |
 | `max_annual_family_budget` | Optional nonnegative yearly budget used for affordability indicators. |
@@ -574,7 +574,7 @@ Response `200`:
         "grants_aid": null,
         "estimated_yearly_cost": 42500,
         "annual_loan_amount": 12000,
-        "loan_interest_rate": 0.055,
+        "loan_interest_rate": 0.0639,
         "loan_term_years": 10
       },
       "estimated_yearly_cost": 42500,
@@ -586,7 +586,7 @@ Response `200`:
         {
           "scenario": "base",
           "principal": 48000,
-          "interest_rate": 0.055,
+          "interest_rate": 0.0639,
           "term_years": 10,
           "estimated_monthly_payment": 521,
           "estimated_total_repaid": 62520,
@@ -614,7 +614,7 @@ Response `200`:
 
 Calculation rules:
 
-- Yearly cost uses entered `estimated_yearly_cost` first, then entered net price or tuition minus scholarships and grants/aid, then profile net price or tuition when available.
+- Yearly cost uses entered `estimated_yearly_cost` first, then entered net price, then entered tuition minus scholarships and grants/aid, then profile net price, then profile out-of-state tuition minus aid. Net price already reflects typical grant aid, so aid is never subtracted from it; aid entered against a net price adds the `aid_not_subtracted_from_net_price` warning. Scholarships plus grants cannot exceed entered tuition.
 - Four-year total is yearly cost multiplied by `4`; no inflation or year-by-year sensitivity is applied in V2.5.
 - Debt exposure uses entered annual loans multiplied by `4`; if loans are missing, observed median debt may be shown as a data indicator with a warning.
 - Repayment scenarios use standard amortization for lower debt, base debt, and higher debt. They are simple sensitivities, not personalized repayment advice.

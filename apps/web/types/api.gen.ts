@@ -387,14 +387,14 @@ export interface components {
             grants_aid?: number | null;
             /**
              * Loan Interest Rate
-             * @default 0.055
+             * @default 0.0639
              */
-            loan_interest_rate: number;
+            loan_interest_rate?: number;
             /**
              * Loan Term Years
              * @default 10
              */
-            loan_term_years: number;
+            loan_term_years?: number;
             /** Scholarships */
             scholarships?: number | null;
             /** School Id */
@@ -414,7 +414,7 @@ export interface components {
             grants_aid: number | null;
             /**
              * Loan Interest Rate
-             * @default 0.055
+             * @default 0.0639
              */
             loan_interest_rate: number;
             /**
@@ -608,7 +608,7 @@ export interface components {
              * @default accepted
              * @enum {string}
              */
-            status: "accepted" | "finalist";
+            status?: "accepted" | "finalist";
             /** Unresolved Concerns */
             unresolved_concerns?: string[];
         };
@@ -1116,7 +1116,7 @@ export interface components {
              * @default asc
              * @enum {string}
              */
-            direction: "asc" | "desc";
+            direction?: "asc" | "desc";
             /** Max Acceptance Rate */
             max_acceptance_rate?: number | null;
             /** Max Enrollment */
@@ -1137,12 +1137,12 @@ export interface components {
              * Page
              * @default 1
              */
-            page: number;
+            page?: number;
             /**
              * Page Size
              * @default 20
              */
-            page_size: number;
+            page_size?: number;
             /** Query */
             query?: string | null;
             /** Region */
@@ -1154,7 +1154,7 @@ export interface components {
              * @default name
              * @enum {string}
              */
-            sort: "name" | "acceptance_rate" | "graduation_rate" | "net_price" | "enrollment";
+            sort?: "name" | "acceptance_rate" | "graduation_rate" | "net_price" | "enrollment";
             /** State */
             state?: string | null;
             /** Type */
@@ -1191,7 +1191,7 @@ export interface components {
              * Candidate Limit
              * @default 50
              */
-            candidate_limit: number;
+            candidate_limit?: number;
             filters?: components["schemas"]["SearchRequest"];
             preferences?: components["schemas"]["Preference"];
             /** Query */
